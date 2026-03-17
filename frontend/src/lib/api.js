@@ -1,13 +1,9 @@
-/**
- * lib/api.js — Cliente HTTP com interceptor de auth
- */
 import axios from 'axios'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
 })
 
-// Interceptor: injeta token em todas as requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
   if (token) {
@@ -16,7 +12,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Interceptor: redireciona pro login se 401
 api.interceptors.response.use(
   (res) => res,
   (err) => {
