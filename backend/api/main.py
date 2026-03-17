@@ -9,16 +9,17 @@ load_dotenv()
 
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel
 
-app = FastAPI(
-    title="iMile Dashboard API",
-    version="1.0.0",
-    docs_url="/docs",
-)
+app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "https://imile-react.vercel.app",
+        "https://imile-react-9sbshgee3-faelsantos7955-lgtms-projects.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:5174",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -30,7 +31,6 @@ app.include_router(reclamacoes.router,  prefix="/api/reclamacoes",  tags=["Recla
 app.include_router(triagem.router,      prefix="/api/triagem",      tags=["Triagem"])
 app.include_router(admin.router,        prefix="/api/admin",        tags=["Admin"])
 app.include_router(excel.router,        prefix="/api/excel",        tags=["Excel"])
-
 
 @app.get("/api/health")
 def health():
