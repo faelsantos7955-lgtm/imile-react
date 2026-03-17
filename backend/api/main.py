@@ -20,14 +20,16 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",     # Vite dev
-        "http://localhost:3000",     # alternativo
-        "https://imile-dashboard.vercel.app",  # produção
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+        "https://imile-dashboard.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Rotas
 app.include_router(auth.router,         prefix="/api/auth",         tags=["Auth"])
