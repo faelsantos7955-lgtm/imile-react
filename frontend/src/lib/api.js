@@ -7,8 +7,6 @@ const api = axios.create({
   baseURL: 'http://localhost:8000',
 })
 
-export default api
-
 // Interceptor: injeta token em todas as requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
