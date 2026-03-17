@@ -1,5 +1,5 @@
 """
-api/routes/historico.py — Dados históricos por período
+api/routes/historico.py — Histórico + Evolução por DS
 """
 from fastapi import APIRouter, Depends, Query
 from api.deps import get_supabase, get_current_user
@@ -11,54 +11,73 @@ router = APIRouter()
 
 @router.get("/periodo")
 def periodo(
-    data_ini: str = Query(...),
-    data_fim: str = Query(...),
+    data_ini: str = Query(...), data_fim: str = Query(...),
     user: dict = Depends(get_current_user),
 ):
     sb = get_supabase()
     q = (sb.table("expedicao_diaria").select("*")
-         .gte("data_ref", data_ini)
-         .lte("data_ref", data_fim))
-    if user["bases"]:
-        q = q.in_("scan_station", user["bases"])
-    res = q.execute()
-    data = res.data or []
-
-    if not data:
-        return {"resumo": {}, "por_dia": [], "por_ds": []}
+         .gte("data_ref", data_ini).lte("data_ref", data_fim))
+    if user["bases"]: q = q.in_("scan_station", user["bases"])
+    data = q.execute().data or []
+    if not data: return {"resumo": {}, "por_dia": [], "por_ds": []}
 
     df = pd.DataFrame(data)
+    rec = int(df["recebido"].sum()); exp = int(df["expedido"].sum())
+    ent = int(df["entregas"].sum()); dias = df["data_ref"].nunique()
 
-    # Resumo
-    rec = int(df["recebido"].sum())
-    exp = int(df["expedido"].sum())
-    ent = int(df["entregas"].sum())
-    taxa = round(exp / rec, 4) if rec else 0
-    dias = df["data_ref"].nunique()
-
-    # Por dia
     por_dia = (df.groupby("data_ref", as_index=False)
-               .agg(recebido=("recebido","sum"),
-                    expedido=("expedido","sum"),
-                    entregas=("entregas","sum")))
-    por_dia["taxa_exp"] = np.where(por_dia["recebido"]>0,
-        (por_dia["expedido"]/por_dia["recebido"]).round(4), 0)
+               .agg(recebido=("recebido","sum"), expedido=("expedido","sum"), entregas=("entregas","sum")))
+    por_dia["taxa_exp"] = np.where(por_dia["recebido"]>0, (por_dia["expedido"]/por_dia["recebido"]).round(4), 0)
     por_dia = por_dia.sort_values("data_ref").to_dict("records")
 
-    # Por DS
     por_ds = (df.groupby(["scan_station","region"], as_index=False)
-              .agg(recebido=("recebido","sum"),
-                   expedido=("expedido","sum"),
-                   entregas=("entregas","sum")))
-    por_ds["taxa_exp"] = np.where(por_ds["recebido"]>0,
-        (por_ds["expedido"]/por_ds["recebido"]).round(4), 0)
+              .agg(recebido=("recebido","sum"), expedido=("expedido","sum"), entregas=("entregas","sum")))
+    por_ds["taxa_exp"] = np.where(por_ds["recebido"]>0, (por_ds["expedido"]/por_ds["recebido"]).round(4), 0)
     por_ds = por_ds.sort_values("recebido", ascending=False).to_dict("records")
 
     return {
-        "resumo": {
-            "recebido": rec, "expedido": exp, "entregas": ent,
-            "taxa_exp": taxa, "dias": dias,
-        },
+        "resumo": {"recebido": rec, "expedido": exp, "entregas": ent,
+                    "taxa_exp": round(exp/rec, 4) if rec else 0, "dias": dias},
         "por_dia": por_dia,
         "por_ds": por_ds,
     }
+
+
+@router.get("/evolucao-ds")
+def evolucao_ds(
+    data_ini: str = Query(...), data_fim: str = Query(...),
+    ds: str = Query(None, description="DS específica ou vazio para top 10"),
+    user: dict = Depends(get_current_user),
+):
+    """Evolução diária de uma DS específica ou top 10 por volume."""
+    sb = get_supabase()
+    q = (sb.table("expedicao_diaria").select("data_ref,scan_station,recebido,expedido,entregas,taxa_exp")
+         .gte("data_ref", data_ini).lte("data_ref", data_fim))
+    if user["bases"]: q = q.in_("scan_station", user["bases"])
+    data = q.execute().data or []
+    if not data: return {"series": [], "ds_list": []}
+
+    df = pd.DataFrame(data)
+
+    if ds:
+        ds_list = [ds]
+    else:
+        ds_list = (df.groupby("scan_station")["recebido"].sum()
+                   .nlargest(10).index.tolist())
+
+    df = df[df["scan_station"].isin(ds_list)]
+
+    series = []
+    for ds_name in ds_list:
+        df_ds = df[df["scan_station"] == ds_name].sort_values("data_ref")
+        series.append({
+            "ds": ds_name,
+            "data": [
+                {"data_ref": r["data_ref"], "taxa_exp": round(float(r["taxa_exp"]), 4),
+                 "recebido": int(r["recebido"]), "expedido": int(r["expedido"])}
+                for _, r in df_ds.iterrows()
+            ]
+        })
+
+    all_ds = sorted(df["scan_station"].unique().tolist())
+    return {"series": series, "ds_list": all_ds}

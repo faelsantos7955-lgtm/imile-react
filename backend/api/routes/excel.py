@@ -1,0 +1,431 @@
+"""
+api/routes/excel.py — Download de Excel formatado
+Dashboard (DS + cidades agrupadas + regiões), Reclamações (TOP Ofensores),
+Triagem (DS + supervisor), Histórico (período consolidado)
+"""
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from api.deps import get_supabase, get_current_user
+import pandas as pd
+import numpy as np
+import io
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+router = APIRouter()
+
+# ── Estilos ───────────────────────────────────────────────────
+_HF   = PatternFill("solid", fgColor="1F3864")
+_AF   = PatternFill("solid", fgColor="D9E1F2")
+_RF   = PatternFill("solid", fgColor="FF0000")
+_GF   = PatternFill("solid", fgColor="70AD47")
+_PF   = PatternFill("solid", fgColor="5B9BD5")
+_DSF  = PatternFill("solid", fgColor="BDD7EE")
+_HFNT = Font(name="Arial", bold=True, color="FFFFFF", size=11)
+_BFNT = Font(name="Arial", size=10)
+_CTR  = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_LFT  = Alignment(horizontal="left", vertical="center")
+_TH   = Side(style="thin", color="BFBFBF")
+_BRD  = Border(left=_TH, right=_TH, top=_TH, bottom=_TH)
+
+
+def _titulo_aba(ws, titulo, n):
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(n, 1))
+    c = ws.cell(row=1, column=1, value=titulo)
+    c.font = Font(name="Arial", bold=True, size=14, color="FFFFFF")
+    c.fill = _HF
+    c.alignment = _CTR
+    ws.row_dimensions[1].height = 30
+
+
+def _write_header(ws, cols, row=2):
+    for ci, cn in enumerate(cols, 1):
+        c = ws.cell(row=row, column=ci, value=cn)
+        c.font = _HFNT; c.fill = _HF; c.alignment = _CTR; c.border = _BRD
+    ws.row_dimensions[row].height = 26
+
+
+def _write_data(ws, df, start_row=3, pct_cols=None):
+    pct_cols = pct_cols or []
+    for ri, row in enumerate(df.itertuples(index=False), start_row):
+        alt = ri % 2 == 0
+        for ci, val in enumerate(row, 1):
+            try:
+                if pd.isnull(val): val = None
+            except: pass
+            c = ws.cell(row=ri, column=ci, value=val)
+            c.font = _BFNT; c.alignment = _CTR; c.border = _BRD
+            if alt: c.fill = _AF
+            cn = df.columns[ci - 1]
+            if cn in pct_cols and isinstance(val, (int, float)):
+                c.number_format = "0.0%"
+                if val < 0.5:
+                    c.fill = _RF
+                    c.font = Font(name="Arial", size=10, color="FFFFFF", bold=True)
+            elif isinstance(val, (int, float)) and val > 100:
+                c.number_format = "#,##0"
+
+
+def _write_grouped(ws, df_ds, df_cid, start_row=3):
+    """Escreve tabela agrupada DS → Cidades (mesmo formato do reference)."""
+    COLS = ["Scan Station", "recebido no DS", "em rota de entrega", "Total Geral",
+            "Taxa de Expedicao", "Entregas", "Taxa de Entrega"]
+    _write_header(ws, COLS, start_row - 1)
+
+    city_index = {}
+    if df_cid is not None and len(df_cid) > 0:
+        for ds, grp in df_cid.groupby("scan_station", observed=True):
+            city_index[ds] = grp.sort_values("recebido", ascending=False)
+
+    DF = Font(name="Arial", size=10, bold=True, color="1F3864")
+    CITF = Font(name="Arial", size=9, italic=True, color="2E75B6")
+    CF1 = PatternFill("solid", fgColor="F2F2F2")
+    CF2 = PatternFill("solid", fgColor="FFFFFF")
+
+    cur = start_row
+    for _, dr in df_ds.iterrows():
+        ds = dr["scan_station"]
+        taxa_exp = float(dr.get("taxa_exp", 0) or 0)
+        meta = float(dr.get("meta", 0.5) or 0.5)
+        vals = [ds, int(dr.get("recebido", 0)), int(dr.get("expedido", 0)),
+                int(dr.get("recebido", 0)), taxa_exp,
+                int(dr.get("entregas", 0)), float(dr.get("taxa_ent", 0) or 0)]
+        for ci, val in enumerate(vals, 1):
+            c = ws.cell(row=cur, column=ci, value=val)
+            c.font = DF; c.fill = _DSF; c.border = _BRD
+            c.alignment = _LFT if ci == 1 else _CTR
+            if ci == 5:
+                c.number_format = "0.0%"
+                c.fill = _RF if taxa_exp < meta else _GF
+                c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            elif ci == 7:
+                c.number_format = "0.0%"; c.fill = _PF
+                c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            elif ci in (2, 3, 4, 6):
+                c.number_format = "#,##0"
+        cur += 1
+
+        # Linhas de cidade
+        for i, (_, cr) in enumerate(city_index.get(ds, pd.DataFrame()).iterrows()):
+            city = cr.get("destination_city", "")
+            fill = CF1 if i % 2 == 0 else CF2
+            taxa_c = float(cr.get("taxa_exp", 0) or 0)
+            taxa_e = float(cr.get("taxa_ent", 0) or 0)
+            vals2 = [f"   {city}", int(cr.get("recebido", 0)), int(cr.get("expedido", 0)),
+                     int(cr.get("recebido", 0)), taxa_c,
+                     int(cr.get("entregas", 0)), taxa_e]
+            for ci, val in enumerate(vals2, 1):
+                c = ws.cell(row=cur, column=ci, value=val)
+                c.font = CITF; c.fill = fill; c.border = _BRD
+                c.alignment = _LFT if ci == 1 else _CTR
+                if ci in (5, 7): c.number_format = "0.0%"
+                elif ci in (2, 3, 4, 6): c.number_format = "#,##0"
+            cur += 1
+
+    # Column widths
+    for col, w in zip([1, 2, 3, 4, 5, 6, 7], [26, 20, 22, 14, 18, 14, 16]):
+        ws.column_dimensions[get_column_letter(col)].width = w
+    ws.freeze_panes = ws.cell(row=start_row, column=1)
+
+
+def _auto_width(ws, extra=4):
+    for col in ws.columns:
+        cl = get_column_letter(col[0].column)
+        mx = max((len(str(c.value or "")) for c in col), default=8)
+        ws.column_dimensions[cl].width = min(mx + extra, 35)
+
+
+def _to_stream(wb):
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf
+
+
+# ══════════════════════════════════════════════════════════════
+#  DASHBOARD EXCEL (DS + cidades agrupadas + regiões)
+# ══════════════════════════════════════════════════════════════
+@router.get("/dashboard/{data_ref}")
+def excel_dashboard(data_ref: str, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+
+    q = sb.table("expedicao_diaria").select("*").eq("data_ref", data_ref)
+    if user["bases"]: q = q.in_("scan_station", user["bases"])
+    dia = pd.DataFrame(q.execute().data or [])
+    if dia.empty: raise HTTPException(404, "Sem dados")
+
+    qc = sb.table("expedicao_cidades").select("*").eq("data_ref", data_ref)
+    if user["bases"]: qc = qc.in_("scan_station", user["bases"])
+    cid = pd.DataFrame(qc.execute().data or [])
+
+    dia = dia.sort_values("recebido", ascending=False)
+    wb = Workbook()
+
+    # Aba Consolidado Geral
+    ws = wb.active; ws.title = "Consolidado_Geral"
+    _titulo_aba(ws, f"Consolidado Geral — {data_ref}", 7)
+    _write_grouped(ws, dia, cid, start_row=3)
+
+    # Abas por região
+    for regiao, label in [("capital", "Capital"), ("metropolitan", "Metropolitan"), ("countryside", "Countryside")]:
+        df_r = dia[dia["region"].str.lower() == regiao]
+        if df_r.empty: continue
+        cid_r = cid[cid["scan_station"].isin(df_r["scan_station"])] if not cid.empty else pd.DataFrame()
+        ws_r = wb.create_sheet(label)
+        _titulo_aba(ws_r, label, 7)
+        _write_grouped(ws_r, df_r, cid_r, start_row=3)
+
+    return StreamingResponse(
+        _to_stream(wb),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=Dashboard_{data_ref}.xlsx"},
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+#  RECLAMAÇÕES EXCEL (formato TOP Ofensores igual imagem 5)
+# ══════════════════════════════════════════════════════════════
+@router.get("/reclamacoes/{upload_id}")
+def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+
+    upload = sb.table("reclamacoes_uploads").select("*").eq("id", upload_id).execute()
+    if not upload.data: raise HTTPException(404, "Upload não encontrado")
+    u = upload.data[0]
+
+    r_sup = pd.DataFrame(sb.table("reclamacoes_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or [])
+    r_sta = pd.DataFrame(sb.table("reclamacoes_por_station").select("*").eq("upload_id", upload_id).execute().data or [])
+    top5 = pd.DataFrame(sb.table("reclamacoes_top5").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or [])
+
+    # Filtra inativos
+    inativos_res = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
+    inativos = [r["id_motorista"] for r in (inativos_res.data or [])]
+    if inativos and not top5.empty:
+        top5 = top5[~top5["motorista"].isin(inativos)].head(5)
+
+    wb = Workbook()
+    C_HDR_DS = "1F4E79"; C_HDR_SUP = "375623"; C_HDR_MOT = "C55A11"
+    C_ALT = "D9E1F2"; C_TOTAL = "BDD7EE"; C_TITULO = "2F5597"
+
+    ws = wb.active; ws.title = "TOP Ofensores"
+    ws.sheet_view.showGridLines = False
+
+    # Título
+    data_str = u.get("data_ref", "")
+    ncols = 8
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols + 6)
+    t = ws.cell(1, 1, f"Reclamações de Fake Delivery  |  Referência: {data_str}")
+    t.font = Font(bold=True, color="FFFFFF", name="Calibri", size=14)
+    t.fill = PatternFill("solid", fgColor=C_TITULO)
+    t.alignment = _CTR; ws.row_dimensions[1].height = 28
+
+    # Tabela DS (esquerda)
+    if not r_sta.empty:
+        df_sta = r_sta[["station", "dia_total", "mes_total"]].copy()
+        df_sta.columns = ["DS", "Qt Dia", "Qt Mês"]
+        df_sta = df_sta.sort_values("Qt Dia", ascending=False)
+
+        hdr_fill = PatternFill("solid", fgColor=C_HDR_DS)
+        for ci, cn in enumerate(df_sta.columns, 1):
+            c = ws.cell(2, ci, cn)
+            c.fill = hdr_fill; c.font = _HFNT; c.alignment = _CTR; c.border = _BRD
+        for ri, row in enumerate(df_sta.itertuples(index=False), 3):
+            is_total = False
+            for ci, val in enumerate(row, 1):
+                c = ws.cell(ri, ci, val)
+                c.border = _BRD; c.alignment = _CTR
+                c.font = Font(name="Calibri", size=10, bold=is_total)
+                if ri % 2 == 1: c.fill = PatternFill("solid", fgColor=C_ALT)
+
+    # Tabela Supervisor (direita)
+    col_sup_start = len(r_sta.columns) + 2 if not r_sta.empty else 1
+    if not r_sup.empty:
+        df_sup = r_sup[["supervisor", "dia_total", "mes_total"]].copy()
+        df_sup.columns = ["Supervisor", "Qt Dia", "Qt Mês"]
+        df_sup = df_sup.sort_values("Qt Dia", ascending=False)
+
+        hdr_fill2 = PatternFill("solid", fgColor=C_HDR_SUP)
+        for ci, cn in enumerate(df_sup.columns, col_sup_start):
+            c = ws.cell(2, ci, cn)
+            c.fill = hdr_fill2; c.font = _HFNT; c.alignment = _CTR; c.border = _BRD
+        for ri, row in enumerate(df_sup.itertuples(index=False), 3):
+            for ci, val in enumerate(row, col_sup_start):
+                c = ws.cell(ri, ci, val)
+                c.border = _BRD; c.alignment = _CTR
+                c.font = Font(name="Calibri", size=10)
+                if ri % 2 == 1: c.fill = PatternFill("solid", fgColor=C_ALT)
+
+    # TOP Motoristas (abaixo da tabela DS)
+    if not top5.empty:
+        row_mot = max(3 + len(r_sta), 3 + len(r_sup)) + 2
+        hdr_fill3 = PatternFill("solid", fgColor=C_HDR_MOT)
+        ws.merge_cells(start_row=row_mot - 1, start_column=col_sup_start,
+                       end_row=row_mot - 1, end_column=col_sup_start + 1)
+        tm = ws.cell(row_mot - 1, col_sup_start, "🏆 TOP Motoristas Ofensores")
+        tm.font = Font(bold=True, color="FFFFFF", name="Calibri", size=11)
+        tm.fill = hdr_fill3; tm.alignment = _CTR
+
+        df_top = top5[["motorista", "total"]].copy()
+        df_top.columns = ["Motorista", "Total"]
+        for ci, cn in enumerate(df_top.columns, col_sup_start):
+            c = ws.cell(row_mot, ci, cn)
+            c.fill = hdr_fill3; c.font = _HFNT; c.alignment = _CTR; c.border = _BRD
+        for ri, row in enumerate(df_top.itertuples(index=False), row_mot + 1):
+            for ci, val in enumerate(row, col_sup_start):
+                c = ws.cell(ri, ci, val)
+                c.border = _BRD; c.alignment = _CTR
+                c.font = Font(name="Calibri", size=10)
+
+    _auto_width(ws)
+    ws.freeze_panes = "A3"
+
+    return StreamingResponse(
+        _to_stream(wb),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=Reclamacoes_{data_str}.xlsx"},
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+#  TRIAGEM EXCEL
+# ══════════════════════════════════════════════════════════════
+@router.get("/triagem/{upload_id}")
+def excel_triagem(upload_id: int, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    upload = sb.table("triagem_uploads").select("*").eq("id", upload_id).execute()
+    if not upload.data: raise HTTPException(404, "Não encontrado")
+    u = upload.data[0]
+
+    por_ds = pd.DataFrame(sb.table("triagem_por_ds").select("*").eq("upload_id", upload_id).execute().data or [])
+    top5 = pd.DataFrame(sb.table("triagem_top5").select("*").eq("upload_id", upload_id).execute().data or [])
+    por_sup = pd.DataFrame(sb.table("triagem_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or [])
+
+    wb = Workbook()
+
+    # Aba Dashboard resumo
+    ws = wb.active; ws.title = "Dashboard"
+    ws.sheet_view.showGridLines = False
+    ws.merge_cells("A1:J1")
+    t = ws.cell(1, 1, f"ERRO DE TRIAGEM (DC > DS)  —  {u['data_ref']}")
+    t.font = Font(bold=True, color="FFFFFF", name="Calibri", size=16)
+    t.fill = _HF; t.alignment = _CTR; ws.row_dimensions[1].height = 36
+
+    # KPIs
+    for ci, (lbl, val) in enumerate([("Total", u["total"]), ("OK", u["qtd_ok"]),
+                                       ("Erros", u["qtd_erro"]), ("Taxa", f"{u['taxa']}%")], 1):
+        ws.cell(3, ci, lbl).font = Font(bold=True, size=10, name="Calibri")
+        ws.cell(4, ci, val).font = Font(bold=True, size=14, name="Calibri", color="1F3864")
+
+    # Por DS
+    if not por_ds.empty:
+        ws2 = wb.create_sheet("Por DS")
+        df_ds = por_ds[["ds", "total", "ok", "nok", "fora", "taxa"]].copy()
+        df_ds.columns = ["DS", "Total Expedido", "Triagem OK", "Triagem NOK", "Fora Abrangência", "Taxa (%)"]
+        df_ds = df_ds.sort_values("Taxa (%)")
+        _titulo_aba(ws2, "Resultado por DS", len(df_ds.columns))
+        _write_header(ws2, df_ds.columns.tolist(), 2)
+        _write_data(ws2, df_ds, 3)
+        _auto_width(ws2); ws2.freeze_panes = "A3"
+
+    # Top 5
+    if not top5.empty:
+        ws3 = wb.create_sheet("Top 5 Erros")
+        df_t = top5[["ds", "total_erros"]].copy()
+        df_t.columns = ["DS", "Total Erros"]
+        _titulo_aba(ws3, "Top 5 DS com mais erros", 2)
+        _write_header(ws3, df_t.columns.tolist(), 2)
+        _write_data(ws3, df_t, 3)
+        _auto_width(ws3)
+
+    # Por Supervisor
+    if not por_sup.empty:
+        ws4 = wb.create_sheet("Por Supervisor")
+        df_s = por_sup[["supervisor", "total", "ok", "nok", "fora", "taxa"]].copy()
+        df_s.columns = ["Supervisor", "Total", "OK", "NOK", "Fora", "Taxa (%)"]
+        df_s = df_s.sort_values("Taxa (%)")
+        _titulo_aba(ws4, "Resultado por Supervisor", len(df_s.columns))
+        _write_header(ws4, df_s.columns.tolist(), 2)
+        _write_data(ws4, df_s, 3)
+        _auto_width(ws4); ws4.freeze_panes = "A3"
+
+    return StreamingResponse(
+        _to_stream(wb),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=Triagem_{u['data_ref']}.xlsx"},
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+#  HISTÓRICO EXCEL (período consolidado)
+# ══════════════════════════════════════════════════════════════
+@router.get("/historico")
+def excel_historico(
+    data_ini: str = Query(...),
+    data_fim: str = Query(...),
+    user: dict = Depends(get_current_user),
+):
+    sb = get_supabase()
+    q = (sb.table("expedicao_diaria").select("*")
+         .gte("data_ref", data_ini).lte("data_ref", data_fim))
+    if user["bases"]: q = q.in_("scan_station", user["bases"])
+    data = q.execute().data or []
+    if not data: raise HTTPException(404, "Sem dados no período")
+
+    df = pd.DataFrame(data)
+
+    # Cidades do período
+    qc = (sb.table("expedicao_cidades").select("*")
+          .gte("data_ref", data_ini).lte("data_ref", data_fim))
+    if user["bases"]: qc = qc.in_("scan_station", user["bases"])
+    cid = pd.DataFrame(qc.execute().data or [])
+
+    # Agrega por DS
+    agg = (df.groupby(["scan_station", "region"], as_index=False)
+           .agg(recebido=("recebido", "sum"), expedido=("expedido", "sum"),
+                entregas=("entregas", "sum"), meta=("meta", "mean")))
+    agg["taxa_exp"] = np.where(agg["recebido"] > 0, agg["expedido"] / agg["recebido"], 0)
+    agg["taxa_ent"] = np.where(agg["recebido"] > 0, (agg["entregas"] / agg["recebido"]).clip(upper=1.0), 0)
+    agg = agg.sort_values("recebido", ascending=False)
+
+    # Agrega cidades
+    cid_agg = pd.DataFrame()
+    if not cid.empty:
+        cid_agg = (cid.groupby(["scan_station", "destination_city"], as_index=False)
+                   .agg(recebido=("recebido", "sum"), expedido=("expedido", "sum"),
+                        entregas=("entregas", "sum")))
+        cid_agg["taxa_exp"] = np.where(cid_agg["recebido"] > 0, cid_agg["expedido"] / cid_agg["recebido"], 0)
+        cid_agg["taxa_ent"] = np.where(cid_agg["recebido"] > 0, (cid_agg["entregas"] / cid_agg["recebido"]).clip(upper=1.0), 0)
+
+    wb = Workbook()
+    data_str = f"{data_ini} a {data_fim}"
+
+    # Consolidado
+    ws = wb.active; ws.title = "Consolidado_Geral"
+    _titulo_aba(ws, f"Consolidado Geral — {data_str}", 7)
+    _write_grouped(ws, agg, cid_agg, start_row=3)
+
+    # Por região
+    for regiao, label in [("capital", "Capital"), ("metropolitan", "Metropolitan"), ("countryside", "Countryside")]:
+        df_r = agg[agg["region"].str.lower() == regiao]
+        if df_r.empty: continue
+        cid_r = cid_agg[cid_agg["scan_station"].isin(df_r["scan_station"])] if not cid_agg.empty else pd.DataFrame()
+        ws_r = wb.create_sheet(label)
+        _titulo_aba(ws_r, label, 7)
+        _write_grouped(ws_r, df_r, cid_r, start_row=3)
+
+    # Resumo por dia
+    ws_d = wb.create_sheet("Por Dia")
+    dia_agg = (df.groupby("data_ref", as_index=False)
+               .agg(recebido=("recebido", "sum"), expedido=("expedido", "sum"), entregas=("entregas", "sum")))
+    dia_agg["taxa_exp"] = np.where(dia_agg["recebido"] > 0, dia_agg["expedido"] / dia_agg["recebido"], 0)
+    dia_agg = dia_agg.sort_values("data_ref")
+    dia_agg.columns = ["Data", "Recebido", "Expedido", "Entregas", "Taxa Exp."]
+    _titulo_aba(ws_d, f"Resumo por Dia — {data_str}", len(dia_agg.columns))
+    _write_header(ws_d, dia_agg.columns.tolist(), 2)
+    _write_data(ws_d, dia_agg, 3, pct_cols=["Taxa Exp."])
+    _auto_width(ws_d); ws_d.freeze_panes = "A3"
+
+    return StreamingResponse(
+        _to_stream(wb),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=Historico_{data_ini}_a_{data_fim}.xlsx"},
+    )
