@@ -1,7 +1,3 @@
-"""
-FastAPI Backend — iMile Dashboard
-Roda com: uvicorn api.main:app --reload --port 8000
-"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -16,7 +12,6 @@ app = FastAPI(
     docs_url="/docs",
 )
 
-# CORS — libera o frontend React
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -24,20 +19,19 @@ app.add_middleware(
         "http://localhost:5174",
         "http://localhost:3000",
         "https://imile-dashboard.vercel.app",
+        "https://imile-react-9sbshgee3-faelsantos7955-lgtms-projects.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# Rotas
-app.include_router(auth.router,         prefix="/api/auth",         tags=["Auth"])
-app.include_router(dashboard.router,    prefix="/api/dashboard",    tags=["Dashboard"])
-app.include_router(historico.router,     prefix="/api/historico",     tags=["Histórico"])
-app.include_router(reclamacoes.router,  prefix="/api/reclamacoes",  tags=["Reclamações"])
-app.include_router(triagem.router,      prefix="/api/triagem",      tags=["Triagem"])
-app.include_router(admin.router,        prefix="/api/admin",        tags=["Admin"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(historico.router, prefix="/api/historico", tags=["Histórico"])
+app.include_router(reclamacoes.router, prefix="/api/reclamacoes", tags=["Reclamações"])
+app.include_router(triagem.router, prefix="/api/triagem", tags=["Triagem"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 
 @app.get("/api/health")
