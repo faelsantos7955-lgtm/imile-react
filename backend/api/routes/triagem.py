@@ -29,3 +29,19 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
         "top5": top5,
         "por_supervisor": r_sup,
     }
+
+
+@router.get("/upload/{upload_id}/cidades/{ds}")
+def cidades_por_ds(upload_id: int, ds: str, user: dict = Depends(get_current_user)):
+    """Retorna breakdown por cidade de uma DS específica para um upload de triagem."""
+    sb = get_supabase()
+    try:
+        res = (sb.table("triagem_por_cidade")
+               .select("*")
+               .eq("upload_id", upload_id)
+               .eq("ds", ds)
+               .order("nok", desc=True)
+               .execute())
+        return res.data or []
+    except Exception:
+        return []
