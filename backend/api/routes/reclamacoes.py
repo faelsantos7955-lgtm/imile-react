@@ -21,16 +21,14 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
 
     r_sup = sb.table("reclamacoes_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or []
     r_sta = sb.table("reclamacoes_por_station").select("*").eq("upload_id", upload_id).execute().data or []
-    top5  = sb.table("reclamacoes_top5").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
+    # Busca mais que 5 para poder substituir os bloqueados
+    top_all = sb.table("reclamacoes_top5").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
 
-    # Filtra inativos do top5 em tempo real
+    # Filtra inativos em tempo real e retorna os 5 primeiros restantes
     inativos_res = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
-    inativos = [r["id_motorista"] for r in (inativos_res.data or [])]
-    n_filtrados = 0
-    if inativos:
-        antes = len(top5)
-        top5 = [t for t in top5 if t.get("motorista") not in inativos][:5]
-        n_filtrados = antes - len(top5)
+    inativos = {r["id_motorista"] for r in (inativos_res.data or [])}
+    n_filtrados = sum(1 for t in top_all if t.get("motorista") in inativos)
+    top5 = [t for t in top_all if t.get("motorista") not in inativos][:5]
 
     return {
         "por_supervisor": r_sup,
@@ -66,8 +64,8 @@ def motoristas_por_semana(user: dict = Depends(get_current_user)):
     semanas = []
     for u in uploads:
         top = (sb.table("reclamacoes_top5").select("motorista,total")
-               .eq("upload_id", u["id"]).order("total", desc=True).execute().data or [])
-        # Filtra inativos
+               .eq("upload_id", u["id"]).order("total", desc=True).limit(20).execute().data or [])
+        # Filtra inativos e retorna os 5 primeiros restantes
         top = [t for t in top if t["motorista"] not in inativos][:5]
         semanas.append({
             "data_ref": u["data_ref"],
