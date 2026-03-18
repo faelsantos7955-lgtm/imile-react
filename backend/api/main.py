@@ -16,6 +16,7 @@ app.add_middleware(
     allow_origins=[
         "https://imile-react.vercel.app",
         "https://imile-react-9sbshgee3-faelsantos7955-lgtms-projects.vercel.app",
+        "https://imile-react-b7xjpubab-faelsantos7955-lgtms-projects.vercel.app",
         "http://localhost:5173",
         "http://localhost:5174",
     ],
