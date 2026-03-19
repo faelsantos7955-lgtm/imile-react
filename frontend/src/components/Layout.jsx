@@ -1,11 +1,11 @@
 /**
  * components/Layout.jsx — Sidebar escura + área de conteúdo clara
  */
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import {
   LayoutDashboard, CalendarDays, BarChart3,
-  GitBranch, FileWarning, Upload, Users, Settings,
+  GitBranch, FileWarning, Settings,
   LogOut, Truck, Bell, HelpCircle, Search
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -18,17 +18,11 @@ const NAV_ITEMS = [
   { to: '/reclamacoes',  icon: FileWarning,     label: 'Reclamações' },
 ]
 
-const ADMIN_ITEMS = [
-  { to: '/admin',        icon: Upload,          label: 'Upload / Processar' },
-  { to: '/admin/users',  icon: Users,           label: 'Solicitações' },
-  { to: '/admin/config', icon: Settings,        label: 'Configurações' },
-]
-
-function SideLink({ to, icon: Icon, label }) {
+function SideLink({ to, icon: Icon, label, end: endProp }) {
   return (
     <NavLink
       to={to}
-      end={to === '/'}
+      end={endProp}
       className={({ isActive }) => clsx(
         'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
         isActive
@@ -79,7 +73,7 @@ export default function Layout() {
             Navegação
           </p>
           {NAV_ITEMS.map((item) => (
-            <SideLink key={item.to} {...item} />
+            <SideLink key={item.to} {...item} end={item.to === '/'} />
           ))}
 
           {isAdmin && (
@@ -88,9 +82,7 @@ export default function Layout() {
               <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-red-400/70">
                 Administração
               </p>
-              {ADMIN_ITEMS.map((item) => (
-                <SideLink key={item.to} {...item} />
-              ))}
+              <SideLink to="/admin" icon={Settings} label="Administração" />
             </>
           )}
         </nav>
