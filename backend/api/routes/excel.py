@@ -160,12 +160,12 @@ def excel_dashboard(data_ref: str, user: dict = Depends(get_current_user)):
     dia = dia.sort_values("recebido", ascending=False)
     wb = Workbook()
 
-    # Aba Consolidado Geral
+    # ── Aba Consolidado Geral (DS + cidades) ──────────────────
     ws = wb.active; ws.title = "Consolidado_Geral"
     _titulo_aba(ws, f"Consolidado Geral — {data_ref}", 7)
     _write_grouped(ws, dia, cid, start_row=3)
 
-    # Abas por região
+    # ── Abas por região (DS + cidades) ────────────────────────
     for regiao, label in [("capital", "Capital"), ("metropolitan", "Metropolitan"), ("countryside", "Countryside")]:
         df_r = dia[dia["region"].str.lower() == regiao]
         if df_r.empty: continue
@@ -173,6 +173,83 @@ def excel_dashboard(data_ref: str, user: dict = Depends(get_current_user)):
         ws_r = wb.create_sheet(label)
         _titulo_aba(ws_r, label, 7)
         _write_grouped(ws_r, df_r, cid_r, start_row=3)
+
+    # ── Aba Resumo Dinâmico (regiões lado a lado) ─────────────
+    ws_res = wb.create_sheet("Resumo_Dinamico")
+    ws_res.sheet_view.showGridLines = False
+
+    REGIOES = [("capital", "Capital"), ("metropolitan", "Metropolitan"), ("countryside", "Countryside")]
+    COLS_RES = ["DS", "recebido no DS", "em rota de entrega", "Total Geral", "Taxa de Expedicao"]
+
+    # Título geral
+    total_cols = len(COLS_RES) * 3 + 2
+    ws_res.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
+    t = ws_res.cell(1, 1, f"Resumo Consolidado — {data_ref}")
+    t.font = Font(name="Arial", bold=True, size=14, color="FFFFFF")
+    t.fill = _HF; t.alignment = _CTR; ws_res.row_dimensions[1].height = 30
+
+    col_start = 1
+    for regiao, label in REGIOES:
+        df_r = dia[dia["region"].str.lower() == regiao].copy()
+        if df_r.empty: continue
+
+        # Resumo da região (totais)
+        rec = int(df_r["recebido"].sum())
+        exp = int(df_r["expedido"].sum())
+        ent = int(df_r["entregas"].sum())
+        taxa = round(exp/rec, 4) if rec else 0
+
+        # Header da região
+        ws_res.merge_cells(start_row=2, start_column=col_start, end_row=2, end_column=col_start + len(COLS_RES) - 1)
+        h = ws_res.cell(2, col_start, f"{label}   |   Rec: {rec:,}   Exp: {exp:,}   Taxa: {taxa:.1%}")
+        h.font = Font(name="Arial", bold=True, size=11, color="FFFFFF")
+        h.fill = _HF; h.alignment = _CTR; ws_res.row_dimensions[2].height = 24
+
+        # Cabeçalhos das colunas
+        for ci, cn in enumerate(COLS_RES, col_start):
+            c = ws_res.cell(3, ci, cn)
+            c.font = _HFNT; c.fill = _HF; c.alignment = _CTR; c.border = _BRD
+        ws_res.row_dimensions[3].height = 22
+
+        # Dados
+        df_r = df_r.sort_values("recebido", ascending=False)
+        for ri, (_, r) in enumerate(df_r.iterrows(), 4):
+            taxa_ds = float(r.get("taxa_exp", 0) or 0)
+            meta_ds = float(r.get("meta", 0.5) or 0.5)
+            alt = ri % 2 == 0
+            vals = [r["scan_station"], int(r.get("recebido",0)), int(r.get("expedido",0)),
+                    int(r.get("recebido",0)), taxa_ds]
+            for ci, val in enumerate(vals, col_start):
+                c = ws_res.cell(ri, ci, val)
+                c.font = _BFNT; c.border = _BRD; c.alignment = _CTR
+                if alt: c.fill = _AF
+                if ci == col_start: c.alignment = Alignment(horizontal="left", vertical="center")
+                if ci == col_start + 4:
+                    c.number_format = "0.0%"
+                    c.fill = _RF if taxa_ds < meta_ds else _GF
+                    c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+                elif ci in (col_start+1, col_start+2, col_start+3):
+                    c.number_format = "#,##0"
+
+        # Linha de total da região
+        last_r = 4 + len(df_r)
+        totals = ["Total Geral", rec, exp, rec, taxa]
+        for ci, val in enumerate(totals, col_start):
+            c = ws_res.cell(last_r, ci, val)
+            c.fill = PatternFill("solid", fgColor="BDD7EE")
+            c.font = Font(name="Arial", bold=True, size=10, color="1F3864")
+            c.border = _BRD; c.alignment = _CTR
+            if ci == col_start: c.alignment = Alignment(horizontal="left", vertical="center")
+            if ci == col_start + 4: c.number_format = "0.0%"
+            elif ci in (col_start+1, col_start+2, col_start+3): c.number_format = "#,##0"
+
+        # Larguras das colunas
+        for ci2, w in enumerate([22, 16, 18, 14, 16], col_start):
+            ws_res.column_dimensions[get_column_letter(ci2)].width = w
+
+        col_start += len(COLS_RES) + 1  # +1 para espaço entre regiões
+
+    ws_res.freeze_panes = "A4"
 
     return StreamingResponse(
         _to_stream(wb),
@@ -192,91 +269,176 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
     if not upload.data: raise HTTPException(404, "Upload não encontrado")
     u = upload.data[0]
 
-    r_sup = pd.DataFrame(sb.table("reclamacoes_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or [])
-    r_sta = pd.DataFrame(sb.table("reclamacoes_por_station").select("*").eq("upload_id", upload_id).execute().data or [])
-    top5 = pd.DataFrame(sb.table("reclamacoes_top5").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or [])
+    r_sup  = pd.DataFrame(sb.table("reclamacoes_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or [])
+    r_sta  = pd.DataFrame(sb.table("reclamacoes_por_station").select("*").eq("upload_id", upload_id).execute().data or [])
+    top_all = pd.DataFrame(sb.table("reclamacoes_top5").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or [])
 
-    # Filtra inativos
+    # Filtra inativos e pega top 5
     inativos_res = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
-    inativos = [r["id_motorista"] for r in (inativos_res.data or [])]
-    if inativos and not top5.empty:
-        top5 = top5[~top5["motorista"].isin(inativos)].head(5)
+    inativos = {r["id_motorista"] for r in (inativos_res.data or [])}
+    top5 = top_all[~top_all["motorista"].isin(inativos)].head(5) if not top_all.empty else top_all
+
+    # Detecta semanas disponíveis nas colunas (week_XX)
+    semana_ref = u.get("semana_ref", 0)
+    week_cols_sta = sorted([c for c in r_sta.columns if c.startswith("week_")], reverse=True) if not r_sta.empty else []
+    week_cols_sup = sorted([c for c in r_sup.columns if c.startswith("week_")], reverse=True) if not r_sup.empty else []
+
+    def _week_label(col):
+        return f"Week {col.replace('week_', '')}"
 
     wb = Workbook()
-    C_HDR_DS = "1F4E79"; C_HDR_SUP = "375623"; C_HDR_MOT = "C55A11"
-    C_ALT = "D9E1F2"; C_TOTAL = "BDD7EE"; C_TITULO = "2F5597"
+    C_HDR_DS  = "1F4E79"
+    C_HDR_SUP = "375623"
+    C_HDR_MOT = "C55A11"
+    C_ALT     = "D9E1F2"
+    C_TITULO  = "2F5597"
+    C_RED     = "FF0000"
 
-    ws = wb.active; ws.title = "TOP Ofensores"
+    def _hfnt(color="FFFFFF", size=11):
+        return Font(bold=True, color=color, name="Calibri", size=size)
+    def _bfnt(bold=False, size=10):
+        return Font(name="Calibri", size=size, bold=bold)
+
+    # ── Aba TOP Ofensores ─────────────────────────────────────
+    ws = wb.active
+    ws.title = "TOP Ofensores"
     ws.sheet_view.showGridLines = False
+    data_str = str(u.get("data_ref", ""))
 
     # Título
-    data_str = u.get("data_ref", "")
-    ncols = 8
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols + 6)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=20)
     t = ws.cell(1, 1, f"Reclamações de Fake Delivery  |  Referência: {data_str}")
-    t.font = Font(bold=True, color="FFFFFF", name="Calibri", size=14)
-    t.fill = PatternFill("solid", fgColor=C_TITULO)
+    t.font = _hfnt(size=14); t.fill = PatternFill("solid", fgColor=C_TITULO)
     t.alignment = _CTR; ws.row_dimensions[1].height = 28
 
-    # Tabela DS (esquerda)
+    # ── Tabela DS (esquerda, cols 1+) ─────────────────────────
+    DS_HDR = ["DS", "SUPERVISOR", f"Qt Semana {semana_ref}"] + [_week_label(c) for c in week_cols_sta[:2]] + ["Qt Mês", "% Rate"]
+    hf_ds = PatternFill("solid", fgColor=C_HDR_DS)
+    for ci, cn in enumerate(DS_HDR, 1):
+        c = ws.cell(3, ci, cn)
+        c.fill = hf_ds; c.font = _hfnt(); c.alignment = _CTR; c.border = _BRD
+        ws.column_dimensions[get_column_letter(ci)].width = 16
+    ws.row_dimensions[3].height = 36
+
+    # Subtítulo em linha 2
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(DS_HDR))
+    s2 = ws.cell(2, 1, "POR DS")
+    s2.fill = hf_ds; s2.font = _hfnt(size=10); s2.alignment = _CTR
+
+    row_ds = 4
     if not r_sta.empty:
-        df_sta = r_sta[["station", "dia_total", "mes_total"]].copy()
-        df_sta.columns = ["DS", "Qt Dia", "Qt Mês"]
-        df_sta = df_sta.sort_values("Qt Dia", ascending=False)
+        df_sta = r_sta.sort_values("dia_total", ascending=False).copy()
+        # Tenta buscar supervisor predominante por DS do top_all
+        ds_sup_map = {}
+        if not top_all.empty and "ds" in top_all.columns and "motorista" in top_all.columns:
+            pass  # sem supervisor no top5, deixa vazio
+        if not r_sup.empty:
+            # Heurística: associa supervisor com mais reclamações a cada DS
+            pass
 
-        hdr_fill = PatternFill("solid", fgColor=C_HDR_DS)
-        for ci, cn in enumerate(df_sta.columns, 1):
-            c = ws.cell(2, ci, cn)
-            c.fill = hdr_fill; c.font = _HFNT; c.alignment = _CTR; c.border = _BRD
-        for ri, row in enumerate(df_sta.itertuples(index=False), 3):
-            is_total = False
-            for ci, val in enumerate(row, 1):
+        for ri, (_, row) in enumerate(df_sta.iterrows(), row_ds):
+            alt = ri % 2 == 0
+            week_vals = [int(row.get(wc, 0) or 0) for wc in week_cols_sta[:2]]
+            mes_total = int(row.get("mes_total", 0) or 0)
+            dia_total = int(row.get("dia_total", 0) or 0)
+            # % Rate = reclamações semana / entregas mês (se disponível)
+            rate = ""
+            vals = [row.get("station", ""), "", dia_total] + week_vals + [mes_total, rate]
+            for ci, val in enumerate(vals, 1):
                 c = ws.cell(ri, ci, val)
-                c.border = _BRD; c.alignment = _CTR
-                c.font = Font(name="Calibri", size=10, bold=is_total)
-                if ri % 2 == 1: c.fill = PatternFill("solid", fgColor=C_ALT)
+                c.font = _bfnt(); c.border = _BRD; c.alignment = _CTR
+                if alt: c.fill = PatternFill("solid", fgColor=C_ALT)
+                if ci == 1: c.alignment = Alignment(horizontal="left", vertical="center")
+                if ci in (3, 4, 5, 6): c.number_format = "#,##0"
+        row_ds = row_ds + len(df_sta)
 
-    # Tabela Supervisor (direita)
-    col_sup_start = len(r_sta.columns) + 2 if not r_sta.empty else 1
+        # Linha total
+        total_dia = int(df_sta["dia_total"].sum())
+        total_mes = int(df_sta["mes_total"].sum()) if "mes_total" in df_sta.columns else 0
+        totals = ["TOTAL GERAL", "", total_dia] + [int(df_sta.get(wc, pd.Series([0])).sum()) for wc in week_cols_sta[:2]] + [total_mes, ""]
+        for ci, val in enumerate(totals, 1):
+            c = ws.cell(row_ds, ci, val)
+            c.fill = PatternFill("solid", fgColor="BDD7EE")
+            c.font = _hfnt(color="1F3864", size=10); c.border = _BRD; c.alignment = _CTR
+            if ci == 1: c.alignment = Alignment(horizontal="left", vertical="center")
+            if ci in (3, 4, 5, 6): c.number_format = "#,##0"
+        row_ds += 1
+
+    # ── Tabela Supervisor (direita, cols 8+) ───────────────────
+    SUP_START = len(DS_HDR) + 2
+    SUP_HDR = ["SUPERVISOR", f"Qt Semana {semana_ref}"] + [_week_label(c) for c in week_cols_sup[:2]] + ["Qt Mês", "% Rate", "Performance"]
+    hf_sup = PatternFill("solid", fgColor=C_HDR_SUP)
+
+    ws.merge_cells(start_row=2, start_column=SUP_START, end_row=2, end_column=SUP_START + len(SUP_HDR) - 1)
+    s2s = ws.cell(2, SUP_START, "POR SUPERVISOR")
+    s2s.fill = hf_sup; s2s.font = _hfnt(size=10); s2s.alignment = _CTR
+
+    for ci, cn in enumerate(SUP_HDR, SUP_START):
+        c = ws.cell(3, ci, cn)
+        c.fill = hf_sup; c.font = _hfnt(); c.alignment = _CTR; c.border = _BRD
+        ws.column_dimensions[get_column_letter(ci)].width = 18
+    ws.row_dimensions[3].height = 36
+
     if not r_sup.empty:
-        df_sup = r_sup[["supervisor", "dia_total", "mes_total"]].copy()
-        df_sup.columns = ["Supervisor", "Qt Dia", "Qt Mês"]
-        df_sup = df_sup.sort_values("Qt Dia", ascending=False)
-
-        hdr_fill2 = PatternFill("solid", fgColor=C_HDR_SUP)
-        for ci, cn in enumerate(df_sup.columns, col_sup_start):
-            c = ws.cell(2, ci, cn)
-            c.fill = hdr_fill2; c.font = _HFNT; c.alignment = _CTR; c.border = _BRD
-        for ri, row in enumerate(df_sup.itertuples(index=False), 3):
-            for ci, val in enumerate(row, col_sup_start):
+        df_sup = r_sup.sort_values("dia_total", ascending=False).copy()
+        prev_col = week_cols_sup[0] if week_cols_sup else None
+        for ri, (_, row) in enumerate(df_sup.iterrows(), 4):
+            alt = ri % 2 == 0
+            dia = int(row.get("dia_total", 0) or 0)
+            prev = int(row.get(prev_col, 0) or 0) if prev_col else 0
+            perf = "Melhor" if dia <= prev else "Piora" if dia > prev else "-"
+            perf_color = "70AD47" if perf == "Melhor" else "FF0000" if perf == "Piora" else "808080"
+            week_vals = [int(row.get(wc, 0) or 0) for wc in week_cols_sup[:2]]
+            vals = [row.get("supervisor", ""), dia] + week_vals + [int(row.get("mes_total", 0) or 0), "", perf]
+            for ci, val in enumerate(vals, SUP_START):
                 c = ws.cell(ri, ci, val)
-                c.border = _BRD; c.alignment = _CTR
-                c.font = Font(name="Calibri", size=10)
-                if ri % 2 == 1: c.fill = PatternFill("solid", fgColor=C_ALT)
+                c.font = _bfnt(); c.border = _BRD; c.alignment = _CTR
+                if alt: c.fill = PatternFill("solid", fgColor=C_ALT)
+                if ci == SUP_START: c.alignment = Alignment(horizontal="left", vertical="center")
+                if ci in (SUP_START + 1, SUP_START + 2, SUP_START + 3, SUP_START + 4): c.number_format = "#,##0"
+                if val in ("Melhor", "Piora"):
+                    c.fill = PatternFill("solid", fgColor=perf_color)
+                    c.font = _hfnt(color="FFFFFF", size=9)
 
-    # TOP Motoristas (abaixo da tabela DS)
+    # ── TOP 5 Motoristas Ofensores ────────────────────────────
     if not top5.empty:
-        row_mot = max(3 + len(r_sta), 3 + len(r_sup)) + 2
-        hdr_fill3 = PatternFill("solid", fgColor=C_HDR_MOT)
-        ws.merge_cells(start_row=row_mot - 1, start_column=col_sup_start,
-                       end_row=row_mot - 1, end_column=col_sup_start + 1)
-        tm = ws.cell(row_mot - 1, col_sup_start, "🏆 TOP Motoristas Ofensores")
-        tm.font = Font(bold=True, color="FFFFFF", name="Calibri", size=11)
-        tm.fill = hdr_fill3; tm.alignment = _CTR
+        MOT_START = SUP_START
+        mot_row_start = max(row_ds, 4 + (len(r_sup) if not r_sup.empty else 0)) + 2
+        hf_mot = PatternFill("solid", fgColor=C_HDR_MOT)
 
-        df_top = top5[["motorista", "total"]].copy()
-        df_top.columns = ["Motorista", "Total"]
-        for ci, cn in enumerate(df_top.columns, col_sup_start):
-            c = ws.cell(row_mot, ci, cn)
-            c.fill = hdr_fill3; c.font = _HFNT; c.alignment = _CTR; c.border = _BRD
-        for ri, row in enumerate(df_top.itertuples(index=False), row_mot + 1):
-            for ci, val in enumerate(row, col_sup_start):
+        ws.merge_cells(start_row=mot_row_start, start_column=MOT_START,
+                       end_row=mot_row_start, end_column=MOT_START + 4)
+        tm = ws.cell(mot_row_start, MOT_START, "🏆 TOP 5 Motoristas Ofensores")
+        tm.fill = hf_mot; tm.font = _hfnt(); tm.alignment = _CTR
+        ws.row_dimensions[mot_row_start].height = 24
+
+        MOT_HDR = ["Motorista", "ID Motorista", "DS", "Semana Atual", "% do Total"]
+        for ci, cn in enumerate(MOT_HDR, MOT_START):
+            c = ws.cell(mot_row_start + 1, ci, cn)
+            c.fill = hf_mot; c.font = _hfnt(); c.alignment = _CTR; c.border = _BRD
+
+        total_dia_ref = int(r_sta["dia_total"].sum()) if not r_sta.empty else 1
+        for ri, (_, row) in enumerate(top5.iterrows(), mot_row_start + 2):
+            total_mot = int(row.get("total", 0) or 0)
+            pct = total_mot / max(total_dia_ref, 1)
+            vals = [
+                row.get("motorista", ""),
+                str(row.get("id_motorista", "") or ""),
+                str(row.get("ds", "") or ""),
+                total_mot,
+                pct,
+            ]
+            for ci, val in enumerate(vals, MOT_START):
                 c = ws.cell(ri, ci, val)
-                c.border = _BRD; c.alignment = _CTR
-                c.font = Font(name="Calibri", size=10)
+                c.font = _bfnt(bold=(ci == MOT_START + 3)); c.border = _BRD; c.alignment = _CTR
+                if ci == MOT_START: c.alignment = Alignment(horizontal="left", vertical="center")
+                if ci == MOT_START + 3:
+                    c.number_format = "#,##0"
+                    c.font = Font(name="Calibri", size=11, bold=True, color=C_RED)
+                if ci == MOT_START + 4:
+                    c.number_format = "0.00%"
 
-    _auto_width(ws)
-    ws.freeze_panes = "A3"
+    ws.freeze_panes = "A4"
 
     return StreamingResponse(
         _to_stream(wb),
