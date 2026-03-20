@@ -106,8 +106,10 @@ def _write_grouped(ws, df_ds, df_cid, start_row=3):
                 c.number_format = "#,##0"
         cur += 1
 
-        # Linhas de cidade
-        for i, (_, cr) in enumerate(city_index.get(ds, pd.DataFrame()).iterrows()):
+        # Linhas de cidade — agrupadas e colapsadas por padrão
+        city_rows = city_index.get(ds, pd.DataFrame())
+        city_start = cur
+        for i, (_, cr) in enumerate(city_rows.iterrows()):
             city = cr.get("destination_city", "")
             fill = CF1 if i % 2 == 0 else CF2
             taxa_c = float(cr.get("taxa_exp", 0) or 0)
@@ -121,12 +123,20 @@ def _write_grouped(ws, df_ds, df_cid, start_row=3):
                 c.alignment = _LFT if ci == 1 else _CTR
                 if ci in (5, 7): c.number_format = "0.0%"
                 elif ci in (2, 3, 4, 6): c.number_format = "#,##0"
+            # Agrupa e colapsa a linha de cidade
+            ws.row_dimensions[cur].outline_level = 1
+            ws.row_dimensions[cur].hidden = True
             cur += 1
+        # Configura o agrupamento para colapsar acima (botão + na linha da DS)
+        if len(city_rows) > 0:
+            ws.sheet_view.showOutlineSymbols = True
 
     # Column widths
     for col, w in zip([1, 2, 3, 4, 5, 6, 7], [26, 20, 22, 14, 18, 14, 16]):
         ws.column_dimensions[get_column_letter(col)].width = w
     ws.freeze_panes = ws.cell(row=start_row, column=1)
+    # Botão + aparece na linha da DS (summary acima das cidades)
+    ws.sheet_properties.outlinePr.summaryBelow = False
 
 
 def _auto_width(ws, extra=4):
