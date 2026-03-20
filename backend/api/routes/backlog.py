@@ -1,353 +1,256 @@
 """
-api/routes/backlog.py — Backlog SLA processing
-Upload do arquivo Excel → processa → retorna dados para o portal
+api/routes/backlog.py — Backlog SLA com persistência no banco
 """
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
-from api.deps import get_current_user
+from api.deps import get_supabase, get_current_user
 import pandas as pd
-import numpy as np
 import io
 from datetime import datetime
 
 router = APIRouter()
 
-FAIXAS      = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
-FAIXAS_COLS = ['1D≤X<3D', '3D≤X<5D', '5D≤X<7D', '7D≤X<10D', '10D≤X<15D', '15D≤X<20D', '≥20D']
+FAIXAS   = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
+FAIXAS_LABELS = ['1D≤X<3D', '3D≤X<5D', '5D≤X<7D', '7D≤X<10D', '10D≤X<15D', '15D≤X<20D', '≥20D']
+DB_COLS  = ['f_1_3', 'f_3_5', 'f_5_7', 'f_7_10', 'f_10_15', 'f_15_20', 'f_20_mais']
+
+
+def _faixas_to_dict(row):
+    return {f: row.get(col, 0) or 0 for f, col in zip(FAIXAS, DB_COLS)}
 
 
 def _ler_excel(conteudo: bytes):
-    """Lê o arquivo e retorna os DataFrames necessários."""
     buf = io.BytesIO(conteudo)
     df = pd.read_excel(buf, sheet_name='Backlog_Details',
                        dtype={'waybillNo': str, 'range_backlog': str,
                               'CARGOS.SUPERVISOR ': str, 'process': str})
-    df.rename(columns={
-        'CARGOS.SUPERVISOR ': 'supervisor',
-        'actual_region':      'regiao',
-        'lastScanSite':       'ds',
-        'clientName':         'cliente',
-        'stageStatus':        'estagio',
-        'cityType':           'tipo_cidade',
-    }, inplace=True)
-    df['supervisor'] = df['supervisor'].fillna('Sem Supervisor').str.strip().str.upper()
-    df['ds']         = df['ds'].fillna('').str.strip().str.upper()
+    df.rename(columns={'CARGOS.SUPERVISOR ': 'supervisor', 'actual_region': 'regiao',
+                       'lastScanSite': 'ds', 'clientName': 'cliente',
+                       'stageStatus': 'estagio'}, inplace=True)
+    df['supervisor']    = df['supervisor'].fillna('Sem Supervisor').str.strip().str.upper()
+    df['ds']            = df['ds'].fillna('').str.strip().str.upper()
     df['range_backlog'] = df['range_backlog'].fillna('1-3').str.strip()
 
     buf.seek(0)
-    df_res = pd.read_excel(buf, sheet_name='Resume_',
-                           dtype={'CARGOS.SUPERVISOR ': str})
-    df_res.rename(columns={
-        'CARGOS.SUPERVISOR ': 'supervisor',
-        'lastScanSite':       'ds',
-        'clientName':         'cliente',
-        'actual region':      'regiao',
-    }, inplace=True)
+    df_res = pd.read_excel(buf, sheet_name='Resume_', dtype={'CARGOS.SUPERVISOR ': str})
+    df_res.rename(columns={'CARGOS.SUPERVISOR ': 'supervisor', 'lastScanSite': 'ds',
+                            'clientName': 'cliente', 'actual region': 'regiao'}, inplace=True)
     df_res['supervisor'] = df_res['supervisor'].fillna('').str.strip().str.upper()
-
     return df, df_res
 
 
-def _faixa_row(grp: pd.DataFrame, orders: int = 0) -> dict:
-    """Monta dict com contagens por faixa para um grupo."""
-    total_backlog = len(grp)
-    pct = round(total_backlog / orders * 100, 1) if orders > 0 else 0
-    faixas_dict = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
-    total_7d = sum(faixas_dict.get(f, 0) for f in ['7-10', '10-15', '15-20', 'Backlog >20'])
+def _faixa_row(grp, orders):
+    faixas = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
+    total_7d = sum(faixas.get(f, 0) for f in ['7-10', '10-15', '15-20', 'Backlog >20'])
+    return {'orders': orders, 'backlog': len(grp),
+            'pct_backlog': round(len(grp)/orders*100, 1) if orders else 0,
+            'faixas': faixas, 'total_7d': total_7d}
+
+
+def _processar(df, df_res):
+    dc  = df[df['process'].isin(['DC-LH', 'DC'])]
+    dfs = df[df['process'] == 'DS']
+    dc_res = df_res[df_res['process'].isin(['DC-LH','DC'])] if 'process' in df_res.columns else pd.DataFrame()
+    ds_res = df_res[df_res['process'] == 'DS'] if 'process' in df_res.columns else df_res
+
+    def orders(df_r, col, val):
+        g = df_r[df_r[col] == val] if col in df_r.columns else pd.DataFrame()
+        return int(g['orders'].sum()) if len(g) and 'orders' in g.columns else 0
+
+    por_rdc = []
+    for nome in sorted(dc['ds'].dropna().unique()):
+        row = _faixa_row(dc[dc['ds']==nome], orders(dc_res,'ds',nome) or len(dc[dc['ds']==nome]))
+        row['nome'] = nome
+        por_rdc.append(row)
+
+    por_supervisor = []
+    for nome in sorted(dfs['supervisor'].dropna().unique()):
+        row = _faixa_row(dfs[dfs['supervisor']==nome], orders(ds_res,'supervisor',nome) or len(dfs[dfs['supervisor']==nome]))
+        row['nome'] = nome
+        por_supervisor.append(row)
+
+    por_ds = []
+    for nome in sorted(dfs['ds'].dropna().unique()):
+        grp = dfs[dfs['ds']==nome]
+        sup = grp['supervisor'].mode().iloc[0] if len(grp) else ''
+        row = _faixa_row(grp, orders(ds_res,'ds',nome) or len(grp))
+        row['nome'] = nome; row['supervisor'] = sup
+        por_ds.append(row)
+    por_ds.sort(key=lambda x: x['total_7d'], reverse=True)
+    for i, r in enumerate(por_ds, 1): r['prioridade'] = i
+
+    total = len(df)
+    kpis = {
+        'total':       total,
+        'na_ds':       int((df['estagio']=='Delivery').sum()),
+        'em_transito': int((df['estagio']=='In Transit').sum()),
+        'total_7d':    sum(r['total_7d'] for r in por_ds),
+        'pct_7d':      round(sum(r['total_7d'] for r in por_ds)/total*100,1) if total else 0,
+        'por_faixa':   {f: int((df['range_backlog']==f).sum()) for f in FAIXAS},
+        'data_ref':    datetime.now().date().isoformat(),
+    }
+    return kpis, por_rdc, por_supervisor, por_ds
+
+
+# ── GET /uploads ──────────────────────────────────────────────
+@router.get("/uploads")
+def listar_uploads(user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    return sb.table("backlog_uploads").select("*").order("criado_em", desc=True).limit(30).execute().data or []
+
+
+# ── GET /upload/{id} ──────────────────────────────────────────
+@router.get("/upload/{upload_id}")
+def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    up = sb.table("backlog_uploads").select("*").eq("id", upload_id).execute()
+    if not up.data: raise HTTPException(404, "Não encontrado")
+    u = up.data[0]
+
+    rdc  = sb.table("backlog_por_rdc").select("*").eq("upload_id", upload_id).execute().data or []
+    sups = sb.table("backlog_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or []
+    dss  = sb.table("backlog_por_ds").select("*").eq("upload_id", upload_id).order("prioridade").execute().data or []
+
+    fmt = lambda rows: [{**r, 'faixas': _faixas_to_dict(r)} for r in rows]
+    total = u['total'] or 1
+
     return {
-        'orders':        orders,
-        'backlog':       total_backlog,
-        'pct_backlog':   pct,
-        'faixas':        faixas_dict,
-        'total_7d':      total_7d,
+        'kpis': {
+            'total': u['total'], 'na_ds': u['na_ds'], 'em_transito': u['em_transito'],
+            'total_7d': u['total_7d'], 'pct_7d': round(u['total_7d']/total*100, 1),
+            'por_faixa': {f: sum(r.get(col,0) or 0 for r in dss) for f,col in zip(FAIXAS,DB_COLS)},
+            'data_ref': u['data_ref'],
+        },
+        'por_rdc': fmt(rdc), 'por_supervisor': fmt(sups), 'por_ds': fmt(dss),
     }
 
 
+# ── POST /processar ───────────────────────────────────────────
 @router.post("/processar")
-async def processar_backlog(
-    file: UploadFile = File(...),
-    user: dict = Depends(get_current_user)
-):
-    """
-    Processa o arquivo Excel de Backlog SLA e retorna:
-    - por_rdc: agregação por DC/RDC
-    - por_supervisor: agregação por supervisor
-    - por_ds: agregação por DS (com supervisor e prioridade)
-    - kpis: totais gerais
-    """
+async def processar_backlog(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     conteudo = await file.read()
     try:
         df, df_res = _ler_excel(conteudo)
     except Exception as e:
         raise HTTPException(400, f"Erro ao ler arquivo: {e}")
 
-    # ── Seção 1: Por RDC (process DC-LH ou DC) ───────────────
-    dc = df[df['process'].isin(['DC-LH', 'DC'])]
-    dc_res = df_res[df_res['process'].isin(['DC-LH', 'DC'])]
-    por_rdc = []
-    for rdc in sorted(dc['ds'].dropna().unique()):
-        grp   = dc[dc['ds'] == rdc]
-        grp_r = dc_res[dc_res['ds'] == rdc]
-        orders = int(grp_r['orders'].sum()) if 'orders' in grp_r.columns else len(grp)
-        row = _faixa_row(grp, orders)
-        row['nome'] = rdc
-        por_rdc.append(row)
+    kpis, por_rdc, por_supervisor, por_ds = _processar(df, df_res)
 
-    # ── Seção 2: Por Supervisor (process DS) ─────────────────
-    ds = df[df['process'] == 'DS']
-    ds_res = df_res[df_res['process'] == 'DS'] if 'process' in df_res.columns else df_res
-    por_supervisor = []
-    for sup in sorted(ds['supervisor'].dropna().unique()):
-        grp   = ds[ds['supervisor'] == sup]
-        grp_r = ds_res[ds_res['supervisor'] == sup] if 'supervisor' in ds_res.columns else pd.DataFrame()
-        orders = int(grp_r['orders'].sum()) if len(grp_r) and 'orders' in grp_r.columns else len(grp)
-        row = _faixa_row(grp, orders)
-        row['nome'] = sup
-        por_supervisor.append(row)
+    sb = get_supabase()
+    up = sb.table("backlog_uploads").insert({
+        "data_ref": kpis['data_ref'], "criado_por": user["email"],
+        "total": kpis['total'], "total_7d": kpis['total_7d'],
+        "na_ds": kpis['na_ds'], "em_transito": kpis['em_transito'],
+    }).execute()
+    uid = up.data[0]["id"]
 
-    # ── Seção 3: Por DS (com supervisor e prioridade) ─────────
-    por_ds = []
-    for ds_name in sorted(ds['ds'].dropna().unique()):
-        grp = ds[ds['ds'] == ds_name]
-        sup = grp['supervisor'].mode().iloc[0] if len(grp) else ''
-        grp_r = ds_res[ds_res['ds'] == ds_name] if 'ds' in ds_res.columns else pd.DataFrame()
-        orders = int(grp_r['orders'].sum()) if len(grp_r) and 'orders' in grp_r.columns else len(grp)
-        row = _faixa_row(grp, orders)
-        row['nome']       = ds_name
-        row['supervisor'] = sup
-        por_ds.append(row)
+    def to_db(rows, extras=[]):
+        result = []
+        for r in rows:
+            row = {"upload_id": uid, "nome": r['nome'], "orders": r['orders'],
+                   "backlog": r['backlog'], "pct_backlog": r['pct_backlog'], "total_7d": r['total_7d']}
+            for f, col in zip(FAIXAS, DB_COLS):
+                row[col] = r['faixas'].get(f, 0)
+            for k in extras:
+                row[k] = r.get(k, '')
+            result.append(row)
+        return result
 
-    # Ordena por total_7d para prioridade
-    por_ds.sort(key=lambda x: x['total_7d'], reverse=True)
-    for i, r in enumerate(por_ds, 1):
-        r['prioridade'] = i
+    sb.table("backlog_por_rdc").insert(to_db(por_rdc)).execute()
+    sb.table("backlog_por_supervisor").insert(to_db(por_supervisor)).execute()
+    sb.table("backlog_por_ds").insert(to_db(por_ds, ['supervisor','prioridade'])).execute()
 
-    # ── KPIs gerais ───────────────────────────────────────────
-    total = len(df)
-    kpis = {
-        'total':       total,
-        'na_ds':       int((df['estagio'] == 'Delivery').sum()),
-        'em_transito': int((df['estagio'] == 'In Transit').sum()),
-        'total_7d':    sum(r['total_7d'] for r in por_ds),
-        'pct_7d':      round(sum(r['total_7d'] for r in por_ds) / total * 100, 1) if total else 0,
-        'por_faixa':   {f: int((df['range_backlog'] == f).sum()) for f in FAIXAS},
-        'data_ref':    datetime.now().strftime('%d/%m/%Y'),
-    }
-
-    return {
-        'kpis':           kpis,
-        'por_rdc':        por_rdc,
-        'por_supervisor': por_supervisor,
-        'por_ds':         por_ds,
-    }
+    return {"upload_id": uid, "kpis": kpis,
+            "por_rdc": por_rdc, "por_supervisor": por_supervisor, "por_ds": por_ds}
 
 
-@router.post("/excel")
-async def excel_backlog(
-    file: UploadFile = File(...),
-    user: dict = Depends(get_current_user)
-):
-    """Gera Excel idêntico ao original com os dados processados."""
+# ── POST /excel/{upload_id} ───────────────────────────────────
+@router.post("/excel/{upload_id}")
+def excel_backlog(upload_id: int, user: dict = Depends(get_current_user)):
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
-    conteudo = await file.read()
-    try:
-        df, df_res = _ler_excel(conteudo)
-    except Exception as e:
-        raise HTTPException(400, f"Erro: {e}")
+    sb = get_supabase()
+    up = sb.table("backlog_uploads").select("*").eq("id", upload_id).execute()
+    if not up.data: raise HTTPException(404, "Não encontrado")
+    u = up.data[0]
 
-    # Reutiliza lógica de processamento
-    dc  = df[df['process'].isin(['DC-LH', 'DC'])]
-    dfs = df[df['process'] == 'DS']
-    dc_res = df_res[df_res['process'].isin(['DC-LH','DC'])] if 'process' in df_res.columns else pd.DataFrame()
-    ds_res = df_res[df_res['process'] == 'DS'] if 'process' in df_res.columns else df_res
+    rdc  = sb.table("backlog_por_rdc").select("*").eq("upload_id", upload_id).execute().data or []
+    sups = sb.table("backlog_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or []
+    dss  = sb.table("backlog_por_ds").select("*").eq("upload_id", upload_id).order("prioridade").execute().data or []
 
-    def get_orders_rdc(rdc):
-        grp_r = dc_res[dc_res['ds'] == rdc] if 'ds' in dc_res.columns else pd.DataFrame()
-        return int(grp_r['orders'].sum()) if len(grp_r) and 'orders' in grp_r.columns else len(dc[dc['ds']==rdc])
-
-    def get_orders_sup(sup):
-        grp_r = ds_res[ds_res['supervisor'] == sup] if 'supervisor' in ds_res.columns else pd.DataFrame()
-        return int(grp_r['orders'].sum()) if len(grp_r) and 'orders' in grp_r.columns else len(dfs[dfs['supervisor']==sup])
-
-    def get_orders_ds(ds_name):
-        grp_r = ds_res[ds_res['ds'] == ds_name] if 'ds' in ds_res.columns else pd.DataFrame()
-        return int(grp_r['orders'].sum()) if len(grp_r) and 'orders' in grp_r.columns else len(dfs[dfs['ds']==ds_name])
-
-    # Styles
-    HDR = PatternFill('solid', fgColor='1F3864')
+    CORES_FAIXA = {'1-3':'92D050','3-5':'FFFF00','5-7':'FFC000','7-10':'FF7F00',
+                   '10-15':'FF0000','15-20':'C00000','Backlog >20':'7030A0'}
+    HDR  = PatternFill('solid', fgColor='1F3864')
     AZUL = PatternFill('solid', fgColor='2E75B6')
-    VERDE = PatternFill('solid', fgColor='375623')
-    ALT = PatternFill('solid', fgColor='D9E1F2')
-    CORES_FAIXA = {
-        '1-3': '92D050', '3-5': 'FFFF00', '5-7': 'FFC000',
-        '7-10': 'FF7F00', '10-15': 'FF0000', '15-20': 'C00000', 'Backlog >20': '7030A0'
-    }
-    BRD = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'),  bottom=Side(style='thin')
-    )
-    CTR = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    LFT = Alignment(horizontal='left', vertical='center')
-    HFNT = Font(name='Calibri', bold=True, color='FFFFFF', size=10)
-    BFNT = Font(name='Calibri', size=10)
-
-    def write_header_row(ws, row, cols, fill=None):
-        for ci, txt in enumerate(cols, 3):
-            c = ws.cell(row, ci, txt)
-            c.fill = fill or HDR
-            c.font = HFNT; c.alignment = CTR; c.border = BRD
-        ws.row_dimensions[row].height = 36
-
-    def write_data_row(ws, row_num, nome, orders, grp, fill_nome=None, extra_cols=None, alt=False):
-        row_fill = ALT if alt else None
-        vals = [nome, orders, len(grp),
-                round(len(grp)/orders*100, 1) if orders else 0]
-        for f in FAIXAS:
-            vals.append(int((grp['range_backlog'] == f).sum()))
-        total_7d = sum(int((grp['range_backlog'] == f).sum()) for f in ['7-10','10-15','15-20','Backlog >20'])
-        vals.append(total_7d)
-        if extra_cols:
-            vals.extend(extra_cols)
-
-        for ci, val in enumerate(vals, 3):
-            c = ws.cell(row_num, ci, val)
-            c.font = BFNT; c.border = BRD; c.alignment = CTR
-            if row_fill: c.fill = row_fill
-            if ci == 3:  # nome
-                c.alignment = LFT
-                if fill_nome: c.fill = fill_nome; c.font = Font(name='Calibri', bold=True, color='FFFFFF', size=10)
-            if ci == 6:  # % backlog
-                c.number_format = '0.0%'
-                v = val/100 if val > 1 else val
-                ws.cell(row_num, ci, v)
-                ws.cell(row_num, ci).font = BFNT
-                ws.cell(row_num, ci).border = BRD; ws.cell(row_num, ci).alignment = CTR
-            # Colore faixas
-            faixa_offset = ci - 7
-            if 0 <= faixa_offset < len(FAIXAS):
-                f = FAIXAS[faixa_offset]
-                cor = CORES_FAIXA.get(f, 'FFFFFF')
-                if val and val > 0:
-                    c.fill = PatternFill('solid', fgColor=cor)
-                    c.font = Font(name='Calibri', size=10, bold=True,
-                                  color='FFFFFF' if f not in ('1-3','3-5') else '000000')
+    VERD = PatternFill('solid', fgColor='375623')
+    ALT  = PatternFill('solid', fgColor='D9E1F2')
+    BRD  = Border(left=Side(style='thin'),right=Side(style='thin'),
+                  top=Side(style='thin'),bottom=Side(style='thin'))
+    CTR  = Alignment(horizontal='center',vertical='center',wrap_text=True)
+    LFT  = Alignment(horizontal='left',vertical='center')
+    HFNT = Font(name='Calibri',bold=True,color='FFFFFF',size=10)
+    BFNT = Font(name='Calibri',size=10)
 
     wb = Workbook()
-    ws = wb.active
-    ws.title = 'BACKLOG'
-    ws.sheet_view.showGridLines = False
+    ws = wb.active; ws.title = 'BACKLOG'; ws.sheet_view.showGridLines = False
 
-    # Título geral
-    ws.merge_cells('C1:O1')
-    t = ws.cell(1, 3, f'BACKLOG 超时未完结  —  {datetime.now().strftime("%d/%m/%Y")}')
-    t.font = Font(name='Calibri', bold=True, color='FFFFFF', size=14)
+    ws.merge_cells('C1:P1')
+    t = ws.cell(1,3,f'BACKLOG 超时未完结  —  {u["data_ref"]}')
+    t.font = Font(name='Calibri',bold=True,color='FFFFFF',size=14)
     t.fill = HDR; t.alignment = CTR; ws.row_dimensions[1].height = 32
 
+    def write_section(cur, titulo, rows, fill, show_sup=False):
+        ws.merge_cells(f'C{cur}:P{cur}')
+        h = ws.cell(cur,3,titulo); h.fill=fill; h.font=HFNT; h.alignment=CTR
+        ws.row_dimensions[cur].height = 22; cur += 1
+
+        hdr = (['Supervisor'] if show_sup else []) + \
+              ['Nome','Orders','Backlog','% Backlog'] + FAIXAS_LABELS + ['>7D']
+        if show_sup: hdr.append('Prioridade')
+        for ci,txt in enumerate(hdr,3):
+            c = ws.cell(cur,ci,txt); c.fill=fill; c.font=HFNT; c.alignment=CTR; c.border=BRD
+        ws.row_dimensions[cur].height = 36; cur += 1
+
+        for i, row in enumerate(rows):
+            rf = ALT if i%2==0 else None
+            vals = []
+            if show_sup: vals.append(row.get('supervisor',''))
+            vals += [row['nome'], row['orders'], row['backlog'],
+                     round(row['pct_backlog']/100,4)]
+            for col in DB_COLS: vals.append(row.get(col,0) or 0)
+            vals.append(row['total_7d'])
+            if show_sup: vals.append(row.get('prioridade',''))
+
+            for ci, val in enumerate(vals,3):
+                c = ws.cell(cur,ci,val); c.font=BFNT; c.border=BRD; c.alignment=CTR
+                if rf: c.fill=rf
+                if ci in (3,4): c.alignment=LFT
+                # % backlog col
+                pct_col = 7 if show_sup else 6
+                if ci == pct_col: c.number_format='0.0%'
+                # faixa cols
+                fo = ci - (8 if show_sup else 7)
+                if 0 <= fo < len(FAIXAS):
+                    cor = CORES_FAIXA.get(FAIXAS[fo],'FFFFFF')
+                    if isinstance(val,(int,float)) and val > 0:
+                        c.fill = PatternFill('solid',fgColor=cor)
+                        c.font = Font(name='Calibri',size=10,bold=True,
+                                      color='FFFFFF' if FAIXAS[fo] not in ('1-3','3-5') else '000000')
+            cur += 1
+        return cur + 1
+
     cur = 3
+    cur = write_section(cur,'LH — Por RDC', rdc, AZUL)
+    cur = write_section(cur,'DS — Por Supervisor', sups, VERD)
+    cur = write_section(cur,'DS — Detalhado por Base', dss, HDR, show_sup=True)
 
-    # ── Seção 1: Por RDC ──────────────────────────────────────
-    ws.merge_cells(f'C{cur}:O{cur}')
-    h = ws.cell(cur, 3, 'LH - Region')
-    h.fill = AZUL; h.font = HFNT; h.alignment = CTR
-    ws.row_dimensions[cur].height = 22; cur += 1
-
-    COLS_HDR = ['Region', 'Orders\n库存', 'BACKLOG', '% Backlog'] + FAIXAS_COLS + ['>7D Total']
-    write_header_row(ws, cur, COLS_HDR, AZUL); cur += 1
-
-    for i, rdc in enumerate(sorted(dc['ds'].dropna().unique())):
-        grp = dc[dc['ds'] == rdc]
-        orders = get_orders_rdc(rdc)
-        write_data_row(ws, cur, rdc, orders, grp, alt=(i%2==0))
-        cur += 1
-
-    cur += 1
-
-    # ── Seção 2: Por Supervisor ───────────────────────────────
-    ws.merge_cells(f'C{cur}:O{cur}')
-    h = ws.cell(cur, 3, 'DS — Por Supervisor')
-    h.fill = VERDE; h.font = HFNT; h.alignment = CTR
-    ws.row_dimensions[cur].height = 22; cur += 1
-
-    write_header_row(ws, cur, COLS_HDR, VERDE); cur += 1
-
-    for i, sup in enumerate(sorted(dfs['supervisor'].dropna().unique())):
-        grp = dfs[dfs['supervisor'] == sup]
-        orders = get_orders_sup(sup)
-        write_data_row(ws, cur, sup, orders, grp, alt=(i%2==0))
-        cur += 1
-
-    cur += 1
-
-    # ── Seção 3: Por DS ───────────────────────────────────────
-    ws.merge_cells(f'C{cur}:R{cur}')
-    h = ws.cell(cur, 3, 'DS — Detalhado por Base')
-    h.fill = HDR; h.font = HFNT; h.alignment = CTR
-    ws.row_dimensions[cur].height = 22; cur += 1
-
-    COLS_DS = ['Supervisor', 'DS', 'Orders\n库存', 'BACKLOG', '% Backlog'] + FAIXAS_COLS + ['>7D', 'Prioridade']
-    for ci, txt in enumerate(COLS_DS, 3):
-        c = ws.cell(cur, ci, txt)
-        c.fill = HDR; c.font = HFNT; c.alignment = CTR; c.border = BRD
-    ws.row_dimensions[cur].height = 36; cur += 1
-
-    # Ordena por >7D
-    ds_sorted = []
-    for ds_name in dfs['ds'].dropna().unique():
-        grp = dfs[dfs['ds'] == ds_name]
-        sup = grp['supervisor'].mode().iloc[0] if len(grp) else ''
-        total_7d = int(sum((grp['range_backlog'] == f).sum() for f in ['7-10','10-15','15-20','Backlog >20']))
-        ds_sorted.append((ds_name, sup, grp, total_7d))
-    ds_sorted.sort(key=lambda x: x[3], reverse=True)
-
-    for i, (ds_name, sup, grp, total_7d) in enumerate(ds_sorted):
-        orders = get_orders_ds(ds_name)
-        alt = i % 2 == 0
-        row_fill = ALT if alt else None
-        pct = round(len(grp)/orders*100, 1) if orders else 0
-
-        vals = [sup, ds_name, orders, len(grp), pct]
-        for f in FAIXAS:
-            vals.append(int((grp['range_backlog'] == f).sum()))
-        vals.extend([total_7d, i+1])
-
-        for ci, val in enumerate(vals, 3):
-            c = ws.cell(cur, ci, val)
-            c.font = BFNT; c.border = BRD; c.alignment = CTR
-            if row_fill: c.fill = row_fill
-            if ci in (3,4): c.alignment = LFT
-            if ci == 7:  # %
-                v = val/100 if isinstance(val, (int,float)) and val > 1 else val
-                ws.cell(cur, ci, v).number_format = '0.0%'
-                ws.cell(cur, ci).font = BFNT; ws.cell(cur, ci).border = BRD
-                ws.cell(cur, ci).alignment = CTR
-                if row_fill: ws.cell(cur, ci).fill = row_fill
-            faixa_offset = ci - 8
-            if 0 <= faixa_offset < len(FAIXAS):
-                f = FAIXAS[faixa_offset]
-                cor = CORES_FAIXA.get(f, 'FFFFFF')
-                if isinstance(val, (int,float)) and val > 0:
-                    c.fill = PatternFill('solid', fgColor=cor)
-                    c.font = Font(name='Calibri', size=10, bold=True,
-                                  color='FFFFFF' if f not in ('1-3','3-5') else '000000')
-            if ci == 3+len(vals)-1:  # Prioridade
-                c.fill = PatternFill('solid', fgColor='1F3864')
-                c.font = Font(name='Calibri', bold=True, color='FFFFFF', size=10)
-        cur += 1
-
-    # Larguras das colunas
-    for col, w in [(3,18),(4,14),(5,12),(6,12),(7,10)] + [(8+i,9) for i in range(8)]:
+    for col,w in [(3,20),(4,14),(5,12),(6,12),(7,10)]+[(8+i,9) for i in range(9)]:
         ws.column_dimensions[get_column_letter(col)].width = w
-
     ws.freeze_panes = 'C4'
 
-    buf = io.BytesIO()
-    wb.save(buf); buf.seek(0)
-
-    return StreamingResponse(
-        buf,
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return StreamingResponse(buf,
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=Backlog_SLA.xlsx'}
-    )
+        headers={'Content-Disposition': f'attachment; filename=Backlog_SLA_{u["data_ref"]}.xlsx'})
