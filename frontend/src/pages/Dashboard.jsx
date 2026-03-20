@@ -83,16 +83,48 @@ export default function Dashboard() {
       </div>
 
       {/* Filtros */}
-      <div className="bg-slate-100 rounded-xl p-4 mb-6 border border-slate-200">
-        <div className="flex items-center gap-2 mb-3"><Filter size={14} className="text-slate-500"/><span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Filtros</span></div>
-        <div className="flex flex-wrap gap-4 items-center">
-          <select value={dataSel||''} onChange={e=>{setDataSel(e.target.value);setDsSel([])}} className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm">
-            {datas.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
-          </select>
-          <select multiple value={dsSel} onChange={e=>setDsSel(Array.from(e.target.selectedOptions,o=>o.value))} className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm min-w-[200px] max-h-[100px]">
-            {data?.ds_disponiveis?.map(ds => <option key={ds} value={ds}>{ds}</option>)}
-          </select>
-          {dsSel.length > 0 && <button onClick={()=>setDsSel([])} className="text-xs text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg">Limpar ({dsSel.length})</button>}
+      <div className="bg-white rounded-xl p-4 mb-6 border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-slate-500"/>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Filtros</span>
+          </div>
+          {dsSel.length > 0 && (
+            <button onClick={()=>setDsSel([])} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+              Limpar seleção ({dsSel.length})
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3 items-start">
+          {/* Seletor de data */}
+          <div>
+            <p className="text-[10px] font-semibold uppercase text-slate-400 mb-1">Data</p>
+            <select value={dataSel||""} onChange={e=>{setDataSel(e.target.value);setDsSel([])}}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm min-w-[140px]">
+              {datas.map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+            </select>
+          </div>
+          {/* Filtro de DS como tags clicáveis */}
+          {data?.ds_disponiveis?.length > 0 && (
+            <div className="flex-1">
+              <p className="text-[10px] font-semibold uppercase text-slate-400 mb-1">
+                Bases {dsSel.length > 0 ? <span className="text-imile-500">({dsSel.length} selecionadas)</span> : <span className="text-slate-300">(todas)</span>}
+              </p>
+              <div className="flex flex-wrap gap-1.5 max-h-[80px] overflow-y-auto">
+                {data.ds_disponiveis.map(ds => {
+                  const sel = dsSel.includes(ds)
+                  return (
+                    <button key={ds} onClick={() => setDsSel(prev => sel ? prev.filter(x => x !== ds) : [...prev, ds])}
+                      className={"px-2.5 py-1 rounded-full text-xs font-medium transition-all border " + (sel
+                        ? "bg-imile-500 text-white border-imile-500 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-imile-400 hover:text-imile-600")}>
+                      {ds}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

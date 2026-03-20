@@ -15,15 +15,26 @@ export default function Historico() {
 
   const [ini, setIni] = useState(d30)
   const [fim, setFim] = useState(today)
+  const [iniInput, setIniInput] = useState(d30)
+  const [fimInput, setFimInput] = useState(today)
   const [data, setData] = useState(null)
   const [evoData, setEvoData] = useState(null)
   const [dsSel, setDsSel] = useState('')
   const [dsList, setDsList] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  const aplicar = () => {
+    if (iniInput && fimInput && iniInput <= fimInput) {
+      setIni(iniInput); setFim(fimInput)
+    }
+  }
 
   useEffect(() => {
     if (!ini || !fim) return
+    setLoading(true)
     api.get('/api/historico/periodo', { params: { data_ini: ini, data_fim: fim } })
       .then(r => { setData(r.data); setDsList(r.data.por_ds?.map(d => d.scan_station) || []) })
+      .finally(() => setLoading(false))
   }, [ini, fim])
 
   // Evolução DS
@@ -68,11 +79,34 @@ export default function Historico() {
         <button onClick={handleExcel} className="flex items-center gap-2 px-4 py-2 bg-navy-900 text-white rounded-lg text-sm font-medium hover:bg-navy-800"><Download size={14}/> Excel do Período</button>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <div><label className="text-[11px] font-semibold uppercase text-slate-500">De</label>
-          <input type="date" value={ini} onChange={e=>setIni(e.target.value)} className="block mt-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"/></div>
-        <div><label className="text-[11px] font-semibold uppercase text-slate-500">Até</label>
-          <input type="date" value={fim} onChange={e=>setFim(e.target.value)} className="block mt-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"/></div>
+      <div className="flex flex-wrap gap-3 items-end mb-6 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div>
+          <label className="text-[11px] font-semibold uppercase text-slate-500">De</label>
+          <input type="date" value={iniInput} onChange={e=>setIniInput(e.target.value)}
+            className="block mt-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"/>
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold uppercase text-slate-500">Até</label>
+          <input type="date" value={fimInput} onChange={e=>setFimInput(e.target.value)}
+            className="block mt-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"/>
+        </div>
+        <button onClick={aplicar} disabled={loading}
+          className="px-5 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 transition-colors">
+          {loading ? 'Carregando...' : 'Aplicar'}
+        </button>
+        {/* Atalhos rápidos */}
+        <div className="flex gap-2 ml-2">
+          {[['7d','7 dias',7],['30d','30 dias',30],['90d','90 dias',90]].map(([k,lbl,days]) => {
+            const d = new Date(); d.setDate(d.getDate() - days + 1)
+            const newIni = d.toISOString().slice(0,10)
+            return (
+              <button key={k} onClick={() => { setIniInput(newIni); setFimInput(today); setIni(newIni); setFim(today) }}
+                className="px-3 py-2 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                {lbl}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {!data?.resumo?.recebido ? <Alert type="info">Nenhum dado no período.</Alert> : <>
