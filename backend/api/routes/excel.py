@@ -412,16 +412,22 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
         tm.fill = hf_mot; tm.font = _hfnt(); tm.alignment = _CTR
         ws.row_dimensions[mot_row_start].height = 24
 
-        MOT_HDR = ["Motorista", "ID Motorista", "DS", "Semana Atual", "% do Total"]
+        MOT_HDR = ["SUPERVISOR", "TOP Motorista Ofensor", "ID Motorista", "DS", f"Qt Reclamações Week {semana_ref}", "% do Total"]
+        ncols_mot = len(MOT_HDR)
+        ws.merge_cells(start_row=mot_row_start, start_column=MOT_START,
+                       end_row=mot_row_start, end_column=MOT_START + ncols_mot - 1)
+        tm.value = "🏆 TOP Motoristas Ofensores"
         for ci, cn in enumerate(MOT_HDR, MOT_START):
             c = ws.cell(mot_row_start + 1, ci, cn)
             c.fill = hf_mot; c.font = _hfnt(); c.alignment = _CTR; c.border = _BRD
+            ws.column_dimensions[get_column_letter(ci)].width = 22
 
         total_dia_ref = int(r_sta["dia_total"].sum()) if not r_sta.empty else 1
         for ri, (_, row) in enumerate(top5.iterrows(), mot_row_start + 2):
             total_mot = int(row.get("total", 0) or 0)
             pct = total_mot / max(total_dia_ref, 1)
             vals = [
+                str(row.get("supervisor", "") or ""),
                 row.get("motorista", ""),
                 str(row.get("id_motorista", "") or ""),
                 str(row.get("ds", "") or ""),
@@ -430,13 +436,15 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
             ]
             for ci, val in enumerate(vals, MOT_START):
                 c = ws.cell(ri, ci, val)
-                c.font = _bfnt(bold=(ci == MOT_START + 3)); c.border = _BRD; c.alignment = _CTR
-                if ci == MOT_START: c.alignment = Alignment(horizontal="left", vertical="center")
-                if ci == MOT_START + 3:
+                c.font = _bfnt(); c.border = _BRD; c.alignment = _CTR
+                if ci in (MOT_START, MOT_START+1): c.alignment = Alignment(horizontal="left", vertical="center")
+                if ci == MOT_START + 4:
                     c.number_format = "#,##0"
                     c.font = Font(name="Calibri", size=11, bold=True, color=C_RED)
-                if ci == MOT_START + 4:
+                if ci == MOT_START + 5:
                     c.number_format = "0.00%"
+                    c.fill = PatternFill("solid", fgColor="FF0000") if pct > 0.005 else PatternFill("solid", fgColor="70AD47")
+                    c.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
 
     ws.freeze_panes = "A4"
 
