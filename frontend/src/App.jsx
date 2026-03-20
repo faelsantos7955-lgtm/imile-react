@@ -11,6 +11,7 @@ import Comparativos from './pages/Comparativos'
 import Triagem from './pages/Triagem'
 import Reclamacoes from './pages/Reclamacoes'
 import Admin from './pages/Admin'
+import Backlog from './pages/Backlog'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -33,6 +34,7 @@ function AppRoutes() {
         <Route path="comparativos" element={<Comparativos />} />
         <Route path="triagem" element={<Triagem />} />
         <Route path="reclamacoes" element={<Reclamacoes />} />
+        <Route path="backlog" element={<Backlog />} />
         <Route path="admin/*" element={
           <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
         } />
