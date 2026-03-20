@@ -229,7 +229,7 @@ export default function Backlog() {
             { l: 'Na DS',        v: F(dados.kpis.na_ds),       c: '#16A34A' },
             { l: 'Em Trânsito',  v: F(dados.kpis.em_transito), c: '#EA580C' },
             { l: 'Críticos >7d', v: F(dados.kpis.total_7d),    c: '#DC2626' },
-            { l: '% Crítico',    v: `${dados.kpis.pct_7d}%`,   c: '#7C3AED' },
+            { l: '% Crítico',    v: `${dados.kpis.pct_7d}%`,   c: '#1E3A5F' },
           ].map(({ l, v, c }) => (
             <div key={l} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm"
               style={{ borderLeftWidth: 4, borderLeftColor: c }}>
@@ -284,9 +284,9 @@ export default function Backlog() {
                 </thead>
                 <tbody>
                   {dados.por_motivo.map((row, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-purple-50/30' : 'bg-white'}>
+                    <tr key={i} className={i % 2 === 0 ? 'bg-blue-50/30' : 'bg-white'}>
                       <td className="px-3 py-2 border border-slate-200 font-semibold text-slate-800">{row.nome}</td>
-                      <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-purple-700">
+                      <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-blue-700">
                         {(row.backlog || 0).toLocaleString('pt-BR')}
                       </td>
                       <td className={`px-3 py-2 text-center border border-slate-200 font-mono

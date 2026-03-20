@@ -11,7 +11,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
 
-const COLORS = ['#2563eb','#f97316','#10b981','#8b5cf6','#ef4444','#f59e0b','#06b6d4','#ec4899','#84cc16','#6366f1']
+const COLORS = ['#2563eb','#f97316','#10b981','#06b6d4','#ef4444','#f59e0b','#06b6d4','#f59e0b','#84cc16','#0ea5e9']
 
 // Calcula períodos para cada tab
 function getPeriodos() {

@@ -136,7 +136,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
           <KpiCard label="Recebido" value={F(d.kpis.recebido)} sub="waybills no dia" color="blue"/>
           <KpiCard label="Em Rota" value={F(d.kpis.expedido)} sub={`taxa ${P(d.kpis.taxa_exp)}`} color="orange"/>
-          <KpiCard label="Entregas" value={F(d.kpis.entregas)} sub={d.kpis.entregas ? `taxa ${P(d.kpis.taxa_ent)}` : 'sem dados'} color="violet"/>
+          <KpiCard label="Entregas" value={F(d.kpis.entregas)} sub={d.kpis.entregas ? `taxa ${P(d.kpis.taxa_ent)}` : 'sem dados'} color="blue"/>
           <KpiCard label="DS na Meta" value={d.kpis.n_ok} sub={`de ${d.kpis.n_ds} bases`} color="green"/>
           <KpiCard label="DS Abaixo" value={d.kpis.n_abaixo} sub="precisam atenção" color="red"/>
         </div>

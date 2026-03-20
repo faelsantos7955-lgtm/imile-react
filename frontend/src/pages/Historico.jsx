@@ -7,7 +7,7 @@ import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/u
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart } from 'recharts'
 import { Download } from 'lucide-react'
 
-const COLORS = ['#2563eb','#f97316','#10b981','#8b5cf6','#ef4444','#f59e0b','#06b6d4','#ec4899','#84cc16','#6366f1']
+const COLORS = ['#2563eb','#f97316','#10b981','#06b6d4','#ef4444','#f59e0b','#06b6d4','#f59e0b','#84cc16','#0ea5e9']
 
 export default function Historico() {
   const today = new Date().toISOString().slice(0,10)

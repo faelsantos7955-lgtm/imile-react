@@ -12,7 +12,7 @@ import {
 import { Download, ShieldAlert, ShieldOff, ShieldCheck, Loader } from 'lucide-react'
 
 const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
-const COLORS_WEEK = ['#2563eb', '#f97316', '#10b981', '#8b5cf6']
+const COLORS_WEEK = ['#2563eb', '#f97316', '#10b981', '#06b6d4']
 
 export default function Reclamacoes() {
   const { isAdmin }               = useAuth()
@@ -126,7 +126,7 @@ export default function Reclamacoes() {
               <KpiCard label="Total Registros"  value={F(u.n_registros)} color="blue"   />
               <KpiCard label="Supervisores"     value={u.n_sup}          color="orange" />
               <KpiCard label="Stations"         value={u.n_sta}          color="green"  />
-              <KpiCard label="Motoristas ID'd"  value={u.n_mot}          color="violet" />
+              <KpiCard label="Motoristas ID'd"  value={u.n_mot}          color="blue" />
             </div>
           )}
 
