@@ -6,7 +6,7 @@ import { useAuth } from '../lib/AuthContext'
 import {
   LayoutDashboard, CalendarDays, BarChart3,
   GitBranch, FileWarning, Upload, Users, Settings,
-  LogOut, Truck, Bell, HelpCircle, Search
+  LogOut, Truck, Bell, HelpCircle, Search, Package
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/comparativos', icon: BarChart3,       label: 'Comparativos' },
   { to: '/triagem',      icon: GitBranch,       label: 'Triagem DC×DS' },
   { to: '/reclamacoes',  icon: FileWarning,     label: 'Reclamações' },
+  { to: '/backlog',      icon: Package,         label: 'Backlog SLA' },
 ]
 
 const ADMIN_ITEMS = [
