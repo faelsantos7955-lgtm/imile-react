@@ -29,7 +29,7 @@ function FaixaCell({ faixa, value }) {
   )
 }
 
-function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false }) {
+function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false, showRegiao = false }) {
   return (
     <div className="mb-6">
       <div className="rounded-t-xl px-4 py-2 text-white font-bold text-sm"
@@ -40,6 +40,7 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false 
         <table className="w-full text-xs">
           <thead>
             <tr style={{ backgroundColor: cor }} className="text-white text-center">
+              {showRegiao    && <th className="px-3 py-2 border border-white/20 text-left">Região</th>}
               {showSupervisor && <th className="px-3 py-2 border border-white/20 text-left">Supervisor</th>}
               <th className="px-3 py-2 border border-white/20 text-left">Nome</th>
               <th className="px-3 py-2 border border-white/20">Orders</th>
@@ -58,6 +59,9 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false 
           <tbody>
             {dados.map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? 'bg-blue-50/30' : 'bg-white'}>
+                {showRegiao && (
+                  <td className="px-3 py-2 border border-slate-200 text-slate-500">{row.regiao || '—'}</td>
+                )}
                 {showSupervisor && (
                   <td className="px-3 py-2 border border-slate-200 text-slate-600">{row.supervisor || '—'}</td>
                 )}
@@ -97,16 +101,15 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false 
 }
 
 export default function Backlog() {
-  const [uploads, setUploads]       = useState([])
-  const [uploadSel, setUploadSel]   = useState(null)
-  const [dados, setDados]           = useState(null)
-  const [loading, setLoading]       = useState(false)
-  const [uploading, setUploading]   = useState(false)
+  const [uploads, setUploads]         = useState([])
+  const [uploadSel, setUploadSel]     = useState(null)
+  const [dados, setDados]             = useState(null)
+  const [loading, setLoading]         = useState(false)
+  const [uploading, setUploading]     = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [erro, setErro]             = useState('')
+  const [erro, setErro]               = useState('')
   const inputRef = useRef()
 
-  // Carrega lista de uploads
   const carregarUploads = async () => {
     try {
       const res = await api.get('/api/backlog/uploads')
@@ -117,7 +120,6 @@ export default function Backlog() {
     } catch {}
   }
 
-  // Carrega dados de um upload
   const carregarDados = async (id) => {
     setLoading(true); setErro('')
     try {
@@ -128,10 +130,7 @@ export default function Backlog() {
   }
 
   useEffect(() => { carregarUploads() }, [])
-
-  useEffect(() => {
-    if (uploadSel) carregarDados(uploadSel)
-  }, [uploadSel])
+  useEffect(() => { if (uploadSel) carregarDados(uploadSel) }, [uploadSel])
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
@@ -169,7 +168,7 @@ export default function Backlog() {
   return (
     <div>
       <div className="flex items-start justify-between">
-        <PageHeader icon="📦" title="Backlog SLA" subtitle="Pedidos acima do SLA por RDC, Supervisor e DS" />
+        <PageHeader icon="📦" title="Backlog SLA" subtitle="Pedidos acima do SLA por RDC, Supervisor, DS e Motivo" />
         <div className="flex gap-2">
           {dados && (
             <button onClick={baixarExcel} disabled={downloading}
@@ -197,7 +196,7 @@ export default function Backlog() {
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
             {uploads.map(u => (
               <option key={u.id} value={u.id}>
-                {fmtDate(u.data_ref)} — {(u.total||0).toLocaleString('pt-BR')} pedidos
+                {fmtDate(u.data_ref)} — {(u.total || 0).toLocaleString('pt-BR')} pedidos
               </option>
             ))}
           </select>
@@ -222,6 +221,7 @@ export default function Backlog() {
       )}
 
       {!loading && dados && <>
+
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           {[
@@ -255,9 +255,58 @@ export default function Backlog() {
         </div>
 
         {/* Tabelas */}
-        <TabelaBacklog titulo="LH — Por RDC"           dados={dados.por_rdc}        cor="#2E75B6" />
+        <TabelaBacklog titulo="LH — Por RDC"           dados={dados.por_rdc}        cor="#2E75B6" showRegiao />
         <TabelaBacklog titulo="DS — Por Supervisor"     dados={dados.por_supervisor} cor="#375623" />
         <TabelaBacklog titulo="DS — Detalhado por Base" dados={dados.por_ds}         cor="#1F3864" showSupervisor />
+
+        {/* Tabela de Motivos */}
+        {dados.por_motivo?.length > 0 && (
+          <div className="mb-6">
+            <div className="rounded-t-xl px-4 py-2 text-white font-bold text-sm"
+              style={{ backgroundColor: '#7030A0' }}>
+              DS — Por Motivo (Último Status)
+            </div>
+            <div className="overflow-x-auto border border-slate-200 rounded-b-xl">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ backgroundColor: '#7030A0' }} className="text-white text-center">
+                    <th className="px-3 py-2 border border-white/20 text-left">Motivo</th>
+                    <th className="px-3 py-2 border border-white/20">Backlog</th>
+                    <th className="px-3 py-2 border border-white/20">% Backlog</th>
+                    {FAIXAS_LABELS.map((f, i) => (
+                      <th key={i} className="px-2 py-2 border border-white/20"
+                        style={{ backgroundColor: CORES[FAIXAS[i]]?.bg, color: CORES[FAIXAS[i]]?.text }}>
+                        {f}
+                      </th>
+                    ))}
+                    <th className="px-3 py-2 border border-white/20">&gt;7D</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dados.por_motivo.map((row, i) => (
+                    <tr key={i} className={i % 2 === 0 ? 'bg-purple-50/30' : 'bg-white'}>
+                      <td className="px-3 py-2 border border-slate-200 font-semibold text-slate-800">{row.nome}</td>
+                      <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-purple-700">
+                        {(row.backlog || 0).toLocaleString('pt-BR')}
+                      </td>
+                      <td className={`px-3 py-2 text-center border border-slate-200 font-mono
+                        ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        {row.pct_backlog?.toFixed(1)}%
+                      </td>
+                      {FAIXAS.map((f, fi) => (
+                        <FaixaCell key={fi} faixa={f} value={row.faixas?.[f] || 0} />
+                      ))}
+                      <td className={`px-3 py-2 text-center border border-slate-200 font-mono font-bold
+                        ${row.total_7d > 500 ? 'text-red-600' : row.total_7d > 100 ? 'text-amber-600' : 'text-slate-600'}`}>
+                        {(row.total_7d || 0).toLocaleString('pt-BR')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </>}
     </div>
   )
