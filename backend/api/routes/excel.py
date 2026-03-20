@@ -312,7 +312,8 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
     t.alignment = _CTR; ws.row_dimensions[1].height = 28
 
     # ── Tabela DS (esquerda, cols 1+) ─────────────────────────
-    DS_HDR = ["DS", "SUPERVISOR", f"Qt Semana {semana_ref}"] + [_week_label(c) for c in week_cols_sta[:2]] + ["Qt Mês", "% Rate"]
+    semana_label = f"Qt Semana {semana_ref}" if semana_ref else "Qt Semana Atual"
+    DS_HDR = ["DS", "SUPERVISOR", semana_label] + [_week_label(c) for c in week_cols_sta[:2]] + ["Qt Mês", "% Rate"]
     hf_ds = PatternFill("solid", fgColor=C_HDR_DS)
     for ci, cn in enumerate(DS_HDR, 1):
         c = ws.cell(3, ci, cn)
@@ -341,9 +342,10 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
             week_vals = [int(row.get(wc, 0) or 0) for wc in week_cols_sta[:2]]
             mes_total = int(row.get("mes_total", 0) or 0)
             dia_total = int(row.get("dia_total", 0) or 0)
+            supervisor_ds = str(row.get("supervisor", "") or "")
             # % Rate = reclamações semana / entregas mês (se disponível)
             rate = ""
-            vals = [row.get("station", ""), "", dia_total] + week_vals + [mes_total, rate]
+            vals = [row.get("station", ""), supervisor_ds, dia_total] + week_vals + [mes_total, rate]
             for ci, val in enumerate(vals, 1):
                 c = ws.cell(ri, ci, val)
                 c.font = _bfnt(); c.border = _BRD; c.alignment = _CTR
@@ -366,7 +368,7 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
 
     # ── Tabela Supervisor (direita, cols 8+) ───────────────────
     SUP_START = len(DS_HDR) + 2
-    SUP_HDR = ["SUPERVISOR", f"Qt Semana {semana_ref}"] + [_week_label(c) for c in week_cols_sup[:2]] + ["Qt Mês", "% Rate", "Performance"]
+    SUP_HDR = ["SUPERVISOR", semana_label] + [_week_label(c) for c in week_cols_sup[:2]] + ["Qt Mês", "% Rate", "Performance"]
     hf_sup = PatternFill("solid", fgColor=C_HDR_SUP)
 
     ws.merge_cells(start_row=2, start_column=SUP_START, end_row=2, end_column=SUP_START + len(SUP_HDR) - 1)
