@@ -19,6 +19,7 @@ def listar_usuarios(user: dict = Depends(require_admin)):
 class PermissoesRequest(BaseModel):
     bases: list = []
     paginas: list = []
+    acoes: list = []
     role: str = "viewer"
     ativo: bool = True
 
@@ -29,6 +30,7 @@ def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends
     sb.table("usuarios").update({
         "bases":    req.bases,
         "paginas":  req.paginas,
+        "acoes":    req.acoes,
         "role":     req.role,
         "ativo":    req.ativo,
         "atualizado_por": user["email"],

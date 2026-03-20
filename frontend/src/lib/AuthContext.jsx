@@ -1,23 +1,23 @@
 /**
- * lib/AuthContext.jsx — Contexto de autenticação global
+ * lib/AuthContext.jsx — Contexto de autenticação com permissões granulares
  */
 import { createContext, useContext, useState, useEffect } from 'react'
 import api from './api'
 
 const AuthContext = createContext(null)
 
+const PAGINAS_DEFAULT = ['dashboard','historico','comparativos','triagem','reclamacoes']
+const ACOES_DEFAULT   = ['excel']
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+  const [user, setUser]     = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Tenta restaurar sessão do localStorage
     const token = localStorage.getItem('access_token')
     const saved = localStorage.getItem('user')
     if (token && saved) {
-      try {
-        setUser(JSON.parse(saved))
-      } catch { /* ignora */ }
+      try { setUser(JSON.parse(saved)) } catch {}
     }
     setLoading(false)
   }, [])
@@ -39,8 +39,24 @@ export function AuthProvider({ children }) {
 
   const isAdmin = user?.role === 'admin'
 
+  // Permissões granulares
+  const paginasPermitidas = isAdmin
+    ? ['dashboard','historico','comparativos','triagem','reclamacoes','admin']
+    : (user?.paginas?.length ? user.paginas : PAGINAS_DEFAULT)
+
+  const acoesPermitidas = isAdmin
+    ? ['excel','bloquear_motorista','aprovar_acesso']
+    : (user?.acoes?.length ? user.acoes : ACOES_DEFAULT)
+
+  const podeVer   = (pagina) => isAdmin || paginasPermitidas.includes(pagina)
+  const podeAção  = (acao)   => isAdmin || acoesPermitidas.includes(acao)
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, isAdmin }}>
+    <AuthContext.Provider value={{
+      user, login, logout, loading, isAdmin,
+      paginasPermitidas, acoesPermitidas,
+      podeVer, podeAção
+    }}>
       {children}
     </AuthContext.Provider>
   )
