@@ -8,22 +8,53 @@ import { Upload, Download, Loader, RefreshCw, Filter, X } from 'lucide-react'
 
 const FAIXAS = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
 const FAIXAS_LABELS = ['1D<3D', '3D<5D', '5D<7D', '7D<10D', '10D<15D', '15D<20D', '≥20D']
-const CORES = {
-  '1-3':         { bg: '#92D050', text: '#000' },
-  '3-5':         { bg: '#FFFF00', text: '#000' },
-  '5-7':         { bg: '#FFC000', text: '#000' },
-  '7-10':        { bg: '#EF4444', text: '#fff' },
-  '10-15':       { bg: '#DC2626', text: '#fff' },
-  '15-20':       { bg: '#B91C1C', text: '#fff' },
-  'Backlog >20': { bg: '#7F1D1D', text: '#fff' },
+
+// Só >7d tem cor de fundo (vermelho). <7d fica neutro.
+const CORES_CELL = {
+  '1-3':         null,
+  '3-5':         null,
+  '5-7':         null,
+  '7-10':        { bg: '#FEE2E2', text: '#DC2626' },
+  '10-15':       { bg: '#FECACA', text: '#B91C1C' },
+  '15-20':       { bg: '#FCA5A5', text: '#991B1B' },
+  'Backlog >20': { bg: '#EF4444', text: '#fff' },
+}
+
+// Badges do topo: <7d em cinza, >7d em vermelho
+const CORES_BADGE = {
+  '1-3':         { bg: '#F1F5F9', text: '#475569' },
+  '3-5':         { bg: '#F1F5F9', text: '#475569' },
+  '5-7':         { bg: '#F1F5F9', text: '#475569' },
+  '7-10':        { bg: '#FEE2E2', text: '#DC2626' },
+  '10-15':       { bg: '#FECACA', text: '#B91C1C' },
+  '15-20':       { bg: '#FCA5A5', text: '#991B1B' },
+  'Backlog >20': { bg: '#EF4444', text: '#fff' },
+}
+
+// Cores do header da tabela para faixas
+const CORES_HEADER = {
+  '1-3':         { bg: '#E2E8F0', text: '#475569' },
+  '3-5':         { bg: '#E2E8F0', text: '#475569' },
+  '5-7':         { bg: '#E2E8F0', text: '#475569' },
+  '7-10':        { bg: '#FEE2E2', text: '#DC2626' },
+  '10-15':       { bg: '#FECACA', text: '#B91C1C' },
+  '15-20':       { bg: '#FCA5A5', text: '#991B1B' },
+  'Backlog >20': { bg: '#EF4444', text: '#fff' },
 }
 
 function FaixaCell({ faixa, value }) {
+  const cores = CORES_CELL[faixa]
   if (!value) return <td className="px-2 py-2 text-center text-xs border border-slate-200 text-slate-300">0</td>
-  const { bg, text } = CORES[faixa] || {}
+  if (!cores) {
+    return (
+      <td className="px-2 py-2 text-center text-xs border border-slate-200 text-slate-600 font-mono">
+        {value.toLocaleString('pt-BR')}
+      </td>
+    )
+  }
   return (
-    <td className="px-2 py-2 text-center text-xs border border-slate-200 font-bold"
-      style={{ backgroundColor: bg, color: text }}>
+    <td className="px-2 py-2 text-center text-xs border border-slate-200 font-bold font-mono"
+      style={{ backgroundColor: cores.bg, color: cores.text }}>
       {value.toLocaleString('pt-BR')}
     </td>
   )
@@ -46,19 +77,22 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false,
               <th className="px-3 py-2 border border-white/20">Orders</th>
               <th className="px-3 py-2 border border-white/20">Backlog</th>
               <th className="px-3 py-2 border border-white/20">% Backlog</th>
-              {FAIXAS_LABELS.map((f, i) => (
-                <th key={i} className="px-2 py-2 border border-white/20"
-                  style={{ backgroundColor: CORES[FAIXAS[i]]?.bg, color: CORES[FAIXAS[i]]?.text }}>
-                  {f}
-                </th>
-              ))}
-              <th className="px-3 py-2 border border-white/20">&gt;7D</th>
+              {FAIXAS_LABELS.map((f, i) => {
+                const hc = CORES_HEADER[FAIXAS[i]]
+                return (
+                  <th key={i} className="px-2 py-2 border border-white/20 font-bold"
+                    style={{ backgroundColor: hc?.bg, color: hc?.text }}>
+                    {f}
+                  </th>
+                )
+              })}
+              <th className="px-3 py-2 border border-white/20 bg-red-600 text-white">&gt;7D</th>
               {showSupervisor && <th className="px-3 py-2 border border-white/20">Prior.</th>}
             </tr>
           </thead>
           <tbody>
             {dados.map((row, i) => (
-              <tr key={i} className={i % 2 === 0 ? 'bg-blue-50/30' : 'bg-white'}>
+              <tr key={i} className={i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}>
                 {showRegiao && (
                   <td className="px-3 py-2 border border-slate-200 text-slate-500">{row.regiao || '—'}</td>
                 )}
@@ -66,21 +100,21 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false,
                   <td className="px-3 py-2 border border-slate-200 text-slate-600">{row.supervisor || '—'}</td>
                 )}
                 <td className="px-3 py-2 border border-slate-200 font-semibold text-slate-800">{row.nome}</td>
-                <td className="px-3 py-2 text-center border border-slate-200 font-mono">
+                <td className="px-3 py-2 text-center border border-slate-200 font-mono text-slate-600">
                   {(row.orders || 0).toLocaleString('pt-BR')}
                 </td>
-                <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-blue-700">
+                <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-slate-800">
                   {(row.backlog || 0).toLocaleString('pt-BR')}
                 </td>
                 <td className={`px-3 py-2 text-center border border-slate-200 font-mono
-                  ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-slate-500'}`}>
                   {row.pct_backlog?.toFixed(1)}%
                 </td>
                 {FAIXAS.map((f, fi) => (
                   <FaixaCell key={fi} faixa={f} value={row.faixas?.[f] || 0} />
                 ))}
                 <td className={`px-3 py-2 text-center border border-slate-200 font-mono font-bold
-                  ${row.total_7d > 500 ? 'text-red-600' : row.total_7d > 100 ? 'text-amber-600' : 'text-slate-600'}`}>
+                  ${row.total_7d > 500 ? 'text-red-600 bg-red-50' : row.total_7d > 100 ? 'text-red-500' : 'text-slate-500'}`}>
                   {(row.total_7d || 0).toLocaleString('pt-BR')}
                 </td>
                 {showSupervisor && (
@@ -290,11 +324,11 @@ export default function Backlog() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           {[
-            { l: 'Total Backlog', v: F(dados.kpis.total),      c: '#2563EB' },
-            { l: 'Na DS',        v: F(dados.kpis.na_ds),       c: '#16A34A' },
-            { l: 'Em Trânsito',  v: F(dados.kpis.em_transito), c: '#EA580C' },
+            { l: 'Total Backlog', v: F(dados.kpis.total),      c: '#334155' },
+            { l: 'Na DS',        v: F(dados.kpis.na_ds),       c: '#334155' },
+            { l: 'Em Trânsito',  v: F(dados.kpis.em_transito), c: '#334155' },
             { l: 'Críticos >7d', v: F(dados.kpis.total_7d),    c: '#DC2626' },
-            { l: '% Crítico',    v: `${dados.kpis.pct_7d}%`,   c: '#1E3A5F' },
+            { l: '% Crítico',    v: `${dados.kpis.pct_7d}%`,   c: dados.kpis.pct_7d > 10 ? '#DC2626' : '#334155' },
           ].map(({ l, v, c }) => (
             <div key={l} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm"
               style={{ borderLeftWidth: 4, borderLeftColor: c }}>
@@ -304,13 +338,13 @@ export default function Backlog() {
           ))}
         </div>
 
-        {/* Faixas */}
+        {/* Faixas resumo */}
         <div className="flex gap-2 flex-wrap mb-6">
           {FAIXAS.map((f, i) => {
             const qtd = dados.kpis.por_faixa?.[f] || 0
-            const { bg, text } = CORES[f]
+            const { bg, text } = CORES_BADGE[f]
             return (
-              <div key={f} className="rounded-lg px-3 py-2 text-center min-w-[80px]"
+              <div key={f} className="rounded-lg px-3 py-2 text-center min-w-[80px] border border-slate-200"
                 style={{ backgroundColor: bg, color: text }}>
                 <p className="text-[10px] font-bold">{FAIXAS_LABELS[i]}</p>
                 <p className="text-lg font-bold font-mono">{qtd.toLocaleString('pt-BR')}</p>
@@ -338,31 +372,34 @@ export default function Backlog() {
                     <th className="px-3 py-2 border border-white/20 text-left">Motivo</th>
                     <th className="px-3 py-2 border border-white/20">Backlog</th>
                     <th className="px-3 py-2 border border-white/20">% Backlog</th>
-                    {FAIXAS_LABELS.map((f, i) => (
-                      <th key={i} className="px-2 py-2 border border-white/20"
-                        style={{ backgroundColor: CORES[FAIXAS[i]]?.bg, color: CORES[FAIXAS[i]]?.text }}>
-                        {f}
-                      </th>
-                    ))}
-                    <th className="px-3 py-2 border border-white/20">&gt;7D</th>
+                    {FAIXAS_LABELS.map((f, i) => {
+                      const hc = CORES_HEADER[FAIXAS[i]]
+                      return (
+                        <th key={i} className="px-2 py-2 border border-white/20 font-bold"
+                          style={{ backgroundColor: hc?.bg, color: hc?.text }}>
+                          {f}
+                        </th>
+                      )
+                    })}
+                    <th className="px-3 py-2 border border-white/20 bg-red-600 text-white">&gt;7D</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dados.por_motivo.map((row, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-blue-50/30' : 'bg-white'}>
+                    <tr key={i} className={i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}>
                       <td className="px-3 py-2 border border-slate-200 font-semibold text-slate-800">{row.nome}</td>
-                      <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-blue-700">
+                      <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-slate-800">
                         {(row.backlog || 0).toLocaleString('pt-BR')}
                       </td>
                       <td className={`px-3 py-2 text-center border border-slate-200 font-mono
-                        ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-slate-500'}`}>
                         {row.pct_backlog?.toFixed(1)}%
                       </td>
                       {FAIXAS.map((f, fi) => (
                         <FaixaCell key={fi} faixa={f} value={row.faixas?.[f] || 0} />
                       ))}
                       <td className={`px-3 py-2 text-center border border-slate-200 font-mono font-bold
-                        ${row.total_7d > 500 ? 'text-red-600' : row.total_7d > 100 ? 'text-amber-600' : 'text-slate-600'}`}>
+                        ${row.total_7d > 500 ? 'text-red-600 bg-red-50' : row.total_7d > 100 ? 'text-red-500' : 'text-slate-500'}`}>
                         {(row.total_7d || 0).toLocaleString('pt-BR')}
                       </td>
                     </tr>
