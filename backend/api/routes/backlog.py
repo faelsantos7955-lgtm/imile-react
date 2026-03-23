@@ -187,35 +187,30 @@ def listar_uploads(user: dict = Depends(get_current_user)):
 @router.get("/clientes/{upload_id}")
 def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
     sb = get_supabase()
-    rows = sb.table("backlog_detalhes").select("cliente").eq("upload_id", upload_id).execute().data or []
-    clientes = sorted(set(r['cliente'] for r in rows if r.get('cliente')))
-    return clientes
-
+    rows = sb.rpc("get_clientes_upload", {"p_upload_id": upload_id}).execute().data or []
+    return [r['cliente'] for r in rows]
 
 # ── GET /upload/{id} ──────────────────────────────────────────
 @router.get("/upload/{upload_id}")
 def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depends(get_current_user)):
     sb = get_supabase()
 
-    # Se tem filtro de cliente, recomputa a partir dos detalhes
     if cliente:
-        query = sb.table("backlog_detalhes").select("*").eq("upload_id", upload_id).eq("cliente", cliente)
-        rows = query.execute().data or []
-        if not rows:
+        result = sb.rpc("backlog_por_cliente", {
+            "p_upload_id": upload_id,
+            "p_cliente":   cliente
+        }).execute()
+
+        if not result.data:
             raise HTTPException(404, "Sem dados para esse cliente")
 
-        up = sb.table("backlog_uploads").select("data_ref").eq("id", upload_id).execute()
-        data_ref = up.data[0]['data_ref'] if up.data else ''
-
-        kpis, por_rdc, por_supervisor, por_ds, por_motivo = _agregar_detalhes(rows)
-        kpis['data_ref'] = data_ref
-
+        data = result.data  # já vem como dict formatado
         return {
-            'kpis': kpis,
-            'por_rdc': por_rdc,
-            'por_supervisor': por_supervisor,
-            'por_ds': por_ds,
-            'por_motivo': por_motivo,
+            'kpis':            data['kpis'],
+            'por_rdc':         data['por_rdc']         or [],
+            'por_supervisor':  data['por_supervisor']  or [],
+            'por_ds':          data['por_ds']          or [],
+            'por_motivo':      data['por_motivo']      or [],
         }
 
     # Sem filtro — usa tabelas pré-agregadas (rápido)
