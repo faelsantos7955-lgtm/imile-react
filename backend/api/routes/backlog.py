@@ -193,36 +193,21 @@ def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depe
     sb = get_supabase()
 
     if cliente:
-        rows = []
-        page_size = 1000
-        offset = 0
-        while True:
-            chunk = (sb.table("backlog_detalhes")
-                       .select("*")
-                       .eq("upload_id", upload_id)
-                       .eq("cliente", cliente)
-                       .range(offset, offset + page_size - 1)
-                       .execute().data or [])
-            rows.extend(chunk)
-            if len(chunk) < page_size:
-                break
-            offset += page_size
+        result = sb.rpc("backlog_por_cliente", {
+            "p_upload_id": upload_id,
+            "p_cliente":   cliente
+        }).execute()
 
-        if not rows:
+        if not result.data:
             raise HTTPException(404, "Sem dados para esse cliente")
 
-        up = sb.table("backlog_uploads").select("data_ref").eq("id", upload_id).execute()
-        data_ref = up.data[0]['data_ref'] if up.data else ''
-
-        kpis, por_rdc, por_supervisor, por_ds, por_motivo = _agregar_detalhes(rows)
-        kpis['data_ref'] = data_ref
-
+        data = result.data  # já vem como dict formatado
         return {
-            'kpis': kpis,
-            'por_rdc': por_rdc,
-            'por_supervisor': por_supervisor,
-            'por_ds': por_ds,
-            'por_motivo': por_motivo,
+            'kpis':            data['kpis'],
+            'por_rdc':         data['por_rdc']         or [],
+            'por_supervisor':  data['por_supervisor']  or [],
+            'por_ds':          data['por_ds']          or [],
+            'por_motivo':      data['por_motivo']      or [],
         }
 
     # Sem filtro — usa tabelas pré-agregadas (rápido)
