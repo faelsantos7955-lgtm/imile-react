@@ -35,6 +35,7 @@ def _ler_excel(conteudo: bytes):
     df['cliente']    = df['cliente'].fillna('Sem Cliente').str.strip()
     df['range_backlog'] = df['range_backlog'].fillna('1-3').str.strip()
 
+    # df_res não é mais usado para orders, mas mantemos para compatibilidade
     buf.seek(0)
     df_res = pd.read_excel(buf, sheet_name='Resume_')
     df_res.columns = df_res.columns.str.strip()
@@ -46,28 +47,28 @@ def _ler_excel(conteudo: bytes):
     return df, df_res
 
 
-def _faixa_row(grp, orders):
+def _faixa_row(grp):
+    """
+    FIX: orders = len(grp) — igual a _agregar_detalhes.
+    Antes usava Resume_ para orders, que somava múltiplas linhas por supervisor
+    (uma por DS + cliente + semana + faixa), inflando o valor incorretamente.
+    """
+    n        = len(grp)
     faixas   = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
     total_7d = sum(faixas.get(f, 0) for f in ['7-10', '10-15', '15-20', 'Backlog >20'])
-    return {'orders': orders, 'backlog': len(grp),
-            'pct_backlog': round(len(grp) / orders * 100, 1) if orders else 0,
+    return {'orders': n, 'backlog': n,
+            'pct_backlog': 100.0,
             'faixas': faixas, 'total_7d': total_7d}
 
 
 def _processar(df, df_res):
     dc  = df[df['process'].isin(['DC-LH', 'DC'])]
     dfs = df[df['process'] == 'DS']
-    dc_res = df_res[df_res['process'].isin(['DC-LH', 'DC'])] if 'process' in df_res.columns else pd.DataFrame()
-    ds_res = df_res[df_res['process'] == 'DS']               if 'process' in df_res.columns else df_res
-
-    def orders(df_r, col, val):
-        g = df_r[df_r[col] == val] if col in df_r.columns else pd.DataFrame()
-        return int(g['orders'].sum()) if len(g) and 'orders' in g.columns else 0
 
     por_rdc = []
     for nome in sorted(dc['ds'].dropna().unique()):
         grp = dc[dc['ds'] == nome]
-        row = _faixa_row(grp, orders(dc_res, 'ds', nome) or len(grp))
+        row = _faixa_row(grp)
         row['nome']   = nome
         row['regiao'] = grp['regiao'].mode().iloc[0] if len(grp) else ''
         por_rdc.append(row)
@@ -75,7 +76,7 @@ def _processar(df, df_res):
     por_supervisor = []
     for nome in sorted(dfs['supervisor'].dropna().unique()):
         grp = dfs[dfs['supervisor'] == nome]
-        row = _faixa_row(grp, orders(ds_res, 'supervisor', nome) or len(grp))
+        row = _faixa_row(grp)
         row['nome'] = nome
         por_supervisor.append(row)
 
@@ -83,8 +84,8 @@ def _processar(df, df_res):
     for nome in sorted(dfs['ds'].dropna().unique()):
         grp = dfs[dfs['ds'] == nome]
         sup = grp['supervisor'].mode().iloc[0] if len(grp) else ''
-        row = _faixa_row(grp, orders(ds_res, 'ds', nome) or len(grp))
-        row['nome']      = nome
+        row = _faixa_row(grp)
+        row['nome']       = nome
         row['supervisor'] = sup
         por_ds.append(row)
     por_ds.sort(key=lambda x: x['total_7d'], reverse=True)
@@ -94,7 +95,7 @@ def _processar(df, df_res):
     por_motivo = []
     for motivo in sorted(df['motivo'].dropna().unique()):
         grp = df[df['motivo'] == motivo]
-        row = _faixa_row(grp, len(grp))
+        row = _faixa_row(grp)
         row['nome'] = motivo
         por_motivo.append(row)
     por_motivo.sort(key=lambda x: x['backlog'], reverse=True)
@@ -125,16 +126,16 @@ def _agregar_detalhes(rows: list[dict]):
     dfs = df[df['process'] == 'DS']
 
     def faixa_row(grp):
-        faixas = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
+        n        = len(grp)
+        faixas   = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
         total_7d = sum(faixas.get(f, 0) for f in ['7-10', '10-15', '15-20', 'Backlog >20'])
-        n = len(grp)
         return {'orders': n, 'backlog': n, 'pct_backlog': 100.0, 'faixas': faixas, 'total_7d': total_7d}
 
     por_rdc = []
     for nome in sorted(dc['ds'].dropna().unique()):
         grp = dc[dc['ds'] == nome]
         row = faixa_row(grp)
-        row['nome'] = nome
+        row['nome']   = nome
         row['regiao'] = grp['regiao'].mode().iloc[0] if len(grp) else ''
         por_rdc.append(row)
 
@@ -148,7 +149,7 @@ def _agregar_detalhes(rows: list[dict]):
     for nome in sorted(dfs['ds'].dropna().unique()):
         grp = dfs[dfs['ds'] == nome]
         row = faixa_row(grp)
-        row['nome'] = nome
+        row['nome']       = nome
         row['supervisor'] = grp['supervisor'].mode().iloc[0] if len(grp) else ''
         por_ds.append(row)
     por_ds.sort(key=lambda x: x['total_7d'], reverse=True)
@@ -190,6 +191,7 @@ def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
     rows = sb.rpc("get_clientes_upload", {"p_upload_id": upload_id}).execute().data or []
     return [r['cliente'] for r in rows]
 
+
 # ── GET /upload/{id} ──────────────────────────────────────────
 @router.get("/upload/{upload_id}")
 def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depends(get_current_user)):
@@ -204,7 +206,7 @@ def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depe
         if not result.data:
             raise HTTPException(404, "Sem dados para esse cliente")
 
-        data = result.data  # já vem como dict formatado
+        data = result.data
         return {
             'kpis':            data['kpis'],
             'por_rdc':         data['por_rdc']         or [],
@@ -287,18 +289,17 @@ async def processar_backlog(file: UploadFile = File(...), user: dict = Depends(g
     detalhes = []
     for _, r in df.iterrows():
         detalhes.append({
-            "upload_id": uid,
-            "waybill":   str(r.get('waybillNo', '')),
-            "cliente":   str(r.get('cliente', '')),
-            "supervisor": str(r.get('supervisor', '')),
-            "ds":        str(r.get('ds', '')),
-            "process":   str(r.get('process', '')),
+            "upload_id":     uid,
+            "waybill":       str(r.get('waybillNo', '')),
+            "cliente":       str(r.get('cliente', '')),
+            "supervisor":    str(r.get('supervisor', '')),
+            "ds":            str(r.get('ds', '')),
+            "process":       str(r.get('process', '')),
             "range_backlog": str(r.get('range_backlog', '')),
-            "motivo":    str(r.get('motivo', '')),
-            "estagio":   str(r.get('estagio', '')),
-            "regiao":    str(r.get('regiao', '')),
+            "motivo":        str(r.get('motivo', '')),
+            "estagio":       str(r.get('estagio', '')),
+            "regiao":        str(r.get('regiao', '')),
         })
-    # Insert em lotes de 500
     for i in range(0, len(detalhes), 500):
         sb.table("backlog_detalhes").insert(detalhes[i:i+500]).execute()
 
@@ -325,7 +326,6 @@ def excel_backlog(upload_id: int, user: dict = Depends(get_current_user)):
     dss  = sb.table("backlog_por_ds").select("*").eq("upload_id", upload_id).order("prioridade").execute().data or []
     mot  = sb.table("backlog_por_motivo").select("*").eq("upload_id", upload_id).order("backlog", desc=True).execute().data or []
 
-    # Cores: 1-3 verde, 3-5 amarelo, 5-7 laranja, >7 tons de vermelho
     CORES_FAIXA = {'1-3': '92D050', '3-5': 'FFFF00', '5-7': 'FFC000', '7-10': 'EF4444',
                    '10-15': 'DC2626', '15-20': 'B91C1C', 'Backlog >20': '7F1D1D'}
     HDR  = PatternFill('solid', fgColor='1F3864')
