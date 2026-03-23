@@ -23,9 +23,9 @@ def _ler_excel(conteudo: bytes):
     buf = io.BytesIO(conteudo)
     df = pd.read_excel(buf, sheet_name='Backlog_Details',
                        dtype={'waybillNo': str, 'range_backlog': str,
-                              'CARGOS.SUPERVISOR ': str, 'process': str,
-                              'lastScanStatus': str, 'actual_region': str})
-    df.rename(columns={'CARGOS.SUPERVISOR ': 'supervisor', 'actual_region': 'regiao',
+                              'process': str, 'actual_region': str})
+    df.columns = df.columns.str.strip()
+    df.rename(columns={'CARGOS.SUPERVISOR': 'supervisor', 'actual_region': 'regiao',
                        'lastScanSite': 'ds', 'clientName': 'cliente',
                        'stageStatus': 'estagio', 'lastScanStatus': 'motivo'}, inplace=True)
     df['supervisor'] = df['supervisor'].fillna('Sem Supervisor').str.strip().str.upper()
@@ -36,10 +36,13 @@ def _ler_excel(conteudo: bytes):
     df['range_backlog'] = df['range_backlog'].fillna('1-3').str.strip()
 
     buf.seek(0)
-    df_res = pd.read_excel(buf, sheet_name='Resume_', dtype={'CARGOS.SUPERVISOR ': str})
-    df_res.rename(columns={'CARGOS.SUPERVISOR ': 'supervisor', 'lastScanSite': 'ds',
+    df_res = pd.read_excel(buf, sheet_name='Resume_')
+    df_res.columns = df_res.columns.str.strip()
+    df_res.rename(columns={'CARGOS.SUPERVISOR': 'supervisor', 'lastScanSite': 'ds',
                             'clientName': 'cliente', 'actual region': 'regiao'}, inplace=True)
     df_res['supervisor'] = df_res['supervisor'].fillna('').str.strip().str.upper()
+    df_res['ds']         = df_res['ds'].fillna('').str.strip().str.upper() if 'ds' in df_res.columns else ''
+    df_res['orders']     = pd.to_numeric(df_res['orders'], errors='coerce').fillna(0).astype(int) if 'orders' in df_res.columns else 0
     return df, df_res
 
 
