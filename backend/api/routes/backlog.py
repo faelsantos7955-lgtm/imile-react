@@ -65,26 +65,39 @@ def _faixa_row(grp, orders_override: int = None):
             'faixas': faixas, 'total_7d': total_7d}
 
 
+def _calcular_orders_cruzado(df_res, df_det, process_filtro, col_det):
+    """
+    Replica o SUMIFS cruzado do Excel linha a linha entre Resume_ e Backlog_Details.
+    SUMIFS(Resume_.orders, Resume_.process==process_filtro, Backlog_Details.col_det==valor)
+    """
+    n = min(len(df_res), len(df_det))
+    res_orders  = df_res['orders'].values[:n]
+    res_process = df_res['process'].values[:n]
+    det_col     = df_det[col_det].values[:n]
+    result = {}
+    for val in pd.Series(det_col).dropna().unique():
+        if not val:
+            continue
+        mask = (det_col == val) & (res_process == process_filtro)
+        result[str(val)] = int(res_orders[mask].sum())
+    return result
+
+
 def _processar(df, df_res):
     dc  = df[df['process'].isin(['DC-LH', 'DC'])]
     dfs = df[df['process'] == 'DS']
 
-    # Pré-agregar orders da Resume_ por ds (para RDC/LH)
-    res_dc = df_res[df_res['process'].isin(['DC-LH', 'DC'])] if 'process' in df_res.columns else pd.DataFrame()
-    orders_por_ds = {}
-    if not res_dc.empty and 'ds' in res_dc.columns:
-        orders_por_ds = res_dc.groupby('ds')['orders'].sum().to_dict()
-
-    # Pré-agregar orders da Resume_ por supervisor (para DS)
-    res_ds = df_res[df_res['process'] == 'DS'] if 'process' in df_res.columns else pd.DataFrame()
-    orders_por_sup = {}
-    if not res_ds.empty and 'supervisor' in res_ds.columns:
-        orders_por_sup = res_ds.groupby('supervisor')['orders'].sum().to_dict()
+    # Calcular orders com lógica cruzada linha a linha (igual ao Excel)
+    orders_por_sup = _calcular_orders_cruzado(df_res, df, 'DS', 'supervisor')
+    orders_por_ds  = _calcular_orders_cruzado(df_res, df, 'DC-LH', 'ds')
+    # DC puro também contribui para RDC
+    for k, v in _calcular_orders_cruzado(df_res, df, 'DC', 'ds').items():
+        orders_por_ds[k] = orders_por_ds.get(k, 0) + v
 
     por_rdc = []
     for nome in sorted(dc['ds'].dropna().unique()):
         grp = dc[dc['ds'] == nome]
-        row = _faixa_row(grp, orders_override=orders_por_ds.get(nome))
+        row = _faixa_row(grp, orders_override=orders_por_ds.get(nome) or None)
         row['nome']   = nome
         row['regiao'] = grp['regiao'].mode().iloc[0] if len(grp) else ''
         por_rdc.append(row)
@@ -92,7 +105,7 @@ def _processar(df, df_res):
     por_supervisor = []
     for nome in sorted(dfs['supervisor'].dropna().unique()):
         grp = dfs[dfs['supervisor'] == nome]
-        row = _faixa_row(grp, orders_override=orders_por_sup.get(nome))
+        row = _faixa_row(grp, orders_override=orders_por_sup.get(nome) or None)
         row['nome'] = nome
         por_supervisor.append(row)
 
