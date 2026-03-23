@@ -56,15 +56,20 @@ def _ler_relatorio(conteudo: bytes):
     }
     df.rename(columns=col_map, inplace=True)
 
-    # Pular linha "Total" (row 0 geralmente)
-    df = df[df['ds'].str.startswith('DS', na=False)].copy()
-    df['ds'] = df['ds'].str.strip().str.upper()
+    # Pular linha "Total" e linhas sem DS
+    df = df[df['ds'].astype(str).str.startswith('DS', na=False)].copy()
+    df['ds'] = df['ds'].astype(str).str.strip().str.upper()
     df['supervisor'] = df['supervisor'].fillna('').str.strip().str.upper()
     df['regiao'] = df['regiao'].fillna('').str.strip()
 
+    # Remover DS duplicados, manter apenas a primeira ocorrência
+    df = df.drop_duplicates(subset=['ds'], keep='first')
+
     # Extrair data do nome da primeira coluna (ex: "03-03 DS")
+    # FIX: first_col pode ser NaN quando a coluna não tem nome no Excel
     data_ref = ''
-    match = re.search(r'(\d{2}-\d{2})', first_col)
+    first_col_str = str(first_col) if pd.notna(first_col) else ''
+    match = re.search(r'(\d{2}-\d{2})', first_col_str)
     if match:
         data_ref = match.group(1)
 
@@ -79,7 +84,6 @@ def _computar_do_raw(conteudo: bytes):
     # Supervisores
     sup_df = pd.read_excel(xls, sheet_name='Supervisores' if 'Supervisores' in xls.sheet_names else xls.sheet_names[0])
     sup_df.columns = sup_df.columns.str.strip()
-    # Find SIGLA and SUPERVISOR columns
     sigla_col = [c for c in sup_df.columns if 'SIGLA' in c.upper()]
     sup_col = [c for c in sup_df.columns if 'SUPERVISOR' in c.upper()]
     reg_col = [c for c in sup_df.columns if 'REGION' in c.upper()]
@@ -93,31 +97,24 @@ def _computar_do_raw(conteudo: bytes):
                 'regiao': str(r[reg_col[0]]).strip() if reg_col and pd.notna(r[reg_col[0]]) else '',
             }
 
-    # All DS from supervisors
     all_ds = sorted(sup_map.keys())
 
-    # RDC_
     rdc = pd.read_excel(xls, sheet_name='RDC_') if 'RDC_' in xls.sheet_names else pd.DataFrame()
     rdc_col = 'Destination Statio' if 'Destination Statio' in rdc.columns else (rdc.columns[12] if len(rdc.columns) > 12 else None)
 
-    # Estoque_
     est = pd.read_excel(xls, sheet_name='Estoque_') if 'Estoque_' in xls.sheet_names else pd.DataFrame()
     est_ds_col = 'last_scan_station' if 'last_scan_station' in est.columns else (est.columns[10] if len(est.columns) > 10 else None)
 
-    # Estoque +7
     est7 = pd.read_excel(xls, sheet_name='Estoque +7') if 'Estoque +7' in xls.sheet_names else pd.DataFrame()
     est7_ds_col = 'last_scan_station' if 'last_scan_station' in est7.columns else (est7.columns[10] if len(est7.columns) > 10 else None)
 
-    # Recebidos
     rec = pd.read_excel(xls, sheet_name='Pacotes recebidos hoje_') if 'Pacotes recebidos hoje_' in xls.sheet_names else pd.DataFrame()
     rec_ds_col = 'Scan Station' if 'Scan Station' in rec.columns else (rec.columns[10] if len(rec.columns) > 10 else None)
 
-    # Expedidos
     exp = pd.read_excel(xls, sheet_name='Pacotes expedidos de hoje_') if 'Pacotes expedidos de hoje_' in xls.sheet_names else pd.DataFrame()
     exp_ds_col = 'Scan station' if 'Scan station' in exp.columns else (exp.columns[24] if len(exp.columns) > 24 else None)
     exp_da_col = 'DA Name' if 'DA Name' in exp.columns else (exp.columns[6] if len(exp.columns) > 6 else None)
 
-    # Assinaturas
     ass = pd.read_excel(xls, sheet_name='Assinaturas-Entregas de hoje_') if 'Assinaturas-Entregas de hoje_' in xls.sheet_names else pd.DataFrame()
     ass_ds_col = 'Scan Station' if 'Scan Station' in ass.columns else (ass.columns[15] if len(ass.columns) > 15 else None)
 
@@ -136,7 +133,6 @@ def _computar_do_raw(conteudo: bytes):
         vol_total = est_total + receb
         saida = count_ds(exp, exp_ds_col, ds)
 
-        # Unique drivers
         if not exp.empty and exp_ds_col and exp_da_col:
             mask = exp[exp_ds_col].fillna('').str.strip().str.upper() == ds
             drivers = exp.loc[mask, exp_da_col].dropna().str.strip()
@@ -155,7 +151,7 @@ def _computar_do_raw(conteudo: bytes):
             'supervisor': info.get('supervisor', ''),
             'regiao': info.get('regiao', ''),
             'rdc_ds': rdc_count,
-            'estoque_ds': est_total,  # sem separação por tipo neste formato
+            'estoque_ds': est_total,
             'estoque_motorista': 0,
             'estoque_total': est_total,
             'estoque_7d': est7_count,
@@ -170,7 +166,10 @@ def _computar_do_raw(conteudo: bytes):
             'eficiencia_assinatura': ef_assin,
         })
 
-    return pd.DataFrame(rows), ''
+    # Remover DS duplicados, manter apenas a primeira ocorrência
+    df = pd.DataFrame(rows)
+    df = df.drop_duplicates(subset=['ds'], keep='first')
+    return df, ''
 
 
 # ── GET /uploads ──────────────────────────────────────────────
@@ -190,7 +189,6 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
 
     rows = sb.table("monitoramento_diario").select("*").eq("upload_id", upload_id).order("ds").execute().data or []
 
-    # Calcular totais
     totais = {
         'rdc_ds': sum(r.get('rdc_ds', 0) or 0 for r in rows),
         'estoque_ds': sum(r.get('estoque_ds', 0) or 0 for r in rows),
@@ -223,7 +221,6 @@ async def processar_monitoramento(file: UploadFile = File(...), user: dict = Dep
     buf = io.BytesIO(conteudo)
     xls = pd.ExcelFile(buf)
 
-    # Tentar ler a aba Relatorio diretamente
     if 'Relatorio' in xls.sheet_names:
         buf.seek(0)
         df, data_ref = _ler_relatorio(conteudo)
