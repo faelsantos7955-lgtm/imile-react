@@ -62,6 +62,9 @@ def _ler_relatorio(conteudo: bytes):
     df['supervisor'] = df['supervisor'].fillna('').str.strip().str.upper()
     df['regiao'] = df['regiao'].fillna('').str.strip()
 
+    # Remover DS duplicados, manter apenas a primeira ocorrência
+    df = df.drop_duplicates(subset=['ds'], keep='first')
+
     # Extrair data do nome da primeira coluna (ex: "03-03 DS")
     data_ref = ''
     match = re.search(r'(\d{2}-\d{2})', first_col)
@@ -170,7 +173,10 @@ def _computar_do_raw(conteudo: bytes):
             'eficiencia_assinatura': ef_assin,
         })
 
-    return pd.DataFrame(rows), ''
+    # Remover DS duplicados, manter apenas a primeira ocorrência
+    df = pd.DataFrame(rows)
+    df = df.drop_duplicates(subset=['ds'], keep='first')
+    return df, ''
 
 
 # ── GET /uploads ──────────────────────────────────────────────
