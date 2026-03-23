@@ -184,10 +184,8 @@ def listar_uploads(user: dict = Depends(get_current_user)):
 @router.get("/clientes/{upload_id}")
 def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
     sb = get_supabase()
-    rows = sb.table("backlog_detalhes").select("cliente").eq("upload_id", upload_id).execute().data or []
-    clientes = sorted(set(r['cliente'] for r in rows if r.get('cliente')))
-    return clientes
-
+    rows = sb.rpc("get_clientes_upload", {"p_upload_id": upload_id}).execute().data or []
+    return [r['cliente'] for r in rows]
 
 # ── GET /upload/{id} ──────────────────────────────────────────
 @router.get("/upload/{upload_id}")
