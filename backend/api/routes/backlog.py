@@ -1,7 +1,7 @@
 """
-api/routes/backlog.py — Backlog SLA com persistência no banco
+api/routes/backlog.py — Backlog SLA com persistência no banco + filtro por cliente
 """
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from api.deps import get_supabase, get_current_user
 import pandas as pd
@@ -32,6 +32,7 @@ def _ler_excel(conteudo: bytes):
     df['ds']         = df['ds'].fillna('').str.strip().str.upper()
     df['regiao']     = df['regiao'].fillna('').str.strip()
     df['motivo']     = df['motivo'].fillna('Outros').str.strip()
+    df['cliente']    = df['cliente'].fillna('Sem Cliente').str.strip()
     df['range_backlog'] = df['range_backlog'].fillna('1-3').str.strip()
 
     buf.seek(0)
@@ -60,7 +61,6 @@ def _processar(df, df_res):
         g = df_r[df_r[col] == val] if col in df_r.columns else pd.DataFrame()
         return int(g['orders'].sum()) if len(g) and 'orders' in g.columns else 0
 
-    # ── Por RDC (LH) ──────────────────────────────────────────
     por_rdc = []
     for nome in sorted(dc['ds'].dropna().unique()):
         grp = dc[dc['ds'] == nome]
@@ -69,7 +69,6 @@ def _processar(df, df_res):
         row['regiao'] = grp['regiao'].mode().iloc[0] if len(grp) else ''
         por_rdc.append(row)
 
-    # ── Por Supervisor ─────────────────────────────────────────
     por_supervisor = []
     for nome in sorted(dfs['supervisor'].dropna().unique()):
         grp = dfs[dfs['supervisor'] == nome]
@@ -77,7 +76,6 @@ def _processar(df, df_res):
         row['nome'] = nome
         por_supervisor.append(row)
 
-    # ── Por DS ────────────────────────────────────────────────
     por_ds = []
     for nome in sorted(dfs['ds'].dropna().unique()):
         grp = dfs[dfs['ds'] == nome]
@@ -90,13 +88,10 @@ def _processar(df, df_res):
     for i, r in enumerate(por_ds, 1):
         r['prioridade'] = i
 
-    # ── Por Motivo ────────────────────────────────────────────
     por_motivo = []
     for motivo in sorted(df['motivo'].dropna().unique()):
         grp = df[df['motivo'] == motivo]
-        # orders = total de pedidos únicos com esse motivo (usa Resume_ se disponível)
-        ord_motivo = len(grp)
-        row = _faixa_row(grp, ord_motivo)
+        row = _faixa_row(grp, len(grp))
         row['nome'] = motivo
         por_motivo.append(row)
     por_motivo.sort(key=lambda x: x['backlog'], reverse=True)
@@ -114,6 +109,70 @@ def _processar(df, df_res):
     return kpis, por_rdc, por_supervisor, por_ds, por_motivo
 
 
+# ── Recomputar agregações a partir de detalhes filtrados ──────
+def _agregar_detalhes(rows: list[dict]):
+    """Recebe lista de dicts (da tabela backlog_detalhes) e retorna agregações."""
+    df = pd.DataFrame(rows)
+    if df.empty:
+        empty_kpis = {'total': 0, 'na_ds': 0, 'em_transito': 0, 'total_7d': 0, 'pct_7d': 0,
+                      'por_faixa': {f: 0 for f in FAIXAS}, 'data_ref': ''}
+        return empty_kpis, [], [], [], []
+
+    dc  = df[df['process'].isin(['DC-LH', 'DC'])]
+    dfs = df[df['process'] == 'DS']
+
+    def faixa_row(grp):
+        faixas = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
+        total_7d = sum(faixas.get(f, 0) for f in ['7-10', '10-15', '15-20', 'Backlog >20'])
+        n = len(grp)
+        return {'orders': n, 'backlog': n, 'pct_backlog': 100.0, 'faixas': faixas, 'total_7d': total_7d}
+
+    por_rdc = []
+    for nome in sorted(dc['ds'].dropna().unique()):
+        grp = dc[dc['ds'] == nome]
+        row = faixa_row(grp)
+        row['nome'] = nome
+        row['regiao'] = grp['regiao'].mode().iloc[0] if len(grp) else ''
+        por_rdc.append(row)
+
+    por_supervisor = []
+    for nome in sorted(dfs['supervisor'].dropna().unique()):
+        row = faixa_row(dfs[dfs['supervisor'] == nome])
+        row['nome'] = nome
+        por_supervisor.append(row)
+
+    por_ds = []
+    for nome in sorted(dfs['ds'].dropna().unique()):
+        grp = dfs[dfs['ds'] == nome]
+        row = faixa_row(grp)
+        row['nome'] = nome
+        row['supervisor'] = grp['supervisor'].mode().iloc[0] if len(grp) else ''
+        por_ds.append(row)
+    por_ds.sort(key=lambda x: x['total_7d'], reverse=True)
+    for i, r in enumerate(por_ds, 1):
+        r['prioridade'] = i
+
+    por_motivo = []
+    if 'motivo' in df.columns:
+        for motivo in sorted(df['motivo'].dropna().unique()):
+            row = faixa_row(df[df['motivo'] == motivo])
+            row['nome'] = motivo
+            por_motivo.append(row)
+        por_motivo.sort(key=lambda x: x['backlog'], reverse=True)
+
+    total = len(df)
+    kpis = {
+        'total':       total,
+        'na_ds':       int((df['estagio'] == 'Delivery').sum()) if 'estagio' in df.columns else 0,
+        'em_transito': int((df['estagio'] == 'In Transit').sum()) if 'estagio' in df.columns else 0,
+        'total_7d':    sum(r['total_7d'] for r in por_ds),
+        'pct_7d':      round(sum(r['total_7d'] for r in por_ds) / total * 100, 1) if total else 0,
+        'por_faixa':   {f: int((df['range_backlog'] == f).sum()) for f in FAIXAS},
+        'data_ref':    '',
+    }
+    return kpis, por_rdc, por_supervisor, por_ds, por_motivo
+
+
 # ── GET /uploads ──────────────────────────────────────────────
 @router.get("/uploads")
 def listar_uploads(user: dict = Depends(get_current_user)):
@@ -121,10 +180,42 @@ def listar_uploads(user: dict = Depends(get_current_user)):
     return sb.table("backlog_uploads").select("*").order("criado_em", desc=True).limit(30).execute().data or []
 
 
+# ── GET /clientes/{upload_id} ─────────────────────────────────
+@router.get("/clientes/{upload_id}")
+def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    rows = sb.table("backlog_detalhes").select("cliente").eq("upload_id", upload_id).execute().data or []
+    clientes = sorted(set(r['cliente'] for r in rows if r.get('cliente')))
+    return clientes
+
+
 # ── GET /upload/{id} ──────────────────────────────────────────
 @router.get("/upload/{upload_id}")
-def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
+def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depends(get_current_user)):
     sb = get_supabase()
+
+    # Se tem filtro de cliente, recomputa a partir dos detalhes
+    if cliente:
+        query = sb.table("backlog_detalhes").select("*").eq("upload_id", upload_id).eq("cliente", cliente)
+        rows = query.execute().data or []
+        if not rows:
+            raise HTTPException(404, "Sem dados para esse cliente")
+
+        up = sb.table("backlog_uploads").select("data_ref").eq("id", upload_id).execute()
+        data_ref = up.data[0]['data_ref'] if up.data else ''
+
+        kpis, por_rdc, por_supervisor, por_ds, por_motivo = _agregar_detalhes(rows)
+        kpis['data_ref'] = data_ref
+
+        return {
+            'kpis': kpis,
+            'por_rdc': por_rdc,
+            'por_supervisor': por_supervisor,
+            'por_ds': por_ds,
+            'por_motivo': por_motivo,
+        }
+
+    # Sem filtro — usa tabelas pré-agregadas (rápido)
     up = sb.table("backlog_uploads").select("*").eq("id", upload_id).execute()
     if not up.data:
         raise HTTPException(404, "Não encontrado")
@@ -194,6 +285,25 @@ async def processar_backlog(file: UploadFile = File(...), user: dict = Depends(g
     sb.table("backlog_por_ds").insert(to_db(por_ds, ['supervisor', 'prioridade'])).execute()
     sb.table("backlog_por_motivo").insert(to_db(por_motivo)).execute()
 
+    # Salvar detalhes brutos para filtro por cliente
+    detalhes = []
+    for _, r in df.iterrows():
+        detalhes.append({
+            "upload_id": uid,
+            "waybill":   str(r.get('waybillNo', '')),
+            "cliente":   str(r.get('cliente', '')),
+            "supervisor": str(r.get('supervisor', '')),
+            "ds":        str(r.get('ds', '')),
+            "process":   str(r.get('process', '')),
+            "range_backlog": str(r.get('range_backlog', '')),
+            "motivo":    str(r.get('motivo', '')),
+            "estagio":   str(r.get('estagio', '')),
+            "regiao":    str(r.get('regiao', '')),
+        })
+    # Insert em lotes de 500
+    for i in range(0, len(detalhes), 500):
+        sb.table("backlog_detalhes").insert(detalhes[i:i+500]).execute()
+
     return {"upload_id": uid, "kpis": kpis,
             "por_rdc": por_rdc, "por_supervisor": por_supervisor,
             "por_ds": por_ds, "por_motivo": por_motivo}
@@ -217,8 +327,9 @@ def excel_backlog(upload_id: int, user: dict = Depends(get_current_user)):
     dss  = sb.table("backlog_por_ds").select("*").eq("upload_id", upload_id).order("prioridade").execute().data or []
     mot  = sb.table("backlog_por_motivo").select("*").eq("upload_id", upload_id).order("backlog", desc=True).execute().data or []
 
-    CORES_FAIXA = {'1-3': '92D050', '3-5': 'FFFF00', '5-7': 'FFC000', '7-10': 'FF7F00',
-                   '10-15': 'FF0000', '15-20': 'C00000', 'Backlog >20': '7030A0'}
+    # Cores: 1-3 verde, 3-5 amarelo, 5-7 laranja, >7 tons de vermelho
+    CORES_FAIXA = {'1-3': '92D050', '3-5': 'FFFF00', '5-7': 'FFC000', '7-10': 'EF4444',
+                   '10-15': 'DC2626', '15-20': 'B91C1C', 'Backlog >20': '7F1D1D'}
     HDR  = PatternFill('solid', fgColor='1F3864')
     AZUL = PatternFill('solid', fgColor='2E75B6')
     VERD = PatternFill('solid', fgColor='375623')

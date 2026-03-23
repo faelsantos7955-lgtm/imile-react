@@ -1,10 +1,10 @@
 /**
- * pages/Backlog.jsx — Backlog SLA com histórico salvo no banco
+ * pages/Backlog.jsx — Backlog SLA com histórico + filtro por cliente
  */
 import { useState, useEffect, useRef } from 'react'
 import api from '../lib/api'
 import { PageHeader, SectionHeader, Card, Alert } from '../components/ui'
-import { Upload, Download, Loader, RefreshCw } from 'lucide-react'
+import { Upload, Download, Loader, RefreshCw, Filter, X } from 'lucide-react'
 
 const FAIXAS = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
 const FAIXAS_LABELS = ['1D<3D', '3D<5D', '5D<7D', '7D<10D', '10D<15D', '15D<20D', '≥20D']
@@ -12,10 +12,10 @@ const CORES = {
   '1-3':         { bg: '#92D050', text: '#000' },
   '3-5':         { bg: '#FFFF00', text: '#000' },
   '5-7':         { bg: '#FFC000', text: '#000' },
-  '7-10':        { bg: '#FF7F00', text: '#fff' },
-  '10-15':       { bg: '#FF0000', text: '#fff' },
-  '15-20':       { bg: '#C00000', text: '#fff' },
-  'Backlog >20': { bg: '#7030A0', text: '#fff' },
+  '7-10':        { bg: '#EF4444', text: '#fff' },
+  '10-15':       { bg: '#DC2626', text: '#fff' },
+  '15-20':       { bg: '#B91C1C', text: '#fff' },
+  'Backlog >20': { bg: '#7F1D1D', text: '#fff' },
 }
 
 function FaixaCell({ faixa, value }) {
@@ -108,6 +108,9 @@ export default function Backlog() {
   const [uploading, setUploading]     = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [erro, setErro]               = useState('')
+  const [clientes, setClientes]       = useState([])
+  const [clienteSel, setClienteSel]   = useState('')
+  const [loadingClientes, setLoadingClientes] = useState(false)
   const inputRef = useRef()
 
   const carregarUploads = async () => {
@@ -120,17 +123,47 @@ export default function Backlog() {
     } catch {}
   }
 
-  const carregarDados = async (id) => {
+  const carregarClientes = async (id) => {
+    setLoadingClientes(true)
+    try {
+      const res = await api.get(`/api/backlog/clientes/${id}`)
+      setClientes(res.data || [])
+    } catch {
+      setClientes([])
+    } finally {
+      setLoadingClientes(false)
+    }
+  }
+
+  const carregarDados = async (id, cliente = '') => {
     setLoading(true); setErro('')
     try {
-      const res = await api.get(`/api/backlog/upload/${id}`)
+      const params = cliente ? { cliente } : {}
+      const res = await api.get(`/api/backlog/upload/${id}`, { params })
       setDados(res.data)
     } catch { setErro('Erro ao carregar dados.') }
     finally { setLoading(false) }
   }
 
   useEffect(() => { carregarUploads() }, [])
-  useEffect(() => { if (uploadSel) carregarDados(uploadSel) }, [uploadSel])
+
+  useEffect(() => {
+    if (uploadSel) {
+      setClienteSel('')
+      carregarClientes(uploadSel)
+      carregarDados(uploadSel)
+    }
+  }, [uploadSel])
+
+  const handleClienteChange = (val) => {
+    setClienteSel(val)
+    if (uploadSel) carregarDados(uploadSel, val)
+  }
+
+  const limparFiltro = () => {
+    setClienteSel('')
+    if (uploadSel) carregarDados(uploadSel)
+  }
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
@@ -188,9 +221,9 @@ export default function Backlog() {
 
       {erro && <Alert type="warning" className="mb-4">{erro}</Alert>}
 
-      {/* Seletor de upload */}
+      {/* Seletor de upload + filtro de cliente */}
       {uploads.length > 0 && (
-        <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3">
+        <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500 uppercase">Upload</span>
           <select value={uploadSel || ''} onChange={e => setUploadSel(Number(e.target.value))}
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
@@ -200,6 +233,27 @@ export default function Backlog() {
               </option>
             ))}
           </select>
+
+          <div className="h-6 w-px bg-slate-200" />
+
+          <Filter size={14} className="text-slate-400" />
+          <span className="text-xs font-semibold text-slate-500 uppercase">Cliente</span>
+          <select value={clienteSel} onChange={e => handleClienteChange(e.target.value)}
+            disabled={loadingClientes || !clientes.length}
+            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs disabled:opacity-50">
+            <option value="">Todos os clientes</option>
+            {clientes.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          {clienteSel && (
+            <button onClick={limparFiltro}
+              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100">
+              <X size={12} /> Limpar
+            </button>
+          )}
+
           <button onClick={() => carregarUploads()} className="p-1.5 text-slate-400 hover:text-slate-600">
             <RefreshCw size={14} />
           </button>
@@ -221,6 +275,17 @@ export default function Backlog() {
       )}
 
       {!loading && dados && <>
+
+        {/* Badge de filtro ativo */}
+        {clienteSel && (
+          <div className="mb-4 flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+            <Filter size={14} />
+            Filtrando por cliente: <strong>{clienteSel}</strong>
+            <button onClick={limparFiltro} className="ml-auto text-blue-500 hover:text-blue-700">
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
