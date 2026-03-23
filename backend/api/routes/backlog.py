@@ -192,10 +192,22 @@ def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
 def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depends(get_current_user)):
     sb = get_supabase()
 
-    # Se tem filtro de cliente, recomputa a partir dos detalhes
     if cliente:
-        query = sb.table("backlog_detalhes").select("*").eq("upload_id", upload_id).eq("cliente", cliente)
-        rows = query.execute().data or []
+        rows = []
+        page_size = 1000
+        offset = 0
+        while True:
+            chunk = (sb.table("backlog_detalhes")
+                       .select("*")
+                       .eq("upload_id", upload_id)
+                       .eq("cliente", cliente)
+                       .range(offset, offset + page_size - 1)
+                       .execute().data or [])
+            rows.extend(chunk)
+            if len(chunk) < page_size:
+                break
+            offset += page_size
+
         if not rows:
             raise HTTPException(404, "Sem dados para esse cliente")
 
