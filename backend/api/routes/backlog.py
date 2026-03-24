@@ -111,71 +111,6 @@ def _processar(df, df_res):
     return kpis, por_rdc, por_supervisor, por_ds, por_motivo
 
 
-def _agregar_detalhes(rows, orders_lookup):
-    df = pd.DataFrame(rows)
-    if df.empty:
-        empty_kpis = {'total': 0, 'na_ds': 0, 'em_transito': 0, 'total_7d': 0, 'pct_7d': 0,
-                      'por_faixa': {f: 0 for f in FAIXAS}, 'data_ref': ''}
-        return empty_kpis, [], [], [], []
-
-    dc  = df[df['process'].isin(['DC-LH', 'DC'])]
-    dfs = df[df['process'] == 'DS']
-
-    def faixa_row(grp, orders_total):
-        faixas = {f: int((grp['range_backlog'] == f).sum()) for f in FAIXAS}
-        total_7d = sum(faixas.get(f, 0) for f in ['7-10', '10-15', '15-20', 'Backlog >20'])
-        n = len(grp)
-        ords = orders_total if orders_total else n
-        return {'orders': ords, 'backlog': n,
-                'pct_backlog': round(n / ords * 100, 1) if ords else 0,
-                'faixas': faixas, 'total_7d': total_7d}
-
-    por_rdc = []
-    for nome in sorted(dc['ds'].dropna().unique()):
-        grp = dc[dc['ds'] == nome]
-        row = faixa_row(grp, orders_lookup.get('por_rdc', {}).get(nome, 0))
-        row['nome'] = nome
-        row['regiao'] = grp['regiao'].mode().iloc[0] if len(grp) else ''
-        por_rdc.append(row)
-
-    por_supervisor = []
-    for nome in sorted(dfs['supervisor'].dropna().unique()):
-        grp = dfs[dfs['supervisor'] == nome]
-        row = faixa_row(grp, orders_lookup.get('por_sup', {}).get(nome, 0))
-        row['nome'] = nome
-        por_supervisor.append(row)
-
-    por_ds = []
-    for nome in sorted(dfs['ds'].dropna().unique()):
-        grp = dfs[dfs['ds'] == nome]
-        row = faixa_row(grp, orders_lookup.get('por_ds', {}).get(nome, 0))
-        row['nome'] = nome
-        row['supervisor'] = grp['supervisor'].mode().iloc[0] if len(grp) else ''
-        por_ds.append(row)
-    por_ds.sort(key=lambda x: x['total_7d'], reverse=True)
-    for i, r in enumerate(por_ds, 1):
-        r['prioridade'] = i
-
-    por_motivo = []
-    if 'motivo' in df.columns:
-        for motivo in sorted(df['motivo'].dropna().unique()):
-            grp = df[df['motivo'] == motivo]
-            row = faixa_row(grp, len(grp))
-            row['nome'] = motivo
-            por_motivo.append(row)
-        por_motivo.sort(key=lambda x: x['backlog'], reverse=True)
-
-    total = len(df)
-    kpis = {
-        'total':       total,
-        'na_ds':       int((df['estagio'] == 'Delivery').sum()) if 'estagio' in df.columns else 0,
-        'em_transito': int((df['estagio'] == 'In Transit').sum()) if 'estagio' in df.columns else 0,
-        'total_7d':    sum(r['total_7d'] for r in por_ds),
-        'pct_7d':      round(sum(r['total_7d'] for r in por_ds) / total * 100, 1) if total else 0,
-        'por_faixa':   {f: int((df['range_backlog'] == f).sum()) for f in FAIXAS},
-        'data_ref':    '',
-    }
-    return kpis, por_rdc, por_supervisor, por_ds, por_motivo
 
 
 @router.get("/uploads")
@@ -196,32 +131,53 @@ def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depe
     sb = get_supabase()
 
     if cliente:
-        det_rows = sb.table("backlog_detalhes").select("*").eq("upload_id", upload_id).eq("cliente", cliente).execute().data or []
-        if not det_rows:
+        # Agregar direto no banco via SQL functions (sem limite de 1000)
+        params = {"p_upload_id": upload_id, "p_cliente": cliente}
+
+        kpis_raw = sb.rpc("backlog_cliente_kpis", params).execute().data
+        if not kpis_raw:
             raise HTTPException(404, "Sem dados para esse cliente")
-
-        dss  = sb.table("backlog_por_ds").select("nome,orders").eq("upload_id", upload_id).execute().data or []
-        sups = sb.table("backlog_por_supervisor").select("nome,orders").eq("upload_id", upload_id).execute().data or []
-        rdc  = sb.table("backlog_por_rdc").select("nome,orders").eq("upload_id", upload_id).execute().data or []
-
-        orders_lookup = {
-            'por_ds':  {r['nome']: r['orders'] for r in dss},
-            'por_sup': {r['nome']: r['orders'] for r in sups},
-            'por_rdc': {r['nome']: r['orders'] for r in rdc},
-        }
 
         up = sb.table("backlog_uploads").select("data_ref").eq("id", upload_id).execute()
         data_ref = up.data[0]['data_ref'] if up.data else ''
 
-        kpis, por_rdc, por_supervisor, por_ds, por_motivo = _agregar_detalhes(det_rows, orders_lookup)
+        # Buscar orders reais das tabelas pré-agregadas
+        dss_orders  = sb.table("backlog_por_ds").select("nome,orders").eq("upload_id", upload_id).execute().data or []
+        sups_orders = sb.table("backlog_por_supervisor").select("nome,orders").eq("upload_id", upload_id).execute().data or []
+        rdc_orders  = sb.table("backlog_por_rdc").select("nome,orders").eq("upload_id", upload_id).execute().data or []
+        orders_ds  = {r['nome']: r['orders'] for r in dss_orders}
+        orders_sup = {r['nome']: r['orders'] for r in sups_orders}
+        orders_rdc = {r['nome']: r['orders'] for r in rdc_orders}
+
+        por_rdc  = sb.rpc("backlog_cliente_por_rdc", params).execute().data or []
+        por_sup  = sb.rpc("backlog_cliente_por_supervisor", params).execute().data or []
+        por_ds   = sb.rpc("backlog_cliente_por_ds", params).execute().data or []
+        por_mot  = sb.rpc("backlog_cliente_por_motivo", params).execute().data or []
+
+        # Adicionar orders, pct_backlog e faixas dict
+        def enrich(rows, orders_map):
+            for r in rows:
+                ords = orders_map.get(r['nome'], 0) or r['backlog']
+                r['orders'] = ords
+                r['pct_backlog'] = round(r['backlog'] / ords * 100, 1) if ords else 0
+                r['faixas'] = {f: r.get(col, 0) or 0 for f, col in zip(FAIXAS, DB_COLS)}
+            return rows
+
+        # Prioridade nos DS
+        por_ds_enriched = enrich(por_ds, orders_ds)
+        por_ds_enriched.sort(key=lambda x: x.get('total_7d', 0), reverse=True)
+        for i, r in enumerate(por_ds_enriched, 1):
+            r['prioridade'] = i
+
+        kpis = kpis_raw
         kpis['data_ref'] = data_ref
 
         return {
             'kpis': kpis,
-            'por_rdc': por_rdc,
-            'por_supervisor': por_supervisor,
-            'por_ds': por_ds,
-            'por_motivo': por_motivo,
+            'por_rdc':        enrich(por_rdc, orders_rdc),
+            'por_supervisor': enrich(por_sup, orders_sup),
+            'por_ds':         por_ds_enriched,
+            'por_motivo':     enrich(por_mot, {r['nome']: r['backlog'] for r in por_mot}),
         }
 
     up = sb.table("backlog_uploads").select("*").eq("id", upload_id).execute()
