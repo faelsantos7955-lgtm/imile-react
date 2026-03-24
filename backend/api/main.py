@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel, backlog, monitoramento
-from api.routes.reclamacoes_upload import router as reclamacoes_upload_router
+from api.routes.reclamacoes_upload_route import router as reclamacoes_upload_router
 
 app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs")
 
