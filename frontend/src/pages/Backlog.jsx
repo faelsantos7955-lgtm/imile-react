@@ -157,7 +157,7 @@ export default function Backlog() {
   }, [uploadSel])
 
   const handleClienteClick = (nome) => {
-    if (clienteSel === nome) {
+    if (!nome || clienteSel === nome) {
       setClienteSel('')
       if (uploadSel) carregarDados(uploadSel)
     } else {
@@ -225,9 +225,9 @@ export default function Backlog() {
 
       {erro && <Alert type="warning" className="mb-4">{erro}</Alert>}
 
-      {/* Seletor de upload */}
+      {/* Seletor de upload + filtro de cliente */}
       {uploads.length > 0 && (
-        <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3">
+        <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500 uppercase">Upload</span>
           <select value={uploadSel || ''} onChange={e => setUploadSel(Number(e.target.value))}
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
@@ -235,6 +235,26 @@ export default function Backlog() {
               <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {(u.total || 0).toLocaleString('pt-BR')} pedidos</option>
             ))}
           </select>
+
+          {clientes.length > 0 && <>
+            <div className="h-6 w-px bg-slate-200" />
+            <Filter size={14} className="text-slate-400" />
+            <span className="text-xs font-semibold text-slate-500 uppercase">Cliente</span>
+            <select value={clienteSel} onChange={e => handleClienteClick(e.target.value)}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
+              <option value="">Todos os clientes</option>
+              {clientes.map(c => (
+                <option key={c.nome} value={c.nome}>{c.nome} ({(c.backlog || 0).toLocaleString('pt-BR')})</option>
+              ))}
+            </select>
+            {clienteSel && (
+              <button onClick={limparFiltro}
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100">
+                <X size={12} /> Limpar
+              </button>
+            )}
+          </>}
+
           <button onClick={() => carregarUploads()} className="p-1.5 text-slate-400 hover:text-slate-600"><RefreshCw size={14} /></button>
         </div>
       )}
