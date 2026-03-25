@@ -2,7 +2,7 @@
 api/routes/reclamacoes.py — Reclamações + motoristas por semana
 """
 from fastapi import APIRouter, Depends, HTTPException
-from api.deps import get_supabase, get_current_user
+from api.deps import get_supabase, get_current_user, require_admin
 from collections import defaultdict
 
 router = APIRouter()
@@ -17,9 +17,7 @@ def listar_uploads(user: dict = Depends(get_current_user)):
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    if not user.get("role") == "admin":
-        raise HTTPException(403, "Acesso negado")
+def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
     for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
         sb.table(tbl).delete().eq("upload_id", upload_id).execute()

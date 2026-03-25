@@ -2,7 +2,7 @@
 api/routes/monitoramento.py — Monitoramento Diário de Entregas
 """
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-from api.deps import get_supabase, get_current_user
+from api.deps import get_supabase, get_current_user, require_admin
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 import pandas as pd
@@ -183,9 +183,7 @@ def listar_uploads(user: dict = Depends(get_current_user)):
 
 # ── DELETE /upload/{id} ───────────────────────────────────────
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    if not user.get("role") == "admin":
-        raise HTTPException(403, "Acesso negado")
+def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
     sb.table("monitoramento_diario").delete().eq("upload_id", upload_id).execute()
     sb.table("monitoramento_uploads").delete().eq("id", upload_id).execute()

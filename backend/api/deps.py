@@ -60,8 +60,8 @@ async def get_current_user(authorization: str = Header(None)) -> dict:
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Erro de autenticação: {e}")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:

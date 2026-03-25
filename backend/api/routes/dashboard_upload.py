@@ -314,4 +314,4 @@ async def upload_dashboard(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Erro ao processar: {exc}") from exc
+        raise HTTPException(500, "Erro interno ao processar o arquivo") from exc

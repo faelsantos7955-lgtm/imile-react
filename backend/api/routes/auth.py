@@ -64,7 +64,7 @@ def login(req: LoginRequest):
         msg = str(e).lower()
         if "invalid" in msg or "credentials" in msg:
             raise HTTPException(401, "Email ou senha incorretos")
-        raise HTTPException(500, f"Erro: {e}")
+        raise HTTPException(500, "Erro interno ao realizar login")
 
 
 @router.post("/refresh")
@@ -81,7 +81,7 @@ def refresh(req: RefreshRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(401, f"Erro ao renovar sessão: {e}")
+        raise HTTPException(401, "Refresh token inválido ou expirado")
 
 
 @router.post("/register")
@@ -95,8 +95,8 @@ def register(req: RegisterRequest):
             "status": "pendente",
         }).execute()
         return {"ok": True, "message": "Solicitação enviada"}
-    except Exception as e:
-        raise HTTPException(500, f"Erro: {e}")
+    except Exception:
+        raise HTTPException(500, "Erro interno ao enviar solicitação")
 
 
 @router.get("/me")
