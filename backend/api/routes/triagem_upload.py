@@ -99,11 +99,11 @@ def _processar(df: pd.DataFrame, sb) -> dict:
     # Top 5 por nok
     top5 = sorted(por_ds_rows, key=lambda r: r["nok"], reverse=True)[:5]
 
-    # Por supervisor (via config_supervisores)
-    res_sup = sb.table("config_supervisores").select("sigla,supervisor").execute()
-    sup_map = {r["sigla"].strip().upper(): r["supervisor"] for r in (res_sup.data or []) if r.get("sigla")}
+    # Por supervisor/região (via config_supervisores — coluna region)
+    res_sup = sb.table("config_supervisores").select("sigla,region").execute()
+    sup_map = {r["sigla"].strip().upper(): r["region"] for r in (res_sup.data or []) if r.get("sigla")}
 
-    df["_sup"] = df["_dest"].map(sup_map).fillna("Sem Supervisor")
+    df["_sup"] = df["_dest"].map(sup_map).fillna("Sem Região")
     por_sup_rows = []
     for sup, grp in df.groupby("_sup"):
         ok_c = int((grp["_status"] == "ok").sum())

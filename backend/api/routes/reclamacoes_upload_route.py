@@ -111,11 +111,11 @@ def _adicionar_supervisor(df, sb):
     if 'SUPERVISOR' in df.columns:
         return df
     # Buscar mapeamento do banco
-    res = sb.table("config_supervisores").select("sigla,supervisor").execute()
+    res = sb.table("config_supervisores").select("sigla,region").execute()
     if not res.data:
-        df['SUPERVISOR'] = 'Sem Supervisor'
+        df['SUPERVISOR'] = 'Sem Região'
         return df
-    sup_map = {r['sigla'].strip().upper(): r['supervisor'] for r in res.data if r.get('sigla')}
+    sup_map = {r['sigla'].strip().upper(): r['region'] for r in res.data if r.get('sigla')}
 
     # Encontrar coluna de station
     col_sta = None
