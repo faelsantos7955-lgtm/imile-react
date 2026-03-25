@@ -5,6 +5,7 @@
  * Upload de dados via modal
  */
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { PageHeader, KpiCard, SectionHeader, Card, RankingRow, Alert, Skeleton } from '../components/ui'
@@ -14,7 +15,8 @@ import {
   PieChart, Pie, Cell, Label, ComposedChart, Line, LineChart,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { Download, Upload, X, Filter, RefreshCw, Loader, ChevronDown } from 'lucide-react'
+import { Download, Upload, X, Filter, Loader } from 'lucide-react'
+import { validarArquivos } from '../lib/validarArquivo'
 
 const CB = { recebido: '#2563eb', expedido: '#f97316', entregas: '#10b981' }
 const COLORS = ['#2563eb', '#f97316', '#10b981', '#06b6d4', '#ef4444', '#f59e0b', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899']
@@ -82,6 +84,8 @@ function UploadModal({ onClose, onSuccess }) {
       setErro('Recebimento e Out of Delivery são obrigatórios.')
       return
     }
+    const erroVal = validarArquivos([...recFiles, ...outFiles, ...entFiles, supFile, metaFile].filter(Boolean))
+    if (erroVal) { setErro(erroVal); return }
     setLoading(true); setErro('')
     try {
       const form = new FormData()
@@ -173,28 +177,15 @@ function UploadModal({ onClose, onSuccess }) {
 // ── Componente principal ───────────────────────────────────────────────
 export default function Analise() {
   const { isAdmin } = useAuth()
-  const [preset, setPreset]       = useState('hoje')
-  const [customIni, setCustomIni] = useState(diasAtras(30))
-  const [customFim, setCustomFim] = useState(hoje())
-  const [agrup, setAgrup]         = useState('Diário')
+  const queryClient = useQueryClient()
+  const [preset, setPreset]         = useState('hoje')
+  const [customIni, setCustomIni]   = useState(diasAtras(30))
+  const [customFim, setCustomFim]   = useState(hoje())
+  const [agrup, setAgrup]           = useState('Diário')
   const [showUpload, setShowUpload] = useState(false)
-
-  // Estado modo "Hoje" (dia único)
-  const [datas, setDatas]     = useState([])
-  const [dataSel, setDataSel] = useState(null)
-  const [dsSel, setDsSel]     = useState([])
-  const [diaData, setDiaData] = useState(null)
-  const [charts, setCharts]   = useState(null)
-  const [heatmap, setHeatmap] = useState(null)
-  const [ontem, setOntem]     = useState(null)
-
-  // Estado modo "Período"
-  const [periodoData, setPeriodoData] = useState(null)
-  const [evoData, setEvoData]         = useState(null)
-  const [dsList, setDsList]           = useState([])
-  const [dsEvoSel, setDsEvoSel]       = useState('')
-
-  const [loading, setLoading] = useState(false)
+  const [dataSel, setDataSel]       = useState(null)
+  const [dsSel, setDsSel]           = useState([])
+  const [dsEvoSel, setDsEvoSel]     = useState('')
 
   const isHoje = preset === 'hoje'
 
@@ -206,51 +197,65 @@ export default function Analise() {
     return { ini: diasAtras(days), fim: hoje() }
   }, [preset, customIni, customFim])
 
-  // Carrega lista de datas disponíveis (modo Hoje)
-  useEffect(() => {
-    api.get('/api/dashboard/datas').then(r => {
-      setDatas(r.data)
-      if (r.data.length) setDataSel(r.data[0])
-    })
-  }, [])
-
-  // Dados do dia selecionado
-  useEffect(() => {
-    if (!isHoje || !dataSel) return
-    setLoading(true)
+  // Data D-1 para comparação
+  const ontemDate = useMemo(() => {
+    if (!dataSel) return null
     const d = new Date(dataSel + 'T12:00:00'); d.setDate(d.getDate() - 1)
-    Promise.all([
-      api.get(`/api/dashboard/dia/${dataSel}`),
-      api.get(`/api/dashboard/charts/${dataSel}`),
-      api.get(`/api/dashboard/heatmap/${dataSel}`).catch(() => ({ data: {} })),
-      api.get(`/api/dashboard/dia/${d.toISOString().slice(0, 10)}`).catch(() => ({ data: { kpis: {} } })),
-    ]).then(([dia, ch, hm, ont]) => {
-      setDiaData(dia.data); setCharts(ch.data); setHeatmap(hm.data); setOntem(ont.data?.kpis || {})
-    }).finally(() => setLoading(false))
-  }, [isHoje, dataSel])
+    return d.toISOString().slice(0, 10)
+  }, [dataSel])
 
-  // Dados do período
-  useEffect(() => {
-    if (isHoje || !ini || !fim) return
-    setLoading(true)
-    Promise.all([
-      api.get('/api/historico/periodo', { params: { data_ini: ini, data_fim: fim } }),
-      api.get('/api/historico/evolucao-ds', { params: { data_ini: ini, data_fim: fim } }),
-    ]).then(([r1, r2]) => {
-      setPeriodoData(r1.data)
-      setEvoData(r2.data)
-      setDsList(r1.data.por_ds?.map(d => d.scan_station) || [])
-      setDsEvoSel('')
-    }).finally(() => setLoading(false))
-  }, [isHoje, ini, fim])
+  // ── Queries ────────────────────────────────────────────────
+  const { data: datas = [] } = useQuery({
+    queryKey: ['dashboard-datas'],
+    queryFn: () => api.get('/api/dashboard/datas').then(r => r.data),
+  })
 
-  // Evolução por DS (quando muda seleção manual)
+  // Inicializa dataSel com o mais recente
   useEffect(() => {
-    if (isHoje || !ini || !fim) return
-    api.get('/api/historico/evolucao-ds', {
+    if (datas.length && !dataSel) setDataSel(datas[0])
+  }, [datas])
+
+  const { data: diaData, isLoading: loadingDia } = useQuery({
+    queryKey: ['dashboard-dia', dataSel],
+    queryFn: () => api.get(`/api/dashboard/dia/${dataSel}`).then(r => r.data),
+    enabled: isHoje && !!dataSel,
+  })
+
+  const { data: charts } = useQuery({
+    queryKey: ['dashboard-charts', dataSel],
+    queryFn: () => api.get(`/api/dashboard/charts/${dataSel}`).then(r => r.data),
+    enabled: isHoje && !!dataSel,
+  })
+
+  const { data: heatmap } = useQuery({
+    queryKey: ['dashboard-heatmap', dataSel],
+    queryFn: () => api.get(`/api/dashboard/heatmap/${dataSel}`).then(r => r.data).catch(() => ({})),
+    enabled: isHoje && !!dataSel,
+  })
+
+  const { data: ontemRaw } = useQuery({
+    queryKey: ['dashboard-dia', ontemDate],
+    queryFn: () => api.get(`/api/dashboard/dia/${ontemDate}`).then(r => r.data).catch(() => ({ kpis: {} })),
+    enabled: isHoje && !!ontemDate,
+  })
+  const ontem = ontemRaw?.kpis || {}
+
+  const { data: periodoData, isLoading: loadingPeriodo } = useQuery({
+    queryKey: ['historico-periodo', ini, fim],
+    queryFn: () => api.get('/api/historico/periodo', { params: { data_ini: ini, data_fim: fim } }).then(r => r.data),
+    enabled: !isHoje && !!ini && !!fim,
+  })
+
+  const { data: evoData } = useQuery({
+    queryKey: ['historico-evo', ini, fim, dsEvoSel],
+    queryFn: () => api.get('/api/historico/evolucao-ds', {
       params: { data_ini: ini, data_fim: fim, ...(dsEvoSel ? { ds: dsEvoSel } : {}) }
-    }).then(r => setEvoData(r.data))
-  }, [dsEvoSel])
+    }).then(r => r.data),
+    enabled: !isHoje && !!ini && !!fim,
+  })
+
+  const loading  = isHoje ? loadingDia : loadingPeriodo
+  const dsList   = periodoData?.por_ds?.map(d => d.scan_station) || []
 
   // Filtro por DS (client-side, modo Hoje)
   const dFiltrado = useMemo(() => {
@@ -326,7 +331,10 @@ export default function Analise() {
         <UploadModal
           onClose={() => setShowUpload(false)}
           onSuccess={() => {
-            api.get('/api/dashboard/datas').then(r => { setDatas(r.data); if (r.data.length) setDataSel(r.data[0]) })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-datas'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-dia'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-charts'] })
+            queryClient.invalidateQueries({ queryKey: ['dashboard-heatmap'] })
           }}
         />
       )}

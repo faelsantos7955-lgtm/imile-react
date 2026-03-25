@@ -2,9 +2,11 @@
  * pages/Monitoramento.jsx — Monitoramento Diário de Entregas
  */
 import { useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { PageHeader, Card, Alert } from '../components/ui'
-import { Upload, Download, Loader, RefreshCw, TrendingUp, Package, Truck, Users, AlertTriangle } from 'lucide-react'
+import { Upload, Loader, RefreshCw, TrendingUp, Package, Truck, AlertTriangle } from 'lucide-react'
+import { validarArquivos } from '../lib/validarArquivo'
 
 function KPI({ label, value, icon: Icon, color = '#334155', suffix = '' }) {
   return (
@@ -34,39 +36,36 @@ function TaxaCell({ value }) {
 }
 
 export default function Monitoramento() {
-  const [uploads, setUploads]         = useState([])
-  const [uploadSel, setUploadSel]     = useState(null)
-  const [dados, setDados]             = useState(null)
-  const [loading, setLoading]         = useState(false)
-  const [uploading, setUploading]     = useState(false)
-  const [erro, setErro]               = useState('')
-  const [sortCol, setSortCol]         = useState(null)
-  const [sortAsc, setSortAsc]         = useState(true)
+  const queryClient               = useQueryClient()
+  const [uploadSel, setUploadSel] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [erro, setErro]           = useState('')
+  const [sortCol, setSortCol]     = useState(null)
+  const [sortAsc, setSortAsc]     = useState(true)
   const inputRef = useRef()
 
-  const carregarUploads = async () => {
-    try {
-      const res = await api.get('/api/monitoramento/uploads')
-      setUploads(res.data || [])
-      if (res.data?.length && !uploadSel) setUploadSel(res.data[0].id)
-    } catch {}
-  }
+  const { data: uploads = [] } = useQuery({
+    queryKey: ['monitoramento-uploads'],
+    queryFn: () => api.get('/api/monitoramento/uploads').then(r => r.data || []).catch(() => []),
+  })
 
-  const carregarDados = async (id) => {
-    setLoading(true); setErro('')
-    try {
-      const res = await api.get(`/api/monitoramento/upload/${id}`)
-      setDados(res.data)
-    } catch { setErro('Erro ao carregar dados.') }
-    finally { setLoading(false) }
-  }
+  useEffect(() => {
+    if (uploads.length && !uploadSel) setUploadSel(uploads[0].id)
+  }, [uploads])
 
-  useEffect(() => { carregarUploads() }, [])
-  useEffect(() => { if (uploadSel) carregarDados(uploadSel) }, [uploadSel])
+  const { data: dados, isLoading: loading } = useQuery({
+    queryKey: ['monitoramento-dados', uploadSel],
+    queryFn: () => api.get(`/api/monitoramento/upload/${uploadSel}`).then(r => r.data),
+    enabled: !!uploadSel,
+  })
+
+  const carregarUploads = () => queryClient.invalidateQueries({ queryKey: ['monitoramento-uploads'] })
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const erroVal = validarArquivos(file)
+    if (erroVal) { setErro(erroVal); return }
     setUploading(true); setErro('')
     try {
       const form = new FormData()

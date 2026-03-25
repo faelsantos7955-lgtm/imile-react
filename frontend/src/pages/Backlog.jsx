@@ -2,9 +2,11 @@
  * pages/Backlog.jsx — Backlog SLA com resumo por cliente + drill-down
  */
 import { useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { PageHeader, Card, Alert } from '../components/ui'
 import { Upload, Download, Loader, RefreshCw, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { validarArquivos } from '../lib/validarArquivo'
 
 const FAIXAS = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
 const FAIXAS_LABELS = ['1D<3D', '3D<5D', '5D<7D', '7D<10D', '10D<15D', '15D<20D', '≥20D']
@@ -107,73 +109,48 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false,
 }
 
 export default function Backlog() {
-  const [uploads, setUploads]         = useState([])
-  const [uploadSel, setUploadSel]     = useState(null)
-  const [dados, setDados]             = useState(null)
-  const [loading, setLoading]         = useState(false)
-  const [uploading, setUploading]     = useState(false)
+  const queryClient               = useQueryClient()
+  const [uploadSel, setUploadSel] = useState(null)
+  const [clienteSel, setClienteSel] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [erro, setErro]               = useState('')
-  const [clientes, setClientes]       = useState([])
-  const [clienteSel, setClienteSel]   = useState('')
-  const [loadingClientes, setLoadingClientes] = useState(false)
+  const [erro, setErro]           = useState('')
   const [showDetalhe, setShowDetalhe] = useState(true)
   const inputRef = useRef()
 
-  const carregarUploads = async () => {
-    try {
-      const res = await api.get('/api/backlog/uploads')
-      setUploads(res.data || [])
-      if (res.data?.length && !uploadSel) setUploadSel(res.data[0].id)
-    } catch {}
-  }
+  const { data: uploads = [] } = useQuery({
+    queryKey: ['backlog-uploads'],
+    queryFn: () => api.get('/api/backlog/uploads').then(r => r.data || []).catch(() => []),
+  })
 
-  const carregarClientes = async (id) => {
-    setLoadingClientes(true)
-    try {
-      const res = await api.get(`/api/backlog/clientes/${id}`)
-      setClientes(res.data || [])
-    } catch { setClientes([]) }
-    finally { setLoadingClientes(false) }
-  }
-
-  const carregarDados = async (id, cliente = '') => {
-    setLoading(true); setErro('')
-    try {
-      const params = cliente ? { cliente } : {}
-      const res = await api.get(`/api/backlog/upload/${id}`, { params })
-      setDados(res.data)
-    } catch { setErro('Erro ao carregar dados.') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { carregarUploads() }, [])
   useEffect(() => {
-    if (uploadSel) {
-      setClienteSel('')
-      carregarClientes(uploadSel)
-      carregarDados(uploadSel)
-    }
-  }, [uploadSel])
+    if (uploads.length && !uploadSel) setUploadSel(uploads[0].id)
+  }, [uploads])
+
+  const { data: clientes = [] } = useQuery({
+    queryKey: ['backlog-clientes', uploadSel],
+    queryFn: () => api.get(`/api/backlog/clientes/${uploadSel}`).then(r => r.data || []).catch(() => []),
+    enabled: !!uploadSel,
+  })
+
+  const { data: dados, isLoading: loading } = useQuery({
+    queryKey: ['backlog-dados', uploadSel, clienteSel],
+    queryFn: () => api.get(`/api/backlog/upload/${uploadSel}`, { params: clienteSel ? { cliente: clienteSel } : {} })
+      .then(r => r.data),
+    enabled: !!uploadSel,
+  })
 
   const handleClienteClick = (nome) => {
-    if (!nome || clienteSel === nome) {
-      setClienteSel('')
-      if (uploadSel) carregarDados(uploadSel)
-    } else {
-      setClienteSel(nome)
-      if (uploadSel) carregarDados(uploadSel, nome)
-    }
+    setClienteSel(prev => prev === nome ? '' : nome)
   }
 
-  const limparFiltro = () => {
-    setClienteSel('')
-    if (uploadSel) carregarDados(uploadSel)
-  }
+  const limparFiltro = () => setClienteSel('')
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const erroVal = validarArquivos(file)
+    if (erroVal) { setErro(erroVal); return }
     setUploading(true); setErro('')
     try {
       const form = new FormData()
@@ -181,10 +158,10 @@ export default function Backlog() {
       const res = await api.post('/api/backlog/processar', form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
-      await carregarUploads()
+      queryClient.invalidateQueries({ queryKey: ['backlog-uploads'] })
       setUploadSel(res.data.upload_id)
     } catch (e) { setErro(e.response?.data?.detail || 'Erro ao processar.') }
-    finally { setUploading(false) }
+    finally { setUploading(false); e.target.value = '' }
   }
 
   const baixarExcel = async () => {
@@ -219,7 +196,7 @@ export default function Backlog() {
             {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
             {uploading ? 'Processando...' : 'Novo Upload'}
           </button>
-          <input ref={inputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFile} />
+          <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm" className="hidden" onChange={handleFile} />
         </div>
       </div>
 
@@ -229,7 +206,7 @@ export default function Backlog() {
       {uploads.length > 0 && (
         <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500 uppercase">Upload</span>
-          <select value={uploadSel || ''} onChange={e => setUploadSel(Number(e.target.value))}
+          <select value={uploadSel || ''} onChange={e => { setUploadSel(Number(e.target.value)); setClienteSel('') }}
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
             {uploads.map(u => (
               <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {(u.total || 0).toLocaleString('pt-BR')} pedidos</option>
@@ -255,7 +232,8 @@ export default function Backlog() {
             )}
           </>}
 
-          <button onClick={() => carregarUploads()} className="p-1.5 text-slate-400 hover:text-slate-600"><RefreshCw size={14} /></button>
+          <button onClick={() => queryClient.invalidateQueries({ queryKey: ['backlog-uploads'] })}
+            className="p-1.5 text-slate-400 hover:text-slate-600"><RefreshCw size={14} /></button>
         </div>
       )}
 
@@ -305,7 +283,7 @@ export default function Backlog() {
           })}
         </div>
 
-        {/* ══ Tabela de Clientes (Resumo) ═══════════════════ */}
+        {/* Tabela de Clientes */}
         {clientes.length > 0 && (
           <div className="mb-6">
             <div className="rounded-t-xl px-4 py-2 text-white font-bold text-sm flex items-center justify-between" style={{ backgroundColor: '#0F172A' }}>
@@ -366,7 +344,7 @@ export default function Backlog() {
           </div>
         )}
 
-        {/* ══ Tabelas detalhadas (colapsáveis) ═══════════════ */}
+        {/* Tabelas detalhadas (colapsáveis) */}
         <div className="mb-4">
           <button onClick={() => setShowDetalhe(!showDetalhe)}
             className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-800">

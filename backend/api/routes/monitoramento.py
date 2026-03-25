@@ -1,8 +1,10 @@
 """
 api/routes/monitoramento.py — Monitoramento Diário de Entregas
 """
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from api.deps import get_supabase, get_current_user
+from api.limiter import limiter
+from api.upload_utils import validar_arquivo
 import pandas as pd
 import io, re
 
@@ -216,8 +218,9 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
 
 # ── POST /processar ───────────────────────────────────────────
 @router.post("/processar")
-async def processar_monitoramento(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    conteudo = await file.read()
+@limiter.limit("10/minute")
+async def processar_monitoramento(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    conteudo = await validar_arquivo(file)
     buf = io.BytesIO(conteudo)
     xls = pd.ExcelFile(buf)
 

@@ -3,9 +3,10 @@ api/routes/excel.py — Download de Excel formatado
 Dashboard (DS + cidades agrupadas + regiões), Reclamações (TOP Ofensores),
 Triagem (DS + supervisor), Histórico (período consolidado)
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from api.deps import get_supabase, get_current_user
+from api.limiter import limiter
 import pandas as pd
 import numpy as np
 import io
@@ -155,7 +156,8 @@ def _to_stream(wb):
 #  DASHBOARD EXCEL (DS + cidades agrupadas + regiões)
 # ══════════════════════════════════════════════════════════════
 @router.get("/dashboard/{data_ref}")
-def excel_dashboard(data_ref: str, user: dict = Depends(get_current_user)):
+@limiter.limit("20/minute")
+def excel_dashboard(request: Request, data_ref: str, user: dict = Depends(get_current_user)):
     sb = get_supabase()
 
     q = sb.table("expedicao_diaria").select("*").eq("data_ref", data_ref)
@@ -272,7 +274,8 @@ def excel_dashboard(data_ref: str, user: dict = Depends(get_current_user)):
 #  RECLAMAÇÕES EXCEL (formato TOP Ofensores igual imagem 5)
 # ══════════════════════════════════════════════════════════════
 @router.get("/reclamacoes/{upload_id}")
-def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
+@limiter.limit("20/minute")
+def excel_reclamacoes(request: Request, upload_id: int, user: dict = Depends(get_current_user)):
     sb = get_supabase()
 
     upload = sb.table("reclamacoes_uploads").select("*").eq("id", upload_id).execute()
@@ -473,7 +476,8 @@ def excel_reclamacoes(upload_id: int, user: dict = Depends(get_current_user)):
 #  Abas separadas: Por DS detalhado, Por Supervisor
 # ══════════════════════════════════════════════════════════════
 @router.get("/triagem/{upload_id}")
-def excel_triagem(upload_id: int, user: dict = Depends(get_current_user)):
+@limiter.limit("20/minute")
+def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_current_user)):
     sb = get_supabase()
     upload = sb.table("triagem_uploads").select("*").eq("id", upload_id).execute()
     if not upload.data: raise HTTPException(404, "Não encontrado")
@@ -661,7 +665,9 @@ def excel_triagem(upload_id: int, user: dict = Depends(get_current_user)):
 #  HISTÓRICO EXCEL (período consolidado)
 # ══════════════════════════════════════════════════════════════
 @router.get("/historico")
+@limiter.limit("20/minute")
 def excel_historico(
+    request: Request,
     data_ini: str = Query(...),
     data_fim: str = Query(...),
     user: dict = Depends(get_current_user),

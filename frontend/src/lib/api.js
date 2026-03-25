@@ -24,6 +24,10 @@ api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config
+    if (err.response?.status === 429) {
+      err.response.data = { detail: 'Muitas requisições. Aguarde um momento e tente novamente.' }
+      return Promise.reject(err)
+    }
     if (err.response?.status !== 401 || original._retry) {
       return Promise.reject(err)
     }

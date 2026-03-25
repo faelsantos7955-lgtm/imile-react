@@ -8,9 +8,11 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from api.deps import get_current_user, get_supabase
+from api.limiter import limiter
+from api.upload_utils import validar_arquivo, validar_varios
 
 router = APIRouter()
 
@@ -45,7 +47,9 @@ def _ler(files: list[bytes], cols: set) -> pd.DataFrame:
 
 
 @router.post("/upload")
+@limiter.limit("5/minute")
 async def upload_dashboard(
+    request: Request,
     data_ref: str = Form(..., description="Data de referência (YYYY-MM-DD)"),
     recebimento: list[UploadFile] = File(..., description="Arquivos de Recebimento (.xlsx)"),
     out_delivery: list[UploadFile] = File(..., description="Arquivos de Out of Delivery (.xlsx)"),
@@ -67,12 +71,12 @@ async def upload_dashboard(
         raise HTTPException(400, "data_ref deve estar no formato YYYY-MM-DD")
 
     try:
-        # ── Lê bytes ──────────────────────────────────────────
-        rec_bytes  = [await f.read() for f in recebimento]
-        out_bytes  = [await f.read() for f in out_delivery]
-        ent_bytes  = [await f.read() for f in entregas] if entregas else []
-        sup_bytes  = await supervisores.read() if supervisores else None
-        meta_bytes = await metas.read() if metas else None
+        # ── Valida e lê bytes ─────────────────────────────────
+        rec_bytes  = await validar_varios(recebimento)
+        out_bytes  = await validar_varios(out_delivery)
+        ent_bytes  = await validar_varios(entregas) if entregas else []
+        sup_bytes  = await validar_arquivo(supervisores, obrigatorio=False)
+        meta_bytes = await validar_arquivo(metas, obrigatorio=False)
 
         # ── Supervisores ──────────────────────────────────────
         mapa = {}

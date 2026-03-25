@@ -1,9 +1,11 @@
 """
 api/routes/backlog.py — Backlog SLA com persistência + filtro por cliente
 """
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from api.deps import get_supabase, get_current_user
+from api.limiter import limiter
+from api.upload_utils import validar_arquivo
 import pandas as pd
 import io
 from datetime import datetime
@@ -211,8 +213,9 @@ def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depe
 
 
 @router.post("/processar")
-async def processar_backlog(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    conteudo = await file.read()
+@limiter.limit("5/minute")
+async def processar_backlog(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    conteudo = await validar_arquivo(file)
     try:
         df, df_res = _ler_excel(conteudo)
     except Exception as e:
@@ -271,7 +274,8 @@ async def processar_backlog(file: UploadFile = File(...), user: dict = Depends(g
 
 
 @router.post("/excel/{upload_id}")
-def excel_backlog(upload_id: int, user: dict = Depends(get_current_user)):
+@limiter.limit("20/minute")
+def excel_backlog(request: Request, upload_id: int, user: dict = Depends(get_current_user)):
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter

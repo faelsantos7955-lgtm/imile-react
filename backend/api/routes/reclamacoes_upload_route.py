@@ -7,9 +7,11 @@ from collections import defaultdict
 from datetime import date, datetime
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from api.deps import get_current_user, get_supabase
+from api.limiter import limiter
+from api.upload_utils import validar_arquivo
 
 router = APIRouter()
 
@@ -129,7 +131,9 @@ def _adicionar_supervisor(df, sb):
 
 
 @router.post("/processar")
+@limiter.limit("5/minute")
 async def processar_reclamacoes(
+    request: Request,
     file: UploadFile = File(..., description="Bilhete de Reclamação (.xlsx)"),
     user: dict = Depends(get_current_user),
 ):
@@ -138,7 +142,7 @@ async def processar_reclamacoes(
     Versão simplificada que aceita apenas o bilhete (arquivo principal).
     """
     sb = get_supabase()
-    conteudo = await file.read()
+    conteudo = await validar_arquivo(file)
 
     try:
         df = _ler_bilhete(io.BytesIO(conteudo))

@@ -2,43 +2,44 @@
  * pages/Triagem.jsx — Triagem DC×DS completo
  * KPIs, gráfico por DS, top 5, tabelas DS (expansível por cidade) + Supervisor, Excel
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts'
-import { Download, CheckCircle, XCircle, AlertTriangle, ChevronRight, ChevronDown, Loader } from 'lucide-react'
+import { Download, Upload, CheckCircle, XCircle, AlertTriangle, ChevronRight, ChevronDown, Loader } from 'lucide-react'
+import { validarArquivos } from '../lib/validarArquivo'
 
 const COLOR_OK  = '#10b981'
 const COLOR_NOK = '#ef4444'
 const COLOR_TOP = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 
 export default function Triagem() {
-  const [uploads, setUploads]     = useState([])
-  const [sel, setSel]             = useState(null)
-  const [detail, setDetail]       = useState(null)
-  const [loading, setLoading]     = useState(false)
-  // Estado dos rows expandidos: { [ds]: { open, data, loading } }
-  const [expanded, setExpanded]   = useState({})
+  const queryClient             = useQueryClient()
+  const [sel, setSel]           = useState(null)
+  const [expanded, setExpanded] = useState({})
+  const [uploading, setUploading] = useState(false)
+  const [erro, setErro]         = useState('')
+  const inputRef = useRef()
+
+  const { data: uploads = [] } = useQuery({
+    queryKey: ['triagem-uploads'],
+    queryFn: () => api.get('/api/triagem/uploads').then(r => r.data).catch(() => []),
+  })
 
   useEffect(() => {
-    api.get('/api/triagem/uploads').then(r => {
-      setUploads(r.data)
-      if (r.data.length) setSel(r.data[0].id)
-    }).catch(() => {})
-  }, [])
+    if (uploads.length && !sel) setSel(uploads[0].id)
+  }, [uploads])
 
-  useEffect(() => {
-    if (!sel) return
-    setLoading(true)
-    setExpanded({})
-    api.get(`/api/triagem/upload/${sel}`)
-      .then(r => setDetail(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [sel])
+  const { data: detail, isLoading: loading } = useQuery({
+    queryKey: ['triagem-detail', sel],
+    queryFn: () => api.get(`/api/triagem/upload/${sel}`).then(r => r.data).catch(() => null),
+    enabled: !!sel,
+    onSuccess: () => setExpanded({}),
+  })
 
   const toggleDs = useCallback(async (ds) => {
     setExpanded(prev => {
@@ -66,6 +67,26 @@ export default function Triagem() {
       return prev
     })
   }, [sel])
+
+  const handleFile = async (e) => {
+    const fileList = [...(e.target.files || [])]
+    if (!fileList.length) return
+    const erroVal = validarArquivos(fileList)
+    if (erroVal) { setErro(erroVal); return }
+    setUploading(true); setErro('')
+    try {
+      const form = new FormData()
+      fileList.forEach(f => form.append('files', f))
+      const res = await api.post('/api/triagem/processar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      queryClient.invalidateQueries({ queryKey: ['triagem-uploads'] })
+      setSel(res.data.upload_id)
+      setExpanded({})
+    } catch (e) {
+      setErro(e.response?.data?.detail || 'Erro ao processar arquivo.')
+    } finally { setUploading(false); e.target.value = '' }
+  }
 
   const u = uploads.find(x => x.id === sel)
   const F = n => n?.toLocaleString('pt-BR') ?? '0'
@@ -103,19 +124,31 @@ export default function Triagem() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <PageHeader icon="🔀" title="Triagem DC×DS" subtitle="Análise de erros de expedição por base" />
-        {sel && (
-          <button
-            onClick={handleExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-navy-900 text-white rounded-lg text-sm font-medium hover:bg-navy-800 transition-colors"
-          >
-            <Download size={14} /> Excel
+        <div className="flex gap-2">
+          {sel && (
+            <button onClick={handleExcel}
+              className="flex items-center gap-2 px-4 py-2 bg-navy-900 text-white rounded-lg text-sm font-medium hover:bg-navy-800 transition-colors">
+              <Download size={14} /> Excel
+            </button>
+          )}
+          <button onClick={() => inputRef.current?.click()} disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50">
+            {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+            {uploading ? 'Processando...' : 'Novo Upload'}
           </button>
-        )}
+          <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleFile} />
+        </div>
       </div>
 
-      {!uploads.length ? (
-        <Alert type="info">Nenhum dado disponível. Aguarde o próximo processamento.</Alert>
-      ) : (
+      {erro && <Alert type="warning" className="mb-4">{erro}</Alert>}
+
+      {!uploads.length && !uploading ? (
+        <div className="text-center py-12 bg-white border border-slate-200 rounded-xl">
+          <Upload size={40} className="text-slate-300 mx-auto mb-4" />
+          <p className="text-slate-500 font-medium">Nenhum upload ainda</p>
+          <p className="text-slate-400 text-sm mt-1">Clique em "Novo Upload" e selecione os arquivos LoadingScan (.xlsx) do RDC</p>
+        </div>
+      ) : uploads.length > 0 ? (
         <>
           <select
             value={sel || ''}
@@ -342,7 +375,7 @@ export default function Triagem() {
             </>
           )}
         </>
-      )}
+      ) : null}
     </div>
   )
 }

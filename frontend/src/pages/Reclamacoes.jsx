@@ -2,6 +2,7 @@
  * pages/Reclamacoes.jsx — Reclamações + bloqueio de motorista + upload
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/ui'
@@ -10,43 +11,52 @@ import {
   ResponsiveContainer, Cell, Legend,
 } from 'recharts'
 import { Download, Upload, ShieldAlert, ShieldOff, ShieldCheck, Loader } from 'lucide-react'
+import { validarArquivos } from '../lib/validarArquivo'
 
 const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 const COLORS_WEEK = ['#2563eb', '#f97316', '#10b981', '#06b6d4']
 
 export default function Reclamacoes() {
   const { isAdmin }               = useAuth()
-  const [uploads, setUploads]     = useState([])
+  const queryClient               = useQueryClient()
   const [sel, setSel]             = useState(null)
-  const [detail, setDetail]       = useState(null)
-  const [semanas, setSemanas]     = useState([])
   const [blocking, setBlocking]   = useState({})
   const [uploading, setUploading] = useState(false)
   const [erroUpload, setErroUpload] = useState('')
   const inputRef = useRef()
 
-  const fetchUploads = useCallback(() => {
-    api.get('/api/reclamacoes/uploads').then(r => {
-      setUploads(r.data)
-      if (r.data.length && !sel) setSel(r.data[0].id)
-    })
-  }, [])
+  const { data: uploads = [] } = useQuery({
+    queryKey: ['reclamacoes-uploads'],
+    queryFn: () => api.get('/api/reclamacoes/uploads').then(r => r.data),
+  })
 
-  const fetchDetail = useCallback((id) => {
-    if (!id) return
-    api.get(`/api/reclamacoes/upload/${id}`).then(r => setDetail(r.data))
-  }, [])
+  useEffect(() => {
+    if (uploads.length && !sel) setSel(uploads[0].id)
+  }, [uploads])
 
-  const fetchSemanas = useCallback(() => {
-    api.get('/api/reclamacoes/motoristas-semana').then(r => setSemanas(r.data.semanas || []))
-  }, [])
+  const { data: detail } = useQuery({
+    queryKey: ['reclamacoes-detail', sel],
+    queryFn: () => api.get(`/api/reclamacoes/upload/${sel}`).then(r => r.data),
+    enabled: !!sel,
+  })
 
-  useEffect(() => { fetchUploads(); fetchSemanas() }, [])
-  useEffect(() => { fetchDetail(sel) }, [sel])
+  const { data: semanasData } = useQuery({
+    queryKey: ['reclamacoes-semanas'],
+    queryFn: () => api.get('/api/reclamacoes/motoristas-semana').then(r => r.data),
+  })
+  const semanas = semanasData?.semanas || []
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['reclamacoes-uploads'] })
+    queryClient.invalidateQueries({ queryKey: ['reclamacoes-detail', sel] })
+    queryClient.invalidateQueries({ queryKey: ['reclamacoes-semanas'] })
+  }
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const erroVal = validarArquivos(file)
+    if (erroVal) { setErroUpload(erroVal); return }
     setUploading(true); setErroUpload('')
     try {
       const form = new FormData()
@@ -54,9 +64,8 @@ export default function Reclamacoes() {
       const res = await api.post('/api/reclamacoes/processar', form, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
-      fetchUploads()
+      invalidateAll()
       setSel(res.data.upload_id)
-      fetchSemanas()
     } catch (e) {
       setErroUpload(e.response?.data?.detail || 'Erro ao processar arquivo.')
     } finally { setUploading(false) }
@@ -72,7 +81,7 @@ export default function Reclamacoes() {
         ativo:          false,
         motivo:         'Bloqueado via painel de reclamações',
       })
-      await Promise.all([fetchDetail(sel), fetchSemanas()])
+      invalidateAll()
     } catch { alert('Erro ao bloquear motorista.') }
     finally { setBlocking(p => { const n = { ...p }; delete n[motorista]; return n }) }
   }
