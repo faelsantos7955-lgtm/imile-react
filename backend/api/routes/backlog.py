@@ -138,10 +138,22 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
 
 
 @router.get("/clientes/{upload_id}")
-def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
+def listar_clientes(
+    upload_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user: dict = Depends(get_current_user)
+):
     sb = get_supabase()
-    rows = sb.table("backlog_por_cliente").select("*").eq("upload_id", upload_id).order("backlog", desc=True).execute().data or []
-    return rows
+    total_res = sb.table("backlog_por_cliente").select("id", count="exact").eq("upload_id", upload_id).execute()
+    total = total_res.count or 0
+    rows = (sb.table("backlog_por_cliente")
+              .select("*")
+              .eq("upload_id", upload_id)
+              .order("backlog", desc=True)
+              .range(offset, offset + limit - 1)
+              .execute().data or [])
+    return {"total": total, "items": rows, "limit": limit, "offset": offset}
 
 
 @router.get("/upload/{upload_id}")

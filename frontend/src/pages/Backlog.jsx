@@ -112,12 +112,13 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false,
 export default function Backlog() {
   const { isAdmin }               = useAuth()
   const queryClient               = useQueryClient()
-  const [uploadSel, setUploadSel] = useState(null)
-  const [clienteSel, setClienteSel] = useState('')
-  const [uploading, setUploading] = useState(false)
+  const [uploadSel, setUploadSel]     = useState(null)
+  const [clienteSel, setClienteSel]   = useState('')
+  const [uploading, setUploading]     = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [erro, setErro]           = useState('')
+  const [erro, setErro]               = useState('')
   const [showDetalhe, setShowDetalhe] = useState(true)
+  const [clienteOffset, setClienteOffset] = useState(0)
   const inputRef = useRef()
 
   const { data: uploads = [] } = useQuery({
@@ -129,11 +130,15 @@ export default function Backlog() {
     if (uploads.length && !uploadSel) setUploadSel(uploads[0].id)
   }, [uploads])
 
-  const { data: clientes = [] } = useQuery({
-    queryKey: ['backlog-clientes', uploadSel],
-    queryFn: () => api.get(`/api/backlog/clientes/${uploadSel}`).then(r => r.data || []).catch(() => []),
+  const { data: clientesRes } = useQuery({
+    queryKey: ['backlog-clientes', uploadSel, clienteOffset],
+    queryFn: () => api.get(`/api/backlog/clientes/${uploadSel}`, {
+      params: { limit: 50, offset: clienteOffset }
+    }).then(r => r.data).catch(() => ({ total: 0, items: [], limit: 50, offset: 0 })),
     enabled: !!uploadSel,
   })
+  const clientes      = clientesRes?.items || []
+  const clientesTotal = clientesRes?.total || 0
 
   const { data: dados, isLoading: loading } = useQuery({
     queryKey: ['backlog-dados', uploadSel, clienteSel],
@@ -147,6 +152,12 @@ export default function Backlog() {
   }
 
   const limparFiltro = () => setClienteSel('')
+
+  const handleUploadChange = (id) => {
+    setUploadSel(id)
+    setClienteSel('')
+    setClienteOffset(0)
+  }
 
   const handleDelete = async () => {
     if (!uploadSel || !window.confirm('Excluir este upload permanentemente?')) return
@@ -218,7 +229,7 @@ export default function Backlog() {
       {uploads.length > 0 && (
         <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500 uppercase">Upload</span>
-          <select value={uploadSel || ''} onChange={e => { setUploadSel(Number(e.target.value)); setClienteSel('') }}
+          <select value={uploadSel || ''} onChange={e => handleUploadChange(Number(e.target.value))}
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
             {uploads.map(u => (
               <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {(u.total || 0).toLocaleString('pt-BR')} pedidos</option>
@@ -305,7 +316,9 @@ export default function Backlog() {
           <div className="mb-6">
             <div className="rounded-t-xl px-4 py-2 text-white font-bold text-sm flex items-center justify-between" style={{ backgroundColor: '#0F172A' }}>
               <span>Backlog por Cliente</span>
-              <span className="text-xs font-normal text-slate-400">Clique numa linha para filtrar</span>
+              <span className="text-xs font-normal text-slate-400">
+                {clienteOffset + 1}–{Math.min(clienteOffset + clientes.length, clientesTotal)} de {clientesTotal} · Clique para filtrar
+              </span>
             </div>
             <div className="overflow-x-auto border border-slate-200 rounded-b-xl">
               <table className="w-full text-xs">
@@ -349,6 +362,28 @@ export default function Backlog() {
                 </tbody>
               </table>
             </div>
+            {/* Paginação */}
+            {clientesTotal > 50 && (
+              <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border border-t-0 border-slate-200 rounded-b-xl">
+                <span className="text-xs text-slate-500">
+                  Mostrando {clienteOffset + 1}–{Math.min(clienteOffset + clientes.length, clientesTotal)} de {clientesTotal} clientes
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    disabled={clienteOffset === 0}
+                    onClick={() => setClienteOffset(Math.max(0, clienteOffset - 50))}
+                    className="px-3 py-1 text-xs rounded-lg border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50">
+                    ← Anterior
+                  </button>
+                  <button
+                    disabled={clienteOffset + 50 >= clientesTotal}
+                    onClick={() => setClienteOffset(clienteOffset + 50)}
+                    className="px-3 py-1 text-xs rounded-lg border border-slate-200 bg-white disabled:opacity-40 hover:bg-slate-50">
+                    Próximo →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
