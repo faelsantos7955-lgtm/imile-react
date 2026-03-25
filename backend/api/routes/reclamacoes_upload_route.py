@@ -1,223 +1,224 @@
 """
-api/routes/reclamacoes_upload.py — Upload e processamento de Reclamações via painel web
-Adicionar ao router principal: app.include_router(router, prefix="/api/reclamacoes")
+api/routes/reclamacoes_upload_route.py — Upload de Reclamações via portal
+Self-contained: não depende de modulos/
 """
 import io
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from api.deps import get_current_user, get_supabase
 
-# Importa os mesmos helpers usados pelo processar.py local
-# Certifique-se de que `modulos/reclamacoes.py` está acessível no PYTHONPATH do servidor
-from modulos.reclamacoes import (
-    _construir_tabelas,
-    adicionar_supervisor,
-    agregar_por_station,
-    agregar_por_supervisor,
-    carregar_bilhete,
-    carregar_delivered,
-    criar_colunas_auxiliares,
-    cruzar_carta_porte,
-    gerar_excel,
-    limpar_dados,
-    separar_periodo,
-    top5_motoristas,
-)
-
 router = APIRouter()
+
+
+def _ler_bilhete(buf):
+    """Lê arquivo de bilhete de reclamações."""
+    df = pd.read_excel(buf, dtype=str)
+    df.columns = df.columns.str.strip()
+    return df
+
+
+def _extrair_data_ref(df):
+    """Extrai data de referência do campo Create Time."""
+    if 'Create Time' in df.columns:
+        datas = pd.to_datetime(df['Create Time'], dayfirst=True, errors='coerce').dropna()
+        if not datas.empty:
+            return datas.dt.date.mode().iloc[0]
+    return date.today()
+
+
+def _agregar_por_supervisor(df):
+    """Agrega reclamações por supervisor."""
+    if 'SUPERVISOR' not in df.columns:
+        return []
+    grp = df.groupby('SUPERVISOR').size().reset_index(name='dia_total')
+    grp = grp.sort_values('dia_total', ascending=False)
+    return [{'supervisor': r['SUPERVISOR'], 'dia_total': int(r['dia_total']), 'mes_total': int(r['dia_total'])}
+            for _, r in grp.iterrows()]
+
+
+def _agregar_por_station(df):
+    """Agrega reclamações por station."""
+    col = None
+    for c in ['Inventory Station', 'inventory_station', 'Station']:
+        if c in df.columns:
+            col = c
+            break
+    if not col:
+        return []
+    grp = df.groupby(col).size().reset_index(name='dia_total')
+    grp = grp.sort_values('dia_total', ascending=False)
+    result = []
+    for _, r in grp.iterrows():
+        sup = ''
+        if 'SUPERVISOR' in df.columns:
+            mask = df[col] == r[col]
+            sups = df.loc[mask, 'SUPERVISOR'].dropna()
+            if not sups.empty:
+                sup = sups.mode().iloc[0]
+        result.append({'station': str(r[col]), 'supervisor': sup, 'dia_total': int(r['dia_total']), 'mes_total': int(r['dia_total'])})
+    return result
+
+
+def _top5_motoristas(df, inativos=None):
+    """Top 5 motoristas com mais reclamações."""
+    inativos = inativos or set()
+    col_mot = None
+    for c in ['Motorista', 'DA Name', 'da_name', 'Driver Name']:
+        if c in df.columns:
+            col_mot = c
+            break
+    if not col_mot:
+        return []
+
+    df_filt = df[~df[col_mot].isin(inativos)] if inativos else df
+    grp = df_filt.groupby(col_mot).size().reset_index(name='total')
+    grp = grp.sort_values('total', ascending=False).head(5)
+
+    result = []
+    for _, r in grp.iterrows():
+        mot = str(r[col_mot])
+        ds = ''
+        sup = ''
+        col_ds = next((c for c in ['Inventory Station', 'Station', 'DS'] if c in df.columns), None)
+        if col_ds:
+            mask = df[col_mot] == mot
+            vals = df.loc[mask, col_ds].dropna()
+            if not vals.empty:
+                ds = vals.mode().iloc[0]
+        if 'SUPERVISOR' in df.columns:
+            mask = df[col_mot] == mot
+            vals = df.loc[mask, 'SUPERVISOR'].dropna()
+            if not vals.empty:
+                sup = vals.mode().iloc[0]
+        result.append({
+            'motorista': mot,
+            'id_motorista': mot,
+            'ds': ds,
+            'supervisor': sup,
+            'total': int(r['total']),
+        })
+    return result
+
+
+def _adicionar_supervisor(df, sb):
+    """Adiciona coluna SUPERVISOR via tabela config_supervisores."""
+    if 'SUPERVISOR' in df.columns:
+        return df
+    # Buscar mapeamento do banco
+    res = sb.table("config_supervisores").select("sigla,supervisor").execute()
+    if not res.data:
+        df['SUPERVISOR'] = 'Sem Supervisor'
+        return df
+    sup_map = {r['sigla'].strip().upper(): r['supervisor'] for r in res.data if r.get('sigla')}
+
+    # Encontrar coluna de station
+    col_sta = None
+    for c in ['Inventory Station', 'inventory_station', 'Station']:
+        if c in df.columns:
+            col_sta = c
+            break
+    if col_sta:
+        df['SUPERVISOR'] = df[col_sta].fillna('').str.strip().str.upper().map(sup_map).fillna('Sem Supervisor')
+    else:
+        df['SUPERVISOR'] = 'Sem Supervisor'
+    return df
 
 
 @router.post("/processar")
 async def processar_reclamacoes(
-    bilhete: UploadFile = File(..., description="Bilhete de Reclamação (.xlsx)"),
-    carta: UploadFile = File(..., description="Consulta à Carta de Porte Central (.xlsx)"),
-    gestao: UploadFile = File(None, description="Gestão de Bases / Supervisores (.xlsx) — opcional"),
-    delivered: UploadFile = File(None, description="Delivered / Entregas (.xlsx) — opcional"),
+    file: UploadFile = File(..., description="Bilhete de Reclamação (.xlsx)"),
     user: dict = Depends(get_current_user),
 ):
     """
-    Recebe os arquivos de Reclamações, processa e salva no Supabase.
-    Equivale ao `processar_reclamacoes()` do processar.py local.
-    Retorna um resumo do que foi salvo.
+    Recebe o bilhete de reclamações, processa e salva no Supabase.
+    Versão simplificada que aceita apenas o bilhete (arquivo principal).
     """
     sb = get_supabase()
-
-    # ── Lê os bytes dos uploads ──────────────────────────────────
-    bilhete_bytes = await bilhete.read()
-    carta_bytes   = await carta.read()
-    gestao_bytes  = await gestao.read() if gestao else None
-    deliv_bytes   = await delivered.read() if delivered else None
-
-    # ── Motoristas inativos ──────────────────────────────────────
-    res_i = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
-    inativos = [r["id_motorista"] for r in (res_i.data or [])]
+    conteudo = await file.read()
 
     try:
-        # ── Bilhete ──────────────────────────────────────────────
-        df = carregar_bilhete(io.BytesIO(bilhete_bytes))
+        df = _ler_bilhete(io.BytesIO(conteudo))
+    except Exception as e:
+        raise HTTPException(400, f"Erro ao ler arquivo: {e}")
 
-        # ── Supervisores ─────────────────────────────────────────
-        if gestao_bytes:
-            df = adicionar_supervisor(df, io.BytesIO(gestao_bytes))
-        else:
-            rs = sb.table("config_supervisores").select("sigla,region").execute()
-            if not rs.data:
-                raise HTTPException(400, "Sem supervisores no banco. Envie o arquivo de Gestão de Bases.")
-            buf = io.BytesIO()
-            pd.DataFrame(rs.data).rename(
-                columns={"sigla": "SIGLA", "region": "SUPERVISOR"}
-            ).to_excel(buf, index=False)
-            buf.seek(0)
-            df = adicionar_supervisor(df, buf)
+    if df.empty:
+        raise HTTPException(400, "Arquivo vazio")
 
-        df = criar_colunas_auxiliares(df)
+    # Adicionar supervisor
+    df = _adicionar_supervisor(df, sb)
 
-        # ── Carta de Porte ───────────────────────────────────────
-        df = cruzar_carta_porte(df, io.BytesIO(carta_bytes))
-        df = limpar_dados(df)
-        df_dia, df_mes, data_ref = separar_periodo(df)
+    # Data de referência
+    data_ref = _extrair_data_ref(df)
 
-        # Usa a data real do bilhete quando possível
-        if "Create Time" in df.columns:
-            data_create = pd.to_datetime(df["Create Time"], dayfirst=True, errors="coerce").dropna()
-            if not data_create.empty:
-                data_ref = data_create.dt.date.mode().iloc[0]
+    # Inativos
+    res_i = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
+    inativos = {r["id_motorista"] for r in (res_i.data or [])}
 
-        # ── Agrega ───────────────────────────────────────────────
-        agg_sup = agregar_por_supervisor(df_dia, df_mes)
-        agg_sta = agregar_por_station(df_dia, df_mes)
-        top5    = top5_motoristas(df_dia, inativos=inativos)
+    # Agregar
+    por_sup = _agregar_por_supervisor(df)
+    por_sta = _agregar_por_station(df)
+    top5 = _top5_motoristas(df, inativos)
 
-        est  = pd.DataFrame(columns=["Delivery Station", "Total Entregas"])
-        esup = pd.DataFrame(columns=["Supervisor", "Total Entregas"])
-        df_del_raw = None
+    # Week
+    semana_ref = 0
+    if 'Create Time' in df.columns:
+        datas = pd.to_datetime(df['Create Time'], dayfirst=True, errors='coerce')
+        if not datas.dropna().empty:
+            semana_ref = int(datas.dropna().dt.isocalendar().week.mode().iloc[0])
 
-        if deliv_bytes:
-            g2 = io.BytesIO(gestao_bytes) if gestao_bytes else io.BytesIO()
-            est, esup = carregar_delivered(io.BytesIO(deliv_bytes), g2)
-            df_del_raw = pd.read_excel(io.BytesIO(deliv_bytes), dtype=str)
+    # Remove upload anterior da mesma data
+    existing = sb.table("reclamacoes_uploads").select("id").eq("data_ref", data_ref.isoformat()).execute()
+    if existing.data:
+        old_id = existing.data[0]["id"]
+        for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
+            sb.table(tbl).delete().eq("upload_id", old_id).execute()
+        sb.table("reclamacoes_uploads").delete().eq("id", old_id).execute()
 
-        tbl_ds, tbl_sup, tbl_mot = _construir_tabelas(df, est, esup, top5, data_ref)
+    # Criar upload
+    n_mot = 0
+    for c in ['Motorista', 'DA Name', 'da_name', 'Driver Name']:
+        if c in df.columns:
+            n_mot = int(df[c].notna().sum())
+            break
 
-        week_cols_ds  = [c for c in tbl_ds.columns  if c.startswith("Qt Week")]
-        week_cols_sup = [c for c in tbl_sup.columns if c.startswith("Qt Week")]
+    col_sta = next((c for c in ['Inventory Station', 'inventory_station', 'Station'] if c in df.columns), None)
+    n_sta = int(df[col_sta].nunique()) if col_sta else 0
 
-        # ── Remove upload anterior da mesma data ─────────────────
-        existing = (
-            sb.table("reclamacoes_uploads")
-            .select("id")
-            .eq("data_ref", data_ref.isoformat())
-            .execute()
-        )
-        if existing.data:
-            old_id = existing.data[0]["id"]
-            for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
-                sb.table(tbl).delete().eq("upload_id", old_id).execute()
-            sb.table("reclamacoes_uploads").delete().eq("id", old_id).execute()
+    up = sb.table("reclamacoes_uploads").insert({
+        "data_ref":    data_ref.isoformat(),
+        "n_registros": len(df),
+        "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
+        "n_sta":       n_sta,
+        "n_mot":       n_mot,
+        "semana_ref":  semana_ref,
+    }).execute()
+    uid = up.data[0]["id"]
 
-        # ── Descobre colunas week_X disponíveis ──────────────────
-        semanas_sup_validas: set = set()
-        semanas_sta_validas: set = set()
-        try:
-            r = sb.table("reclamacoes_por_supervisor").select("*").limit(1).execute()
-            if r.data:
-                semanas_sup_validas = {k.replace("week_", "") for k in r.data[0] if k.startswith("week_")}
-        except Exception:
-            pass
-        try:
-            r = sb.table("reclamacoes_por_station").select("*").limit(1).execute()
-            if r.data:
-                semanas_sta_validas = {k.replace("week_", "") for k in r.data[0] if k.startswith("week_")}
-        except Exception:
-            pass
+    # Salvar por supervisor
+    if por_sup:
+        rows = [{"upload_id": uid, **r} for r in por_sup]
+        sb.table("reclamacoes_por_supervisor").insert(rows).execute()
 
-        semana_ref_val = (
-            int(df["Week"].dropna().mode().iloc[0])
-            if "Week" in df.columns and not df["Week"].dropna().empty
-            else 0
-        )
+    # Salvar por station
+    if por_sta:
+        rows = [{"upload_id": uid, **r} for r in por_sta]
+        sb.table("reclamacoes_por_station").insert(rows).execute()
 
-        # ── Cria upload ──────────────────────────────────────────
-        up = sb.table("reclamacoes_uploads").insert({
-            "data_ref":    data_ref.isoformat(),
-            "n_registros": len(df),
-            "n_sup":       int(agg_sup["Supervisor"].nunique()),
-            "n_sta":       int(agg_sta["Inventory Station"].nunique()),
-            "n_mot":       int(df["Motorista"].notna().sum()),
-            "semana_ref":  semana_ref_val,
-        }).execute()
-        uid = up.data[0]["id"]
+    # Salvar top 5
+    if top5:
+        rows = [{"upload_id": uid, **r} for r in top5]
+        sb.table("reclamacoes_top5").insert(rows).execute()
 
-        # ── Por Supervisor ───────────────────────────────────────
-        if not tbl_sup.empty:
-            rows_sup = []
-            for _, r in tbl_sup.iterrows():
-                if str(r.get("Supervisor", "")) == "TOTAL":
-                    continue
-                row = {
-                    "upload_id":  uid,
-                    "supervisor": str(r["Supervisor"]),
-                    "dia_total":  int(r.get(list(tbl_sup.columns)[1], 0) or 0),
-                    "mes_total":  int(r.get("Qt Mês", 0) or 0),
-                }
-                for wc in week_cols_sup:
-                    num = wc.replace("Qt Week ", "").strip()
-                    if num in semanas_sup_validas:
-                        row[f"week_{num}"] = int(r.get(wc, 0) or 0)
-                rows_sup.append(row)
-            if rows_sup:
-                sb.table("reclamacoes_por_supervisor").insert(rows_sup).execute()
-
-        # ── Por Station ──────────────────────────────────────────
-        if not tbl_ds.empty:
-            rows_sta = []
-            for _, r in tbl_ds.iterrows():
-                if str(r.get("DS", "")) == "TOTAL":
-                    continue
-                row = {
-                    "upload_id":  uid,
-                    "station":    str(r["DS"]),
-                    "supervisor": str(r.get("SUPERVISOR", "") or ""),
-                    "dia_total":  int(r.get(list(tbl_ds.columns)[2], 0) or 0),
-                    "mes_total":  int(r.get("Qt Mês", 0) or 0),
-                }
-                for wc in week_cols_ds:
-                    num = wc.replace("Qt Week ", "").strip()
-                    if num in semanas_sta_validas:
-                        row[f"week_{num}"] = int(r.get(wc, 0) or 0)
-                rows_sta.append(row)
-            if rows_sta:
-                sb.table("reclamacoes_por_station").insert(rows_sta).execute()
-
-        # ── Top 5 Motoristas ─────────────────────────────────────
-        if not top5.empty:
-            sb.table("reclamacoes_top5").insert([
-                {
-                    "upload_id":    uid,
-                    "motorista":    str(r["Motorista"]),
-                    "id_motorista": str(r.get("ID Motorista", "") or ""),
-                    "ds":           str(r.get("DS", "") or ""),
-                    "supervisor":   str(r.get("Supervisor", "") or ""),
-                    "total":        int(r["Qtd Reclamações"]),
-                }
-                for _, r in top5.iterrows()
-            ]).execute()
-
-        return {
-            "upload_id":   uid,
-            "data_ref":    data_ref.isoformat(),
-            "n_registros": len(df),
-            "n_sup":       int(agg_sup["Supervisor"].nunique()),
-            "n_sta":       int(agg_sta["Inventory Station"].nunique()),
-            "n_mot":       int(df["Motorista"].notna().sum()),
-            "top5":        top5.to_dict(orient="records") if not top5.empty else [],
-        }
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(500, f"Erro ao processar: {exc}") from exc
+    return {
+        "upload_id":   uid,
+        "data_ref":    data_ref.isoformat(),
+        "n_registros": len(df),
+        "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
+        "n_sta":       n_sta,
+        "n_mot":       n_mot,
+        "top5":        top5,
+    }
