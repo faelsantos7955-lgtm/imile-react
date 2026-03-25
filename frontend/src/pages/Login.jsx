@@ -1,10 +1,10 @@
 /**
- * pages/Login.jsx — Tela de login corporativa
+ * pages/Login.jsx — Tela de login corporativa iMile
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { Truck, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react'
 import api from '../lib/api'
 
 export default function Login() {
@@ -19,7 +19,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
 
-  // Registro
   const [regNome, setRegNome] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regMotivo, setRegMotivo] = useState('')
@@ -59,114 +58,190 @@ export default function Login() {
     }
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 relative overflow-hidden">
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-[0.03]"
-        style={{ backgroundImage: 'radial-gradient(circle, #2563eb 1px, transparent 1px)', backgroundSize: '24px 24px' }}
-      />
+  const inputClass = `
+    mt-1.5 w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50/50
+    text-sm text-slate-900 placeholder:text-slate-400
+    focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500
+    focus:bg-white transition-all
+  `
 
-      <div className="relative z-10 w-full max-w-md px-4">
+  return (
+    <div className="min-h-screen flex">
+
+      {/* ── Painel Esquerdo — Brand ─────────────────────────────── */}
+      <div className="hidden lg:flex lg:w-[45%] bg-navy-950 flex-col justify-between p-12 relative overflow-hidden">
+        {/* Gradiente de fundo */}
+        <div className="absolute inset-0 bg-gradient-to-br from-imile-500/10 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-navy-950 to-transparent pointer-events-none" />
+
+        {/* Pontos decorativos */}
+        <div className="absolute top-0 right-0 w-72 h-72 opacity-[0.04]"
+          style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '20px 20px' }}
+        />
+
         {/* Logo */}
-        <div className="text-center mb-8">
-          <Truck size={48} className="mx-auto text-imile-500 mb-3" />
-          <h1 className="text-2xl font-bold text-imile-700">
-            iMile <span className="text-imile-500">Delivery</span>
-          </h1>
-          <div className="w-32 h-0.5 bg-imile-500 mx-auto mt-2 rounded-full" />
-          <p className="text-[11px] tracking-[3px] text-slate-500 uppercase mt-2">
-            Portal Operacional · Brasil
-          </p>
+        <div className="relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-imile-500 flex items-center justify-center shadow-imile">
+              <span className="text-white font-black text-base">iM</span>
+            </div>
+            <div>
+              <p className="text-white font-bold text-lg leading-tight">iMile Delivery</p>
+              <p className="text-white/40 text-xs">Brasil Operations</p>
+            </div>
+          </div>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+        {/* Copy central */}
+        <div className="relative z-10">
+          <div className="w-10 h-1 bg-imile-500 rounded-full mb-6" />
+          <h2 className="text-3xl font-bold text-white leading-tight mb-4">
+            Portal de<br />Gestão Operacional
+          </h2>
+          <p className="text-white/50 text-sm leading-relaxed max-w-xs">
+            Acompanhe métricas de entrega, gestão de backlog, triagem e reclamações em tempo real.
+          </p>
 
-          {/* Tab login / registro */}
+          <div className="mt-10 space-y-3">
+            {['Expedição diária por base', 'Backlog SLA e aging', 'Triagem e reclamações', 'Ranking de performance'].map((item) => (
+              <div key={item} className="flex items-center gap-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-imile-500" />
+                <span className="text-white/60 text-sm">{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Rodapé */}
+        <div className="relative z-10">
+          <p className="text-white/25 text-xs">© 2025 iMile Delivery Brasil. Acesso restrito.</p>
+        </div>
+      </div>
+
+      {/* ── Painel Direito — Form ───────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-sm">
+
+          {/* Logo mobile */}
+          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg bg-imile-500 flex items-center justify-center">
+              <span className="text-white font-black text-sm">iM</span>
+            </div>
+            <span className="font-bold text-slate-800">iMile Delivery</span>
+          </div>
+
           {tab === 'login' ? (
-            <form onSubmit={handleLogin} className="p-8">
-              <h2 className="text-xl font-bold text-slate-900">Bem-vindo de volta</h2>
-              <p className="text-sm text-slate-500 mt-1">Acesso restrito à equipe iMile Brasil</p>
+            <form onSubmit={handleLogin} className="animate-in">
+              <p className="text-xs font-semibold uppercase tracking-widest text-imile-500 mb-1">Portal Operacional</p>
+              <h1 className="text-2xl font-bold text-slate-900 mb-1">Bem-vindo de volta</h1>
+              <p className="text-sm text-slate-500 mb-7">Entre com suas credenciais corporativas</p>
 
-              <div className="mt-6 space-y-4">
+              <div className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email</label>
+                  <label className="text-xs font-semibold text-slate-600">Email corporativo</label>
                   <input
                     type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    className="mt-1 w-full px-4 py-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500 transition-all"
+                    placeholder="seu@imile.com"
+                    className={inputClass}
+                    autoComplete="email"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Senha</label>
-                  <div className="relative mt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-600">Senha</label>
+                  </div>
+                  <div className="relative">
                     <input
-                      type={showPw ? 'text' : 'password'} value={senha} onChange={(e) => setSenha(e.target.value)}
+                      type={showPw ? 'text' : 'password'} value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500 transition-all pr-11"
+                      className={inputClass + ' pr-11'}
+                      autoComplete="current-password"
                     />
                     <button type="button" onClick={() => setShowPw(!showPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                      {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors mt-0.5">
+                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
               </div>
 
-              {error && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+              {error && (
+                <div className="mt-4 flex items-start gap-2 px-3.5 py-2.5 bg-red-50 border border-red-200/80 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                  <p className="text-xs text-red-700">{error}</p>
+                </div>
+              )}
 
               <button type="submit" disabled={loading}
-                className="mt-6 w-full py-3 rounded-lg bg-imile-500 text-white font-semibold text-sm hover:bg-imile-600 active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-imile-500/25">
-                {loading ? 'Entrando...' : 'Entrar no portal →'}
+                className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-imile-500 text-white font-semibold text-sm hover:bg-imile-600 active:scale-[0.99] transition-all disabled:opacity-60 shadow-imile">
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>Entrar <ArrowRight size={15} /></>
+                )}
               </button>
 
-              <div className="mt-4 text-center">
-                <div className="text-xs text-slate-400 mb-2">ou</div>
+              <div className="mt-5 pt-5 border-t border-slate-200">
                 <button type="button" onClick={() => { setTab('register'); setError('') }}
-                  className="w-full py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-                  Solicitar acesso
+                  className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all font-medium">
+                  Solicitar acesso ao portal
                 </button>
               </div>
             </form>
-          ) : (
-            <form onSubmit={handleRegister} className="p-8">
-              <h2 className="text-xl font-bold text-slate-900">Solicitar Acesso</h2>
-              <p className="text-sm text-slate-500 mt-1">O administrador receberá sua solicitação.</p>
 
-              <div className="mt-6 space-y-4">
+          ) : (
+            <form onSubmit={handleRegister} className="animate-in">
+              <button type="button" onClick={() => { setTab('login'); setError(''); setSuccess('') }}
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 mb-6 transition-colors">
+                <ArrowLeft size={13} /> Voltar ao login
+              </button>
+
+              <p className="text-xs font-semibold uppercase tracking-widest text-imile-500 mb-1">Novo acesso</p>
+              <h1 className="text-2xl font-bold text-slate-900 mb-1">Solicitar acesso</h1>
+              <p className="text-sm text-slate-500 mb-7">O administrador receberá e avaliará sua solicitação.</p>
+
+              <div className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Nome completo</label>
+                  <label className="text-xs font-semibold text-slate-600">Nome completo</label>
                   <input type="text" value={regNome} onChange={(e) => setRegNome(e.target.value)}
-                    placeholder="João Silva"
-                    className="mt-1 w-full px-4 py-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500" />
+                    placeholder="João Silva" className={inputClass} />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Email corporativo</label>
+                  <label className="text-xs font-semibold text-slate-600">Email corporativo</label>
                   <input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="joao.silva@imile.com"
-                    className="mt-1 w-full px-4 py-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500" />
+                    placeholder="joao.silva@imile.com" className={inputClass} />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Motivo</label>
+                  <label className="text-xs font-semibold text-slate-600">Motivo / área de atuação</label>
                   <textarea value={regMotivo} onChange={(e) => setRegMotivo(e.target.value)}
-                    placeholder="Área de atuação, região, motivo do acesso..."
+                    placeholder="Ex: Supervisor de operações, região São Paulo..."
                     rows={3}
-                    className="mt-1 w-full px-4 py-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500 resize-none" />
+                    className={inputClass + ' resize-none'} />
                 </div>
               </div>
 
-              {error && <p className="mt-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-              {success && <p className="mt-4 text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg">{success}</p>}
+              {error && (
+                <div className="mt-4 flex items-start gap-2 px-3.5 py-2.5 bg-red-50 border border-red-200/80 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                  <p className="text-xs text-red-700">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="mt-4 flex items-start gap-2 px-3.5 py-2.5 bg-emerald-50 border border-emerald-200/80 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                  <p className="text-xs text-emerald-700">{success}</p>
+                </div>
+              )}
 
               <button type="submit" disabled={loading}
-                className="mt-6 w-full py-3 rounded-lg bg-imile-500 text-white font-semibold text-sm hover:bg-imile-600 transition-all disabled:opacity-50">
-                {loading ? 'Enviando...' : 'Enviar solicitação'}
-              </button>
-
-              <button type="button" onClick={() => { setTab('login'); setError(''); setSuccess('') }}
-                className="mt-3 w-full py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-                ← Voltar ao login
+                className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-imile-500 text-white font-semibold text-sm hover:bg-imile-600 active:scale-[0.99] transition-all disabled:opacity-60 shadow-imile">
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>Enviar solicitação <ArrowRight size={15} /></>
+                )}
               </button>
             </form>
           )}
