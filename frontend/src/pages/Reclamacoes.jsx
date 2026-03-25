@@ -14,7 +14,7 @@ import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader }
 import { validarArquivos } from '../lib/validarArquivo'
 
 const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
-const COLORS_WEEK = ['#2563eb', '#f97316', '#10b981', '#06b6d4']
+const COLORS_WEEK = ['#095EF7', '#f97316', '#10b981', '#06b6d4']
 
 export default function Reclamacoes() {
   const { isAdmin }               = useAuth()

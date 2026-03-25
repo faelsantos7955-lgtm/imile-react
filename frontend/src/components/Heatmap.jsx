@@ -4,7 +4,7 @@
 import { useMemo } from 'react'
 
 const COLORS_EXP = ['#fee2e2','#fecaca','#fca5a5','#f87171','#ef4444','#dc2626','#b91c1c','#bbf7d0','#86efac','#4ade80','#22c55e','#16a34a']
-const COLORS_ENT = ['#dbeafe','#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8']
+const COLORS_ENT = ['#eff4ff','#c0d0fd','#93b1fb','#5f87f7','#095EF7','#084fd4','#0640ab']
 
 function getColor(value, type) {
   const colors = type === 'ent' ? COLORS_ENT : COLORS_EXP
@@ -75,7 +75,7 @@ export default function Heatmap({ data, dsList, cityList, type = 'exp', title = 
             <div className="flex h-3">
               {(type === 'exp'
                 ? ['#fee2e2','#fca5a5','#fde68a','#bbf7d0','#86efac','#22c55e']
-                : ['#dbeafe','#93c5fd','#3b82f6','#1d4ed8']
+                : ['#eff4ff','#93b1fb','#095EF7','#0640ab']
               ).map((c, i) => (
                 <div key={i} style={{ backgroundColor: c, width: 24, height: 12 }} />
               ))}

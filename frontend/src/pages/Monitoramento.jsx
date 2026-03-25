@@ -185,7 +185,7 @@ export default function Monitoramento() {
       {!loading && dados && <>
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-          <KPI label="Volume Total" value={F(dados.totais.volume_total)} icon={Package} color="#2563EB" />
+          <KPI label="Volume Total" value={F(dados.totais.volume_total)} icon={Package} color="#095EF7" />
           <KPI label="Recebimento" value={F(dados.totais.recebimento)} icon={TrendingUp} color="#16A34A" />
           <KPI label="Saída" value={F(dados.totais.volume_saida)} icon={Truck} color="#7C3AED" />
           <KPI label="Taxa Expedição" value={`${(dados.totais.taxa_expedicao * 100).toFixed(1)}`} suffix="%" icon={TrendingUp}
@@ -214,7 +214,7 @@ export default function Monitoramento() {
               </thead>
               <tbody>
                 {sortedDados.map((row, i) => (
-                  <tr key={i} className={`${i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'} hover:bg-blue-50/50`}>
+                  <tr key={i} className={`${i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'} hover:bg-imile-50/60`}>
                     {COLS.map(col => {
                       const val = row[col.key]
 

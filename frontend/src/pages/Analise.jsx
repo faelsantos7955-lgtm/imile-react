@@ -18,8 +18,8 @@ import {
 import { Download, Upload, X, Filter, Loader } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 
-const CB = { recebido: '#2563eb', expedido: '#f97316', entregas: '#10b981' }
-const COLORS = ['#2563eb', '#f97316', '#10b981', '#06b6d4', '#ef4444', '#f59e0b', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899']
+const CB = { recebido: '#095EF7', expedido: '#f97316', entregas: '#10b981' }
+const COLORS = ['#095EF7', '#f97316', '#10b981', '#06b6d4', '#ef4444', '#f59e0b', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899']
 
 const PRESETS = [
   { key: 'hoje',        label: 'Hoje',         days: 0 },
