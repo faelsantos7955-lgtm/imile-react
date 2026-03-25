@@ -33,7 +33,7 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
 
 @router.delete("/upload/{upload_id}")
 def deletar_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    if not user.get("is_admin"):
+    if not user.get("role") == "admin":
         raise HTTPException(403, "Acesso negado")
     sb = get_supabase()
     for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade"):
