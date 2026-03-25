@@ -2,8 +2,12 @@
 api/routes/admin.py — Rotas administrativas
 """
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from typing import Literal
 from api.deps import get_supabase, get_supabase_admin, require_admin
+
+PAGINAS_VALIDAS = {'dashboard','historico','comparativos','triagem','reclamacoes','backlog','monitoramento','admin'}
+ACOES_VALIDAS   = {'excel','bloquear_motorista','aprovar_acesso'}
 
 router = APIRouter()
 
@@ -20,8 +24,24 @@ class PermissoesRequest(BaseModel):
     bases: list = []
     paginas: list = []
     acoes: list = []
-    role: str = "viewer"
+    role: Literal["viewer", "supervisor", "admin"] = "viewer"
     ativo: bool = True
+
+    @field_validator("paginas")
+    @classmethod
+    def validar_paginas(cls, v):
+        invalidas = set(v) - PAGINAS_VALIDAS
+        if invalidas:
+            raise ValueError(f"Páginas inválidas: {invalidas}")
+        return v
+
+    @field_validator("acoes")
+    @classmethod
+    def validar_acoes(cls, v):
+        invalidas = set(v) - ACOES_VALIDAS
+        if invalidas:
+            raise ValueError(f"Ações inválidas: {invalidas}")
+        return v
 
 
 @router.put("/usuarios/{user_id}")

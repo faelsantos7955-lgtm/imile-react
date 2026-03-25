@@ -55,19 +55,25 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
     inativos_res = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
     inativos = {r["id_motorista"] for r in (inativos_res.data or [])}
 
-    # Busca top de todos os 3 uploads e acumula por motorista
+    # Busca top de todos os uploads de uma vez (evita N+1)
+    all_registros = (
+        sb.table("reclamacoes_top5")
+        .select("*")
+        .in_("upload_id", ids_3dias)
+        .order("total", desc=True)
+        .execute().data or []
+    )
+
+    # Agrupa por upload_id mantendo ordem de ids_3dias (mais recente primeiro)
+    by_upload = defaultdict(list)
+    for r in all_registros:
+        by_upload[r["upload_id"]].append(r)
+
     acumulado = defaultdict(lambda: {"total": 0, "id_motorista": "", "ds": "", "supervisor": ""})
     n_filtrados = 0
 
     for uid in ids_3dias:
-        registros = (
-            sb.table("reclamacoes_top5")
-            .select("*")
-            .eq("upload_id", uid)
-            .order("total", desc=True)
-            .execute().data or []
-        )
-        for t in registros:
+        for t in by_upload[uid]:
             motorista = t.get("motorista", "")
             if motorista in inativos:
                 n_filtrados += 1
@@ -115,30 +121,36 @@ def motoristas_por_semana(user: dict = Depends(get_current_user)):
     inativos_res = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
     inativos = {r["id_motorista"] for r in (inativos_res.data or [])}
 
+    # Busca todos os tops de uma vez (evita N+1)
+    all_ids = [u["id"] for u in uploads]
+    all_top = (
+        sb.table("reclamacoes_top5")
+        .select("motorista,total,upload_id")
+        .in_("upload_id", all_ids)
+        .execute().data or []
+    )
+    by_upload = defaultdict(list)
+    for t in all_top:
+        by_upload[t["upload_id"]].append(t)
+
     semanas = []
-    # Para cada upload, acumula os 3 dias anteriores (incluindo ele)
     for i, u in enumerate(uploads[:4]):
-        # Janela de 3 uploads: o atual + 2 anteriores na lista
         janela = uploads[i:i+3]
         ids_janela = [j["id"] for j in janela]
 
         acumulado = defaultdict(lambda: {"total": 0, "motorista": ""})
-
         for uid in ids_janela:
-            top = (sb.table("reclamacoes_top5").select("motorista,total")
-                   .eq("upload_id", uid).order("total", desc=True).limit(20).execute().data or [])
-            for t in top:
+            for t in by_upload[uid]:
                 motorista = t["motorista"]
                 if motorista in inativos:
                     continue
-                acumulado[motorista]["total"]     += t["total"]
-                acumulado[motorista]["motorista"]  = motorista
+                acumulado[motorista]["total"]    += t["total"]
+                acumulado[motorista]["motorista"] = motorista
 
         top5 = sorted(acumulado.values(), key=lambda x: x["total"], reverse=True)[:5]
-
         semanas.append({
-            "data_ref":  u["data_ref"],
-            "upload_id": u["id"],
+            "data_ref":   u["data_ref"],
+            "upload_id":  u["id"],
             "motoristas": top5,
         })
 
