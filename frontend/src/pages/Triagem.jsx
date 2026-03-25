@@ -5,12 +5,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
+import { useAuth } from '../lib/AuthContext'
 import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts'
-import { Download, Upload, CheckCircle, XCircle, AlertTriangle, ChevronRight, ChevronDown, Loader } from 'lucide-react'
+import { Download, Upload, Trash2, CheckCircle, XCircle, AlertTriangle, ChevronRight, ChevronDown, Loader } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 
 const COLOR_OK  = '#10b981'
@@ -18,6 +19,7 @@ const COLOR_NOK = '#ef4444'
 const COLOR_TOP = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 
 export default function Triagem() {
+  const { isAdmin }             = useAuth()
   const queryClient             = useQueryClient()
   const [sel, setSel]           = useState(null)
   const [expanded, setExpanded] = useState({})
@@ -88,6 +90,16 @@ export default function Triagem() {
     } finally { setUploading(false); e.target.value = '' }
   }
 
+  const handleDelete = async () => {
+    if (!sel || !window.confirm('Excluir este upload permanentemente?')) return
+    try {
+      await api.delete(`/api/triagem/upload/${sel}`)
+      setSel(null)
+      setExpanded({})
+      queryClient.invalidateQueries({ queryKey: ['triagem-uploads'] })
+    } catch (e) { setErro(e.response?.data?.detail || 'Erro ao excluir.') }
+  }
+
   const u = uploads.find(x => x.id === sel)
   const F = n => n?.toLocaleString('pt-BR') ?? '0'
 
@@ -150,17 +162,24 @@ export default function Triagem() {
         </div>
       ) : uploads.length > 0 ? (
         <>
-          <select
-            value={sel || ''}
-            onChange={e => setSel(Number(e.target.value))}
-            className="mb-6 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm max-w-sm"
-          >
-            {uploads.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.data_ref} — {u.qtd_ok}/{u.total} OK ({u.taxa}%)
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 mb-6">
+            <select
+              value={sel || ''}
+              onChange={e => { setSel(Number(e.target.value)); setExpanded({}) }}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm max-w-sm flex-1"
+            >
+              {uploads.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.data_ref} — {u.qtd_ok}/{u.total} OK ({u.taxa}%)
+                </option>
+              ))}
+            </select>
+            {isAdmin && sel && (
+              <button onClick={handleDelete} className="p-2 text-red-400 hover:text-red-600" title="Excluir upload">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
 
           {u && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

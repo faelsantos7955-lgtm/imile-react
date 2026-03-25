@@ -51,24 +51,21 @@ def _processar(df: pd.DataFrame, sb) -> dict:
     # Remover duplicatas por waybill
     df = df.drop_duplicates(subset=[col_wb], keep="first").copy()
 
-    # Normalizar
+    # Normalizar (vetorizado)
     df["_dest"] = _lc(df[col_dest])
-    df["_deliv"] = _lc(df[col_deliv]) if col_deliv in df.columns else ""
-    df["_city"] = _lc(df[col_city]) if col_city in df.columns else ""
+    df["_deliv"] = _lc(df[col_deliv]) if col_deliv in df.columns else pd.Series("", index=df.index)
+    df["_city"] = _lc(df[col_city]) if col_city in df.columns else pd.Series("", index=df.index)
 
-    # Classificar
-    def _classif(row):
-        dest = row["_dest"]
-        deliv = row["_deliv"]
-        if not dest:
-            return "fora"
-        if not deliv:
-            return "fora"
-        if dest == deliv:
-            return "ok"
-        return "nok"
-
-    df["_status"] = df.apply(_classif, axis=1)
+    # Classificar vetorizado — sem apply()
+    import numpy as np
+    dest_empty  = df["_dest"] == ""
+    deliv_empty = df["_deliv"] == ""
+    match       = df["_dest"] == df["_deliv"]
+    df["_status"] = np.select(
+        [dest_empty | deliv_empty, match],
+        ["fora",                   "ok"],
+        default="nok",
+    )
 
     # Data de referência
     data_ref: str = date.today().isoformat()

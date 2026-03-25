@@ -10,7 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
 } from 'recharts'
-import { Download, Upload, ShieldAlert, ShieldOff, ShieldCheck, Loader } from 'lucide-react'
+import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 
 const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
@@ -69,6 +69,16 @@ export default function Reclamacoes() {
     } catch (e) {
       setErroUpload(e.response?.data?.detail || 'Erro ao processar arquivo.')
     } finally { setUploading(false) }
+  }
+
+  const handleDelete = async () => {
+    if (!sel || !window.confirm('Excluir este upload permanentemente?')) return
+    try {
+      await api.delete(`/api/reclamacoes/upload/${sel}`)
+      setSel(null)
+      queryClient.invalidateQueries({ queryKey: ['reclamacoes-uploads'] })
+      queryClient.invalidateQueries({ queryKey: ['reclamacoes-semanas'] })
+    } catch (e) { setErroUpload(e.response?.data?.detail || 'Erro ao excluir.') }
   }
 
   const handleBloquear = async (motorista) => {
@@ -145,15 +155,22 @@ export default function Reclamacoes() {
         </Card>
       ) : (
         <>
-          <select
-            value={sel || ''}
-            onChange={e => setSel(Number(e.target.value))}
-            className="mb-6 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm max-w-md"
-          >
-            {uploads.map(u => (
-              <option key={u.id} value={u.id}>{u.data_ref} — {F(u.n_registros)} registros</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 mb-6">
+            <select
+              value={sel || ''}
+              onChange={e => setSel(Number(e.target.value))}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm max-w-md flex-1"
+            >
+              {uploads.map(u => (
+                <option key={u.id} value={u.id}>{u.data_ref} — {F(u.n_registros)} registros</option>
+              ))}
+            </select>
+            {isAdmin && sel && (
+              <button onClick={handleDelete} className="p-2 text-red-400 hover:text-red-600" title="Excluir upload">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
 
           {u && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

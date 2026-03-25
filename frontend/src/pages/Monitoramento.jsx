@@ -4,8 +4,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
+import { useAuth } from '../lib/AuthContext'
 import { PageHeader, Card, Alert } from '../components/ui'
-import { Upload, Loader, RefreshCw, TrendingUp, Package, Truck, AlertTriangle } from 'lucide-react'
+import { Upload, Loader, RefreshCw, Trash2, TrendingUp, Package, Truck, AlertTriangle } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 
 function KPI({ label, value, icon: Icon, color = '#334155', suffix = '' }) {
@@ -36,6 +37,7 @@ function TaxaCell({ value }) {
 }
 
 export default function Monitoramento() {
+  const { isAdmin }               = useAuth()
   const queryClient               = useQueryClient()
   const [uploadSel, setUploadSel] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -60,6 +62,17 @@ export default function Monitoramento() {
   })
 
   const carregarUploads = () => queryClient.invalidateQueries({ queryKey: ['monitoramento-uploads'] })
+
+  const handleDelete = async () => {
+    if (!uploadSel || !window.confirm('Excluir este upload permanentemente?')) return
+    try {
+      await api.delete(`/api/monitoramento/upload/${uploadSel}`)
+      setUploadSel(null)
+      carregarUploads()
+    } catch (e) {
+      setErro(e.response?.data?.detail || 'Erro ao excluir.')
+    }
+  }
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
@@ -147,6 +160,11 @@ export default function Monitoramento() {
           <button onClick={() => carregarUploads()} className="p-1.5 text-slate-400 hover:text-slate-600">
             <RefreshCw size={14} />
           </button>
+          {isAdmin && uploadSel && (
+            <button onClick={handleDelete} className="p-1.5 text-red-400 hover:text-red-600" title="Excluir upload">
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       )}
 

@@ -5,8 +5,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { PageHeader, Card, Alert } from '../components/ui'
-import { Upload, Download, Loader, RefreshCw, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { Upload, Download, Loader, RefreshCw, Trash2, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
+import { useAuth } from '../lib/AuthContext'
 
 const FAIXAS = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
 const FAIXAS_LABELS = ['1D<3D', '3D<5D', '5D<7D', '7D<10D', '10D<15D', '15D<20D', '≥20D']
@@ -109,6 +110,7 @@ function TabelaBacklog({ titulo, dados, cor = '#1F3864', showSupervisor = false,
 }
 
 export default function Backlog() {
+  const { isAdmin }               = useAuth()
   const queryClient               = useQueryClient()
   const [uploadSel, setUploadSel] = useState(null)
   const [clienteSel, setClienteSel] = useState('')
@@ -145,6 +147,16 @@ export default function Backlog() {
   }
 
   const limparFiltro = () => setClienteSel('')
+
+  const handleDelete = async () => {
+    if (!uploadSel || !window.confirm('Excluir este upload permanentemente?')) return
+    try {
+      await api.delete(`/api/backlog/upload/${uploadSel}`)
+      setUploadSel(null)
+      setClienteSel('')
+      queryClient.invalidateQueries({ queryKey: ['backlog-uploads'] })
+    } catch (e) { setErro(e.response?.data?.detail || 'Erro ao excluir.') }
+  }
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
@@ -234,6 +246,11 @@ export default function Backlog() {
 
           <button onClick={() => queryClient.invalidateQueries({ queryKey: ['backlog-uploads'] })}
             className="p-1.5 text-slate-400 hover:text-slate-600"><RefreshCw size={14} /></button>
+          {isAdmin && uploadSel && (
+            <button onClick={handleDelete} className="p-1.5 text-red-400 hover:text-red-600" title="Excluir upload">
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       )}
 

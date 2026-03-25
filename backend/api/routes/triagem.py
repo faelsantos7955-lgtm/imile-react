@@ -1,7 +1,7 @@
 """
 api/routes/triagem.py — Dados de triagem
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from api.deps import get_supabase, get_current_user
 
 router = APIRouter()
@@ -29,6 +29,20 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
         "top5": top5,
         "por_supervisor": r_sup,
     }
+
+
+@router.delete("/upload/{upload_id}")
+def deletar_upload(upload_id: int, user: dict = Depends(get_current_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(403, "Acesso negado")
+    sb = get_supabase()
+    for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade"):
+        try:
+            sb.table(tbl).delete().eq("upload_id", upload_id).execute()
+        except Exception:
+            pass
+    sb.table("triagem_uploads").delete().eq("id", upload_id).execute()
+    return {"ok": True}
 
 
 @router.get("/upload/{upload_id}/cidades/{ds}")

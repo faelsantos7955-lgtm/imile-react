@@ -121,6 +121,20 @@ def listar_uploads(user: dict = Depends(get_current_user)):
     return sb.table("backlog_uploads").select("*").order("criado_em", desc=True).limit(30).execute().data or []
 
 
+@router.delete("/upload/{upload_id}")
+def deletar_upload(upload_id: int, user: dict = Depends(get_current_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(403, "Acesso negado")
+    sb = get_supabase()
+    for tbl in ("backlog_detalhes", "backlog_por_cliente", "backlog_por_motivo", "backlog_por_ds", "backlog_por_supervisor", "backlog_por_rdc"):
+        try:
+            sb.table(tbl).delete().eq("upload_id", upload_id).execute()
+        except Exception:
+            pass
+    sb.table("backlog_uploads").delete().eq("id", upload_id).execute()
+    return {"ok": True}
+
+
 @router.get("/clientes/{upload_id}")
 def listar_clientes(upload_id: int, user: dict = Depends(get_current_user)):
     sb = get_supabase()
