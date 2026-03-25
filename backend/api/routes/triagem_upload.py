@@ -171,52 +171,58 @@ async def processar_triagem(
     except Exception as e:
         raise HTTPException(400, f"Erro ao processar: {e}")
 
-    data_ref = resultado["data_ref"]
+    try:
+        data_ref = resultado["data_ref"]
 
-    # Remove upload anterior da mesma data
-    existing = sb.table("triagem_uploads").select("id").eq("data_ref", data_ref).execute()
-    if existing.data:
-        old_id = existing.data[0]["id"]
-        for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade"):
-            try:
-                sb.table(tbl).delete().eq("upload_id", old_id).execute()
-            except Exception:
-                pass
-        sb.table("triagem_uploads").delete().eq("id", old_id).execute()
+        # Remove upload anterior da mesma data
+        existing = sb.table("triagem_uploads").select("id").eq("data_ref", data_ref).execute()
+        if existing.data:
+            old_id = existing.data[0]["id"]
+            for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade"):
+                try:
+                    sb.table(tbl).delete().eq("upload_id", old_id).execute()
+                except Exception:
+                    pass
+            sb.table("triagem_uploads").delete().eq("id", old_id).execute()
 
-    # Criar upload
-    up = sb.table("triagem_uploads").insert({
-        "data_ref":   data_ref,
-        "criado_por": user["email"],
-        "total":      resultado["total"],
-        "qtd_ok":     resultado["qtd_ok"],
-        "qtd_erro":   resultado["qtd_erro"],
-        "taxa":       resultado["taxa"],
-    }).execute()
-    uid = up.data[0]["id"]
+        # Criar upload
+        up = sb.table("triagem_uploads").insert({
+            "data_ref":   data_ref,
+            "criado_por": user["email"],
+            "total":      resultado["total"],
+            "qtd_ok":     resultado["qtd_ok"],
+            "qtd_erro":   resultado["qtd_erro"],
+            "taxa":       resultado["taxa"],
+        }).execute()
+        uid = up.data[0]["id"]
 
-    # Salvar por DS
-    if resultado["por_ds"]:
-        sb.table("triagem_por_ds").insert(
-            [{"upload_id": uid, **r} for r in resultado["por_ds"]]
-        ).execute()
+        # Salvar por DS
+        if resultado["por_ds"]:
+            sb.table("triagem_por_ds").insert(
+                [{"upload_id": uid, **r} for r in resultado["por_ds"]]
+            ).execute()
 
-    # Salvar top 5
-    if resultado["top5"]:
-        sb.table("triagem_top5").insert(
-            [{"upload_id": uid, "ds": r["ds"], "total_erros": r["nok"]} for r in resultado["top5"]]
-        ).execute()
+        # Salvar top 5
+        if resultado["top5"]:
+            sb.table("triagem_top5").insert(
+                [{"upload_id": uid, "ds": r["ds"], "total_erros": r["nok"]} for r in resultado["top5"]]
+            ).execute()
 
-    # Salvar por supervisor
-    if resultado["por_supervisor"]:
-        sb.table("triagem_por_supervisor").insert(
-            [{"upload_id": uid, **r} for r in resultado["por_supervisor"]]
-        ).execute()
+        # Salvar por supervisor
+        if resultado["por_supervisor"]:
+            sb.table("triagem_por_supervisor").insert(
+                [{"upload_id": uid, **r} for r in resultado["por_supervisor"]]
+            ).execute()
 
-    # Salvar por cidade (em lotes)
-    cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
-    for i in range(0, len(cidades), 500):
-        sb.table("triagem_por_cidade").insert(cidades[i:i + 500]).execute()
+        # Salvar por cidade (em lotes)
+        cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
+        for i in range(0, len(cidades), 500):
+            sb.table("triagem_por_cidade").insert(cidades[i:i + 500]).execute()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Erro ao salvar no banco: {e}")
 
     return {
         "upload_id": uid,
