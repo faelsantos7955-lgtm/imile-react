@@ -3,5 +3,7 @@ frontend/dist
 node_modules
 dist
 .env
+backend/.env
+backend/.env.txt
 __pycache__
 venv

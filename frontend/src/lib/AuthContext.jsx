@@ -24,8 +24,9 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.post('/api/auth/login', { email, password })
-    const { access_token, user: userData } = res.data
+    const { access_token, refresh_token, user: userData } = res.data
     localStorage.setItem('access_token', access_token)
+    localStorage.setItem('refresh_token', refresh_token)
     localStorage.setItem('user', JSON.stringify(userData))
     setUser(userData)
     return userData
@@ -33,6 +34,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
     setUser(null)
   }

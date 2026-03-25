@@ -13,6 +13,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class RegisterRequest(BaseModel):
     nome: str
     email: str
@@ -61,6 +65,23 @@ def login(req: LoginRequest):
         if "invalid" in msg or "credentials" in msg:
             raise HTTPException(401, "Email ou senha incorretos")
         raise HTTPException(500, f"Erro: {e}")
+
+
+@router.post("/refresh")
+def refresh(req: RefreshRequest):
+    sb = get_supabase()
+    try:
+        res = sb.auth.refresh_session(req.refresh_token)
+        if not res.session:
+            raise HTTPException(401, "Refresh token inválido ou expirado")
+        return {
+            "access_token":  res.session.access_token,
+            "refresh_token": res.session.refresh_token,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(401, f"Erro ao renovar sessão: {e}")
 
 
 @router.post("/register")

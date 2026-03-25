@@ -1,6 +1,7 @@
 """
 FastAPI Backend — iMile Dashboard
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -9,17 +10,16 @@ load_dotenv()
 
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel, backlog, monitoramento
 from api.routes.reclamacoes_upload_route import router as reclamacoes_upload_router
+from api.routes.dashboard_upload import router as dashboard_upload_router
 
 app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs")
 
+_default_origins = "https://imile-react.vercel.app,http://localhost:5173,http://localhost:5174"
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _default_origins).split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://imile-react.vercel.app",
-        "https://imile-react-9sbshgee3-faelsantos7955-lgtms-projects.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:5174",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +30,7 @@ app.include_router(dashboard.router,            prefix="/api/dashboard",     tag
 app.include_router(historico.router,            prefix="/api/historico",     tags=["Histórico"])
 app.include_router(reclamacoes.router,          prefix="/api/reclamacoes",   tags=["Reclamações"])
 app.include_router(reclamacoes_upload_router,   prefix="/api/reclamacoes",   tags=["Reclamações"])  # POST /processar
+app.include_router(dashboard_upload_router,     prefix="/api/dashboard",     tags=["Dashboard"])    # POST /upload
 app.include_router(triagem.router,              prefix="/api/triagem",       tags=["Triagem"])
 app.include_router(admin.router,                prefix="/api/admin",         tags=["Admin"])
 app.include_router(excel.router,                prefix="/api/excel",         tags=["Excel"])

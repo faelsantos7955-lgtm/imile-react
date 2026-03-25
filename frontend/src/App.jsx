@@ -5,14 +5,11 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Historico from './pages/Historico'
-import Comparativos from './pages/Comparativos'
-import Triagem from './pages/Triagem'
+import Analise from './pages/Analise'
+import Operacional from './pages/Operacional'
 import Reclamacoes from './pages/Reclamacoes'
 import Admin from './pages/Admin'
 import Backlog from './pages/Backlog'
-import Monitoramento from './pages/Monitoramento'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -30,13 +27,10 @@ function AppRoutes() {
       <Route path="/" element={
         <ProtectedRoute><Layout /></ProtectedRoute>
       }>
-        <Route index element={<Dashboard />} />
-        <Route path="historico" element={<Historico />} />
-        <Route path="comparativos" element={<Comparativos />} />
-        <Route path="triagem" element={<Triagem />} />
+        <Route index element={<Analise />} />
+        <Route path="operacional" element={<Operacional />} />
         <Route path="reclamacoes" element={<Reclamacoes />} />
         <Route path="backlog" element={<Backlog />} />
-        <Route path="monitoramento" element={<Monitoramento />} />
         <Route path="admin/*" element={
           <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
         } />

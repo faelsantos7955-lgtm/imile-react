@@ -4,20 +4,16 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import {
-  LayoutDashboard, CalendarDays, BarChart3,
-  GitBranch, FileWarning, Upload, Users, Settings,
-  LogOut, Truck, Bell, HelpCircle, Search, Package, ClipboardList
+  BarChart2, Wrench, FileWarning, Upload, Users, Settings,
+  LogOut, Truck, Bell, HelpCircle, Search, Package,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const NAV_ITEMS = [
-  { to: '/',              icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/historico',     icon: CalendarDays,    label: 'Histórico' },
-  { to: '/comparativos',  icon: BarChart3,       label: 'Comparativos' },
-  { to: '/triagem',       icon: GitBranch,       label: 'Triagem DC×DS' },
-  { to: '/reclamacoes',   icon: FileWarning,     label: 'Reclamações' },
-  { to: '/backlog',       icon: Package,         label: 'Backlog SLA' },
-  { to: '/monitoramento', icon: ClipboardList,   label: 'Monitoramento' },
+  { to: '/',            icon: BarChart2,   label: 'Análise' },
+  { to: '/operacional', icon: Wrench,      label: 'Operacional' },
+  { to: '/reclamacoes', icon: FileWarning, label: 'Reclamações' },
+  { to: '/backlog',     icon: Package,     label: 'Backlog SLA' },
 ]
 
 const ADMIN_ITEMS = [
