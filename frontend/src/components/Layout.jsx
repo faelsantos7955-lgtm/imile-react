@@ -1,5 +1,5 @@
 /**
- * components/Layout.jsx — Sidebar corporativa iMile + área de conteúdo
+ * components/Layout.jsx — Clean & Premium · iMile Portal
  * Mobile: sidebar como drawer com overlay
  */
 import { useState, useEffect, useRef } from 'react'
@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
-  LogOut, Bell, Package, ChevronRight, Menu, X, History,
+  LogOut, Bell, Package, Menu, X, History,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -21,10 +21,10 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_ITEMS = [
-  { to: '/admin',           icon: Upload,   label: 'Upload / Processar' },
-  { to: '/admin/users',     icon: Users,    label: 'Solicitações' },
-  { to: '/admin/config',    icon: Settings, label: 'Configurações' },
-  { to: '/admin/auditlog',  icon: History,  label: 'Histórico' },
+  { to: '/admin',          icon: Upload,   label: 'Upload / Processar' },
+  { to: '/admin/users',    icon: Users,    label: 'Solicitações' },
+  { to: '/admin/config',   icon: Settings, label: 'Configurações' },
+  { to: '/admin/auditlog', icon: History,  label: 'Histórico' },
 ]
 
 const PAGE_TITLES = [
@@ -38,6 +38,7 @@ const PAGE_TITLES = [
   { path: '/admin/auditlog',  label: 'Histórico de Ações' },
 ]
 
+// ── Nav link ──────────────────────────────────────────────────
 function SideLink({ to, icon: Icon, label, onClick }) {
   return (
     <NavLink
@@ -45,101 +46,105 @@ function SideLink({ to, icon: Icon, label, onClick }) {
       end={to === '/'}
       onClick={onClick}
       className={({ isActive }) => clsx(
-        'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+        'group relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150',
         isActive
-          ? 'bg-imile-500 text-white shadow-imile'
-          : 'text-navy-100/60 hover:text-white hover:bg-white/8'
+          ? 'bg-white/10 text-white'
+          : 'text-white/40 hover:text-white/80 hover:bg-white/5'
       )}
     >
-      <Icon size={17} strokeWidth={1.8} className="shrink-0" />
-      <span className="flex-1 truncate">{label}</span>
-      <ChevronRight size={13} className="opacity-0 group-hover:opacity-40 transition-opacity shrink-0" />
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-imile-400" />
+          )}
+          <Icon size={16} strokeWidth={isActive ? 2 : 1.8} className="shrink-0" />
+          <span className="flex-1 truncate">{label}</span>
+        </>
+      )}
     </NavLink>
   )
 }
 
-function NavGroup({ label, children, accent = false }) {
+// ── Nav group ─────────────────────────────────────────────────
+function NavGroup({ label, children }) {
   return (
-    <div className="mb-1">
-      <p className={clsx(
-        'px-3 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em]',
-        accent ? 'text-imile-400/70' : 'text-white/25'
-      )}>
+    <div className="mb-2">
+      <p className="px-3 pt-5 pb-2 text-[9px] font-bold uppercase tracking-widest text-white/20">
         {label}
       </p>
-      <div className="space-y-0.5">{children}</div>
+      <div className="space-y-px">{children}</div>
     </div>
   )
 }
 
+// ── Sidebar ───────────────────────────────────────────────────
 function Sidebar({ onClose }) {
   const { user, logout, isAdmin } = useAuth()
   const firstName = user?.nome?.split(' ')[0] || user?.email?.split('@')[0] || ''
   const initial = firstName[0]?.toUpperCase() || '?'
-
   const handleLogout = () => { onClose?.(); logout() }
 
   return (
-    <aside className="w-60 bg-navy-950 flex flex-col h-full">
+    <aside className="w-[220px] bg-navy-950 flex flex-col h-full border-r border-white/5">
+
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/5 flex items-center justify-between">
+      <div className="px-4 h-14 flex items-center justify-between shrink-0 border-b border-white/5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-imile-500 flex items-center justify-center shadow-imile shrink-0">
-            <span className="text-white font-black text-sm leading-none">iM</span>
+          <div className="w-7 h-7 rounded-lg bg-imile-500 flex items-center justify-center shadow-imile-sm shrink-0">
+            <span className="text-white font-black text-[11px] leading-none tracking-tighter">iM</span>
           </div>
           <div>
-            <p className="text-white font-bold text-sm leading-tight tracking-tight">iMile Delivery</p>
-            <p className="text-white/30 text-[10px] leading-tight">Portal Operacional</p>
+            <p className="text-white font-bold text-[13px] leading-none tracking-tight">iMile</p>
+            <p className="text-white/25 text-[10px] leading-none mt-0.5">Portal Operacional</p>
           </div>
         </div>
-        {/* Botão fechar — só aparece em mobile */}
         {onClose && (
-          <button onClick={onClose} className="lg:hidden p-1.5 text-white/40 hover:text-white">
-            <X size={18} />
+          <button onClick={onClose} className="lg:hidden p-1 text-white/30 hover:text-white/70">
+            <X size={16} />
           </button>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-2.5 overflow-y-auto pt-1">
+      <nav className="flex-1 px-2.5 overflow-y-auto sidebar-scroll py-1">
         <NavGroup label="Menu">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map(item => (
             <SideLink key={item.to} {...item} onClick={onClose} />
           ))}
         </NavGroup>
-
         {isAdmin && (
-          <NavGroup label="Administração" accent>
-            {ADMIN_ITEMS.map((item) => (
+          <NavGroup label="Admin">
+            {ADMIN_ITEMS.map(item => (
               <SideLink key={item.to} {...item} onClick={onClose} />
             ))}
           </NavGroup>
         )}
       </nav>
 
-      {/* User + Logout */}
-      <div className="p-2.5 border-t border-white/5">
-        <div className="flex items-center gap-2.5 px-2.5 py-2 mb-1">
-          <div className="w-7 h-7 rounded-full bg-imile-500/20 border border-imile-500/30 flex items-center justify-center text-imile-400 text-xs font-bold shrink-0">
+      {/* User footer */}
+      <div className="p-2.5 border-t border-white/5 shrink-0">
+        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg">
+          <div className="w-6 h-6 rounded-full bg-imile-500/20 border border-imile-500/20 flex items-center justify-center text-imile-300 text-[11px] font-bold shrink-0">
             {initial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-semibold truncate leading-tight">{firstName}</p>
-            {isAdmin && <span className="text-[10px] text-imile-400 font-semibold">Admin</span>}
+            <p className="text-white/80 text-[12px] font-semibold truncate leading-none">{firstName}</p>
+            {isAdmin && <p className="text-imile-400/70 text-[9px] font-semibold mt-0.5">Admin</p>}
           </div>
+          <button
+            onClick={handleLogout}
+            title="Sair"
+            className="p-1.5 text-white/20 hover:text-red-400 transition-colors"
+          >
+            <LogOut size={13} />
+          </button>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs text-red-400/70 hover:text-red-400 hover:bg-red-500/8 transition-colors"
-        >
-          <LogOut size={15} />
-          <span>Sair da conta</span>
-        </button>
       </div>
     </aside>
   )
 }
 
+// ── Bell / Notificações ───────────────────────────────────────
 function BellMenu({ isAdmin }) {
   const [open, setOpen] = useState(false)
   const ref = useRef()
@@ -152,11 +157,10 @@ function BellMenu({ isAdmin }) {
     refetchInterval: 60_000,
   })
 
-  // Fecha ao clicar fora
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
   }, [])
 
   if (!isAdmin) return null
@@ -165,34 +169,35 @@ function BellMenu({ isAdmin }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="relative p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+        className={clsx(
+          'relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+          open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+        )}
       >
-        <Bell size={17} />
+        <Bell size={16} />
         {pendentes.length > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
-            {pendentes.length > 9 ? '9+' : pendentes.length}
-          </span>
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 w-72 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+        <div className="absolute right-0 top-10 w-72 bg-white border border-slate-100 rounded-xl shadow-popover z-50 overflow-hidden animate-scale">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-700">Solicitações Pendentes</p>
             {pendentes.length > 0 && (
-              <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full">
+              <span className="px-2 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-full border border-red-100">
                 {pendentes.length}
               </span>
             )}
           </div>
           {pendentes.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-6">Nenhuma solicitação pendente</p>
+            <p className="text-xs text-slate-400 text-center py-8">Nenhuma solicitação pendente</p>
           ) : (
-            <ul className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+            <ul className="max-h-60 overflow-y-auto divide-y divide-slate-50">
               {pendentes.map(s => (
-                <li key={s.id} className="px-4 py-3">
+                <li key={s.id} className="px-4 py-3 hover:bg-slate-50 transition-colors">
                   <p className="text-xs font-semibold text-slate-800 truncate">{s.nome || s.email}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{s.email}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 truncate">{s.email}</p>
                 </li>
               ))}
             </ul>
@@ -200,7 +205,7 @@ function BellMenu({ isAdmin }) {
           <div className="border-t border-slate-100 px-4 py-2.5">
             <button
               onClick={() => { navigate('/admin/users'); setOpen(false) }}
-              className="text-xs font-semibold text-imile-600 hover:text-imile-700"
+              className="text-[11px] font-semibold text-imile-600 hover:text-imile-700 transition-colors"
             >
               Ver todas as solicitações →
             </button>
@@ -211,6 +216,7 @@ function BellMenu({ isAdmin }) {
   )
 }
 
+// ── Layout principal ──────────────────────────────────────────
 export default function Layout() {
   const { user, isAdmin } = useAuth()
   const location = useLocation()
@@ -221,67 +227,64 @@ export default function Layout() {
   const pageTitle = PAGE_TITLES.find(p => p.path === location.pathname)?.label || 'Dashboard'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-[#f8fafc]">
 
-      {/* ── Sidebar desktop (sempre visível) ──────────────────── */}
+      {/* Sidebar desktop */}
       <div className="hidden lg:flex shrink-0">
         <Sidebar />
       </div>
 
-      {/* ── Sidebar mobile (drawer com overlay) ───────────────── */}
+      {/* Sidebar mobile */}
       {mobileOpen && (
         <>
-          {/* Overlay escuro */}
           <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden animate-fade"
             onClick={() => setMobileOpen(false)}
           />
-          {/* Drawer */}
           <div className="fixed inset-y-0 left-0 z-50 lg:hidden animate-slide">
             <Sidebar onClose={() => setMobileOpen(false)} />
           </div>
         </>
       )}
 
-      {/* ── Content Area ────────────────────────────────────────── */}
+      {/* Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* Top bar */}
-        <header className="h-14 bg-white border-b border-slate-200/80 flex items-center justify-between px-4 lg:px-6 shrink-0">
+        {/* Header */}
+        <header className="h-14 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 shrink-0">
           <div className="flex items-center gap-3">
-            {/* Hambúrguer — só em mobile */}
             <button
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+              className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
               aria-label="Abrir menu"
             >
-              <Menu size={20} />
+              <Menu size={18} />
             </button>
             <div>
-              <h1 className="text-sm font-semibold text-slate-800 leading-none">{pageTitle}</h1>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-none hidden sm:block">
+              <h1 className="text-[13px] font-semibold text-slate-900 leading-none">{pageTitle}</h1>
+              <p className="text-[10px] text-slate-400 mt-0.5 leading-none hidden sm:block tracking-wide">
                 iMile Brasil · Portal Operacional
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <BellMenu isAdmin={isAdmin} />
-            <div className="w-px h-5 bg-slate-200 mx-1" />
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-default transition-colors">
-              <div className="w-7 h-7 rounded-full bg-imile-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <div className="w-px h-5 bg-slate-100 mx-0.5" />
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-default transition-colors">
+              <div className="w-6 h-6 rounded-full bg-imile-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                 {initial}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold text-slate-700 leading-tight">{firstName}</p>
-                <p className="text-[10px] text-slate-400 leading-tight truncate max-w-[120px]">{user?.email}</p>
+                <p className="text-[12px] font-semibold text-slate-700 leading-none">{firstName}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[120px]">{user?.email}</p>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 lg:p-6">
+        {/* Page */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

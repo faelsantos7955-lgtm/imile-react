@@ -59,17 +59,17 @@ export default function Login() {
   }
 
   const inputClass = `
-    mt-1.5 w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50/50
-    text-sm text-slate-900 placeholder:text-slate-400
-    focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-500
-    focus:bg-white transition-all
+    mt-1.5 w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white
+    text-sm text-slate-900 placeholder:text-slate-300
+    focus:outline-none focus:ring-2 focus:ring-imile-500/15 focus:border-imile-400
+    transition-all duration-150
   `
 
   return (
     <div className="min-h-screen flex">
 
       {/* ── Painel Esquerdo — Brand ─────────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[45%] bg-navy-950 flex-col justify-between p-12 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-[42%] bg-navy-950 flex-col justify-between p-12 relative overflow-hidden">
         {/* Gradiente de fundo */}
         <div className="absolute inset-0 bg-gradient-to-br from-imile-500/10 via-transparent to-transparent pointer-events-none" />
         <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-navy-950 to-transparent pointer-events-none" />
@@ -119,8 +119,8 @@ export default function Login() {
       </div>
 
       {/* ── Painel Direito — Form ───────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center bg-slate-50 px-6 py-12">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 flex items-center justify-center bg-[#f8fafc] px-6 py-12">
+        <div className="w-full max-w-[360px]">
 
           {/* Logo mobile */}
           <div className="flex items-center gap-2.5 mb-8 lg:hidden">

@@ -5,30 +5,58 @@
 /* ── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+/* ── Scrollbar sidebar (dark) ───────────────────────────────── */
+.sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
 /* ── Animations ─────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-8px); }
+  from { opacity: 0; transform: translateX(-10px); }
   to   { opacity: 1; transform: translateX(0); }
 }
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
 
-.animate-in   { animation: fadeIn  0.25s ease-out; }
-.animate-slide { animation: slideIn 0.2s ease-out; }
+.animate-in     { animation: fadeUp   0.2s ease-out; }
+.animate-fade   { animation: fadeIn   0.15s ease-out; }
+.animate-slide  { animation: slideIn  0.2s ease-out; }
+.animate-scale  { animation: scaleIn  0.15s ease-out; }
 
 /* ── Base typography ─────────────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-/* ── Focus ring global ───────────────────────────────────────── */
+/* ── Text selection ──────────────────────────────────────────── */
+::selection {
+  background: #c0d0fd;
+  color: #083289;
+}
+
+/* ── Focus ring ──────────────────────────────────────────────── */
 :focus-visible {
   outline: 2px solid #095EF7;
   outline-offset: 2px;
+  border-radius: 6px;
 }
+
+/* ── Table base ──────────────────────────────────────────────── */
+table { border-collapse: collapse; }
