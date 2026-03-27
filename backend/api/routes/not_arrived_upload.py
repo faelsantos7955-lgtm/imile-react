@@ -94,6 +94,11 @@ def _processar(conteudo: bytes) -> dict:
     df["op_orig"] = df["last_operate"].fillna("").astype(str).str.strip()
     df["operacao"] = df["op_orig"].map(OPERACAO_MAP).fillna(df["op_orig"])
 
+    # Filtrar apenas São Paulo (CDC-SP + DS SP)
+    df = df[df["regiao"].isin(["São Paulo", "CDC"])].copy()
+    if df.empty:
+        raise HTTPException(400, "Nenhum registro de São Paulo encontrado no arquivo.")
+
     # Supervisor: coluna DC onde disponível, depois mapa pelo oc_name
     df["supervisor"] = ""
     if "Supervisor" in df.columns:
