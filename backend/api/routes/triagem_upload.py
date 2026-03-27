@@ -16,7 +16,7 @@ from datetime import date
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from typing import Optional
+from typing import List, Optional
 
 from api.deps import get_current_user, get_supabase
 from api.limiter import limiter
@@ -211,8 +211,8 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
 @limiter.limit("5/minute")
 async def processar_triagem(
     request:       Request,
-    files:         list[UploadFile] = File(...,        description="Arquivos LoadingScan (.xlsx)"),
-    arrival_files: list[UploadFile] = File(default=[], description="Arquivos Arrival (.xlsx) — opcional"),
+    files:         List[UploadFile]           = File(...,           description="Arquivos LoadingScan (.xlsx)"),
+    arrival_files: Optional[List[UploadFile]] = File(default=None, description="Arquivos Arrival (.xlsx) — opcional"),
     user: dict = Depends(get_current_user),
 ):
     if not files:

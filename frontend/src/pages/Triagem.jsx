@@ -47,7 +47,7 @@ function UploadPanel({ onClose, onSuccess }) {
       lsFiles.forEach(f  => form.append('files', f))
       arrFiles.forEach(f => form.append('arrival_files', f))
       const res = await api.post('/api/triagem/processar', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 300_000, // 5 min — arquivos grandes
       })
       onSuccess(res.data.upload_id)
     } catch (e) {

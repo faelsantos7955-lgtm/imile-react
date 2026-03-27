@@ -1,5 +1,5 @@
 const EXTENSOES_PERMITIDAS = ['.xlsx', '.xls', '.xlsm']
-const TAMANHO_MAX_MB = 50
+const TAMANHO_MAX_MB = 150
 const TAMANHO_MAX_BYTES = TAMANHO_MAX_MB * 1024 * 1024
 
 /**
@@ -16,7 +16,7 @@ export function validarArquivos(arquivos) {
       return `Arquivo "${arquivo.name}" inválido. Permitido: ${EXTENSOES_PERMITIDAS.join(', ')}`
     }
     if (arquivo.size > TAMANHO_MAX_BYTES) {
-      return `Arquivo "${arquivo.name}" muito grande (${(arquivo.size / 1024 / 1024).toFixed(1)} MB). Máximo: ${TAMANHO_MAX_MB} MB`
+      return `Arquivo "${arquivo.name}" muito grande (${(arquivo.size / 1024 / 1024).toFixed(1)} MB). Máximo: ${TAMANHO_MAX_MB} MB.`
     }
   }
   return ''
