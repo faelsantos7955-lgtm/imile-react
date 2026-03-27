@@ -15,7 +15,7 @@ from datetime import date
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from typing import List, Optional
 
 from api.deps import get_current_user, get_supabase
@@ -211,19 +211,29 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
 @limiter.limit("5/minute")
 async def processar_triagem(
     request:       Request,
-    files:         List[UploadFile]           = File(...,           description="Arquivos LoadingScan (.xlsx)"),
-    arrival_files: Optional[List[UploadFile]] = File(default=None, description="Arquivos Arrival (.xlsx) — opcional"),
+    files:         List[UploadFile] = File(..., description="Todos os arquivos (LoadingScan primeiro, depois Arrival)"),
+    arrival_count: int              = Form(default=0, description="Quantos dos últimos arquivos são Arrival"),
     user: dict = Depends(get_current_user),
 ):
     if not files:
-        raise HTTPException(400, "Nenhum arquivo LoadingScan enviado.")
+        raise HTTPException(400, "Nenhum arquivo enviado.")
 
-    conteudos = [await validar_arquivo(f) for f in files]
+    # Separar LoadingScan e Arrival pelo contador
+    if arrival_count > 0 and arrival_count < len(files):
+        ls_uploads  = files[:-arrival_count]
+        arr_uploads = files[-arrival_count:]
+    elif arrival_count > 0 and arrival_count == len(files):
+        raise HTTPException(400, "Nenhum arquivo LoadingScan enviado — todos os arquivos foram marcados como Arrival.")
+    else:
+        ls_uploads  = files
+        arr_uploads = []
+
+    conteudos = [await validar_arquivo(f) for f in ls_uploads]
 
     # Arrival (opcional)
     arrival_set: set[str] | None = None
-    if arrival_files:
-        arr_bytes = [await validar_arquivo(f) for f in arrival_files]
+    if arr_uploads:
+        arr_bytes = [await validar_arquivo(f) for f in arr_uploads]
         arrival_set = _ler_arrival(arr_bytes)
 
     sb = get_supabase()

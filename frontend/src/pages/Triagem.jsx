@@ -44,8 +44,10 @@ function UploadPanel({ onClose, onSuccess }) {
     setUploading(true); setErro('')
     try {
       const form = new FormData()
+      // LoadingScan primeiro, depois Arrival — todos no campo 'files'
       lsFiles.forEach(f  => form.append('files', f))
-      arrFiles.forEach(f => form.append('arrival_files', f))
+      arrFiles.forEach(f => form.append('files', f))
+      form.append('arrival_count', String(arrFiles.length))
       const res = await api.post('/api/triagem/processar', form, {
         timeout: 300_000, // 5 min — arquivos grandes
       })
