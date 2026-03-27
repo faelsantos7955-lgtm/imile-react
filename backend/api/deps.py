@@ -68,3 +68,21 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
     return user
+
+
+def audit_log(action: str, target: str, detail: dict, user: dict) -> None:
+    """Registra ação administrativa na tabela audit_log."""
+    try:
+        get_supabase().table("audit_log").insert({
+            "acao":    action,
+            "alvo":    target,
+            "detalhe": detail,
+            "email":   user.get("email", ""),
+            "user_id": user.get("id", ""),
+        }).execute()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).error(
+            "Falha ao gravar audit_log: action=%s target=%s user=%s",
+            action, target, user.get("email")
+        )

@@ -4,7 +4,7 @@ api/routes/admin.py — Rotas administrativas
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Literal
-from api.deps import get_supabase, get_supabase_admin, require_admin
+from api.deps import get_supabase, get_supabase_admin, require_admin, audit_log
 
 PAGINAS_VALIDAS = {'dashboard','historico','comparativos','triagem','reclamacoes','backlog','monitoramento','admin'}
 ACOES_VALIDAS   = {'excel','bloquear_motorista','aprovar_acesso'}
@@ -55,6 +55,8 @@ def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends
         "ativo":    req.ativo,
         "atualizado_por": user["email"],
     }).eq("id", user_id).execute()
+    audit_log("permissoes_atualizadas", f"usuario:{user_id}",
+              {"role": req.role, "ativo": req.ativo, "paginas": req.paginas}, user)
     return {"ok": True}
 
 
@@ -79,6 +81,8 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
 
     s = sol.data[0]
     sb.table("solicitacoes_acesso").update({"status": "aprovado"}).eq("id", sol_id).execute()
+    audit_log("solicitacao_aprovada", f"solicitacao:{sol_id}",
+              {"email": s["email"], "role": role}, user)
 
     # Convida no Auth
     auth_id = None
@@ -104,6 +108,7 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
 def rejeitar(sol_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
     sb.table("solicitacoes_acesso").update({"status": "rejeitado"}).eq("id", sol_id).execute()
+    audit_log("solicitacao_rejeitada", f"solicitacao:{sol_id}", {}, user)
     return {"ok": True}
 
 

@@ -2,7 +2,7 @@
 api/routes/reclamacoes.py — Reclamações + motoristas por semana
 """
 from fastapi import APIRouter, Depends, HTTPException
-from api.deps import get_supabase, get_current_user, require_admin
+from api.deps import get_supabase, get_current_user, require_admin, audit_log
 from collections import defaultdict
 
 router = APIRouter()
@@ -22,6 +22,7 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
         sb.table(tbl).delete().eq("upload_id", upload_id).execute()
     sb.table("reclamacoes_uploads").delete().eq("id", upload_id).execute()
+    audit_log("upload_deletado", f"reclamacoes_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 

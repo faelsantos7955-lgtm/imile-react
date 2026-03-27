@@ -4,7 +4,7 @@ api/routes/backlog.py — Backlog SLA com persistência + filtro por cliente
 import logging
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from api.deps import get_supabase, get_current_user, require_admin
+from api.deps import get_supabase, get_current_user, require_admin, audit_log
 
 logger = logging.getLogger(__name__)
 from api.limiter import limiter
@@ -134,6 +134,7 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
             logger.error("Falha ao deletar tabela %s para upload_id=%s", tbl, upload_id)
             raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
     sb.table("backlog_uploads").delete().eq("id", upload_id).execute()
+    audit_log("upload_deletado", f"backlog_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 

@@ -2,7 +2,7 @@
 api/routes/monitoramento.py — Monitoramento Diário de Entregas
 """
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-from api.deps import get_supabase, get_current_user, require_admin
+from api.deps import get_supabase, get_current_user, require_admin, audit_log
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 import pandas as pd
@@ -187,6 +187,7 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
     sb.table("monitoramento_diario").delete().eq("upload_id", upload_id).execute()
     sb.table("monitoramento_uploads").delete().eq("id", upload_id).execute()
+    audit_log("upload_deletado", f"monitoramento_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 

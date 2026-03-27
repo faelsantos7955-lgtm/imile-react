@@ -3,7 +3,7 @@ api/routes/triagem.py — Dados de triagem
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from api.deps import get_supabase, get_current_user, require_admin
+from api.deps import get_supabase, get_current_user, require_admin, audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
             logger.error("Falha ao deletar tabela %s para upload_id=%s", tbl, upload_id)
             raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
     sb.table("triagem_uploads").delete().eq("id", upload_id).execute()
+    audit_log("upload_deletado", f"triagem_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 
