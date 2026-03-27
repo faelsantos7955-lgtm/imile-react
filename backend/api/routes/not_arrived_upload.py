@@ -59,8 +59,61 @@ def _norm_regiao(s) -> str:
     return REGIAO_MAP.get(s.strip(), s.strip() or "Outros")
 
 
-def _processar(conteudo: bytes) -> dict:
+def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
+    """
+    Lê a aba 汇总 e extrai a seção A (supervisor × data diária).
+    Retorna lista de {supervisor, data, total}.
+    """
+    if "汇总" not in xl.sheet_names:
+        return []
+    try:
+        df = xl.parse("汇总", header=None)
+    except Exception:
+        return []
+
+    if df.shape[0] < 3 or df.shape[1] < 3:
+        return []
+
+    # Linha 1: mapa col → data ISO
+    date_map: dict[int, str] = {}
+    for col in range(2, df.shape[1]):
+        val = df.iloc[1, col]
+        if pd.isna(val):
+            continue
+        try:
+            ts = pd.Timestamp(val)
+            date_map[col] = ts.date().isoformat()
+        except Exception:
+            pass  # ignora Total, 趋势, etc.
+
+    if not date_map:
+        return []
+
+    SKIP = {"合计", "NAN", "", "NONE", "区域"}
+    registros: list[dict] = []
+    # Seção A: linhas 2-15 (supervisores DS)
+    for row_idx in range(2, min(16, df.shape[0])):
+        sup_val = df.iloc[row_idx, 0]
+        if pd.isna(sup_val):
+            continue
+        sup = str(sup_val).strip().upper()
+        if sup in SKIP:
+            continue
+        for col_idx, data_str in date_map.items():
+            cell = df.iloc[row_idx, col_idx]
+            if pd.notna(cell) and isinstance(cell, (int, float)):
+                registros.append({
+                    "supervisor": sup,
+                    "data":       data_str,
+                    "total":      int(cell),
+                })
+
+    return registros
+
+
+def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     xl = pd.ExcelFile(io.BytesIO(conteudo))
+    tendencia = _ler_sumario(xl)
 
     if "数据源" not in xl.sheet_names:
         raise HTTPException(400, "Aba '数据源' (DC) não encontrada no arquivo.")
@@ -184,7 +237,7 @@ def _processar(conteudo: bytes) -> dict:
         for r in grp_sup.itertuples(index=False)
     ]
 
-    return {
+    resultado = {
         "data_ref":       data_ref,
         "total":          total,
         "total_dc":       total_dc,
@@ -196,6 +249,7 @@ def _processar(conteudo: bytes) -> dict:
         "por_operacao":   por_operacao,
         "por_supervisor": por_supervisor,
     }
+    return resultado, tendencia
 
 
 @router.post("/processar")
@@ -208,7 +262,7 @@ async def processar_not_arrived(
     conteudo = await validar_arquivo(file)
 
     try:
-        resultado = _processar(conteudo)
+        resultado, tendencia = _processar(conteudo)
     except HTTPException:
         raise
     except Exception as e:
@@ -224,7 +278,8 @@ async def processar_not_arrived(
         if existing.data:
             old_id = existing.data[0]["id"]
             for tbl in ("not_arrived_por_estacao", "not_arrived_por_regiao",
-                        "not_arrived_por_operacao", "not_arrived_por_supervisor"):
+                        "not_arrived_por_operacao", "not_arrived_por_supervisor",
+                        "not_arrived_tendencia"):
                 try:
                     sb.table(tbl).delete().eq("upload_id", old_id).execute()
                 except Exception:
@@ -262,6 +317,13 @@ async def processar_not_arrived(
             sb.table("not_arrived_por_supervisor").insert(
                 [{"upload_id": uid, **r} for r in resultado["por_supervisor"]]
             ).execute()
+
+        # Tendência por supervisor (aba 汇总)
+        if tendencia:
+            for i in range(0, len(tendencia), 500):
+                sb.table("not_arrived_tendencia").insert(
+                    [{"upload_id": uid, **r} for r in tendencia[i:i + 500]]
+                ).execute()
 
     except HTTPException:
         raise

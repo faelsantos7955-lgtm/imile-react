@@ -57,11 +57,24 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/upload/{upload_id}/tendencia")
+def tendencia_upload(upload_id: int, user: dict = Depends(get_current_user)):
+    sb = get_supabase()
+    res = (
+        sb.table("not_arrived_tendencia").select("supervisor,data,total")
+        .eq("upload_id", upload_id)
+        .order("data")
+        .execute()
+    )
+    return res.data or []
+
+
 @router.delete("/upload/{upload_id}")
 def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
     for tbl in ("not_arrived_por_estacao", "not_arrived_por_regiao",
-                "not_arrived_por_operacao", "not_arrived_por_supervisor"):
+                "not_arrived_por_operacao", "not_arrived_por_supervisor",
+                "not_arrived_tendencia"):
         try:
             sb.table(tbl).delete().eq("upload_id", upload_id).execute()
         except Exception:

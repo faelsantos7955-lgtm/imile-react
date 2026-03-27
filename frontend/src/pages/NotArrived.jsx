@@ -153,6 +153,116 @@ function UploadPanel({ onClose, onSuccess }) {
   )
 }
 
+// ── Tabela tendência (heatmap supervisor × data) ──────────────
+function TabelaTendencia({ rows }) {
+  if (!rows || rows.length === 0) return <EmptyState icon={Package} title="Sem dados de tendência" />
+
+  // Agrupa: supervisores e datas únicas (ordenadas)
+  const supSet  = new Set()
+  const dateSet = new Set()
+  rows.forEach(r => { supSet.add(r.supervisor); dateSet.add(r.data) })
+
+  const datas = [...dateSet].sort()
+  // Mostra últimas 20 datas para não estourar a largura
+  const datasVisiveis = datas.slice(-20)
+
+  // Mapa supervisor → data → total
+  const pivot = {}
+  rows.forEach(r => {
+    if (!pivot[r.supervisor]) pivot[r.supervisor] = {}
+    pivot[r.supervisor][r.data] = (pivot[r.supervisor][r.data] || 0) + r.total
+  })
+
+  // Total por supervisor (considerando todas as datas)
+  const sups = [...supSet].sort((a, b) => {
+    const ta = Object.values(pivot[a] || {}).reduce((s, v) => s + v, 0)
+    const tb = Object.values(pivot[b] || {}).reduce((s, v) => s + v, 0)
+    return tb - ta
+  })
+
+  // Máximo para escala de cor
+  const allVals = rows.map(r => r.total).filter(Boolean)
+  const maxVal  = allVals.length ? Math.max(...allVals) : 1
+
+  // Cor da célula: escala branco→vermelho (mais alto = mais crítico)
+  function cellColor(val) {
+    if (!val) return 'bg-slate-50 text-slate-300'
+    const ratio = Math.min(val / maxVal, 1)
+    if (ratio >= 0.75) return 'bg-red-500 text-white font-semibold'
+    if (ratio >= 0.50) return 'bg-red-300 text-red-900 font-medium'
+    if (ratio >= 0.25) return 'bg-amber-200 text-amber-900'
+    return 'bg-amber-50 text-amber-700'
+  }
+
+  // Formata data DD/MM
+  function fmtData(iso) {
+    const [, m, d] = iso.split('-')
+    return `${d}/${m}`
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-[11px] w-full border-collapse">
+        <thead>
+          <tr className="bg-slate-800">
+            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-white/60 sticky left-0 bg-slate-800 z-10 min-w-[130px]">
+              Supervisor
+            </th>
+            {datasVisiveis.map(d => (
+              <th key={d} className="px-2 py-2 text-center text-[10px] font-bold text-white/60 min-w-[42px] whitespace-nowrap">
+                {fmtData(d)}
+              </th>
+            ))}
+            <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-white sticky right-0 bg-slate-800 z-10">
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {sups.map(sup => {
+            const supData = pivot[sup] || {}
+            const totalSup = Object.values(supData).reduce((s, v) => s + v, 0)
+            return (
+              <tr key={sup} className="hover:bg-slate-50/60 transition-colors">
+                <td className="px-3 py-1.5 font-semibold text-slate-700 sticky left-0 bg-white z-10 border-r border-slate-100">
+                  {sup}
+                </td>
+                {datasVisiveis.map(d => {
+                  const val = supData[d] || 0
+                  return (
+                    <td key={d} className={clsx('px-1 py-1.5 text-center font-mono transition-colors rounded-sm mx-0.5', cellColor(val))}>
+                      {val || '—'}
+                    </td>
+                  )
+                })}
+                <td className="px-3 py-1.5 text-right font-mono font-bold text-slate-800 sticky right-0 bg-white z-10 border-l border-slate-100">
+                  {fmt(totalSup)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+          <tr>
+            <td className="px-3 py-2 font-bold text-xs text-slate-700 sticky left-0 bg-slate-50 z-10">Total</td>
+            {datasVisiveis.map(d => {
+              const tot = sups.reduce((s, sup) => s + (pivot[sup]?.[d] || 0), 0)
+              return (
+                <td key={d} className="px-1 py-2 text-center font-mono font-semibold text-slate-700 text-[10px]">
+                  {tot || '—'}
+                </td>
+              )
+            })}
+            <td className="px-3 py-2 text-right font-mono font-bold text-slate-900 text-xs sticky right-0 bg-slate-50 z-10">
+              {fmt(rows.reduce((s, r) => s + r.total, 0))}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
 // ── Tabela estações ───────────────────────────────────────────
 function TabelaEstacoes({ rows }) {
   const [search, setSearch] = useState('')
@@ -475,6 +585,13 @@ export default function NotArrived() {
     enabled: !!selectedId,
   })
 
+  // Tendência (heatmap supervisor × data)
+  const { data: tendencia = [] } = useQuery({
+    queryKey: ['not-arrived-tendencia', selectedId],
+    queryFn: () => api.get(`/api/not-arrived/upload/${selectedId}/tendencia`).then(r => r.data),
+    enabled: !!selectedId,
+  })
+
   const upload = uploads.find(u => u.id === selectedId)
 
   const handleUploadSuccess = (data) => {
@@ -596,6 +713,12 @@ export default function NotArrived() {
                     : <EmptyState icon={Package} title="Sem dados de operação" />}
                 </Card>
               </div>
+
+              {/* Tendência — heatmap supervisor × data */}
+              <SectionHeader title="Tendência por Supervisor" />
+              <Card padding={false}>
+                <TabelaTendencia rows={tendencia} />
+              </Card>
 
               {/* Supervisores */}
               <SectionHeader title="Por Supervisor" />
