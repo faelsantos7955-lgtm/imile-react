@@ -2,7 +2,7 @@
  * pages/NotArrived.jsx — Not Arrived com movimentação
  * Relatório 有发未到问题件后又有其他操作
  */
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Upload, X, FileSpreadsheet, AlertCircle, ChevronUp, ChevronDown,
@@ -459,15 +459,14 @@ export default function NotArrived() {
   const { data: uploads = [], isLoading: loadingUploads } = useQuery({
     queryKey: ['not-arrived-uploads'],
     queryFn: () => api.get('/api/not-arrived/uploads').then(r => r.data),
-    onSuccess: (data) => {
-      if (data.length > 0 && !selectedId) setSelectedId(data[0].id)
-    },
   })
 
-  // Atualiza selectedId quando uploads carregam
-  if (uploads.length > 0 && !selectedId) {
-    setSelectedId(uploads[0].id)
-  }
+  // Seleciona o upload mais recente automaticamente
+  useEffect(() => {
+    if (uploads.length > 0 && !selectedId) {
+      setSelectedId(uploads[0].id)
+    }
+  }, [uploads, selectedId])
 
   // Detalhe do upload selecionado
   const { data: detalhe, isLoading: loadingDetalhe } = useQuery({
