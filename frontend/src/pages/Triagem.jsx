@@ -53,7 +53,11 @@ function UploadPanel({ onClose, onSuccess }) {
       })
       onSuccess(res.data.upload_id)
     } catch (e) {
-      setErro(e.response?.data?.detail || 'Erro ao processar.')
+      if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
+        setErro('Tempo limite excedido. O arquivo é muito grande ou o servidor está lento. Tente novamente.')
+      } else {
+        setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
+      }
     } finally { setUploading(false) }
   }
 
@@ -158,8 +162,9 @@ export default function Triagem() {
     queryKey: ['triagem-detail', sel],
     queryFn:  () => api.get(`/api/triagem/upload/${sel}`).then(r => r.data).catch(() => null),
     enabled:  !!sel,
-    onSuccess: () => setExpanded({}),
   })
+
+  useEffect(() => { setExpanded({}) }, [sel])
 
   const toggleDs = useCallback(async (ds) => {
     setExpanded(prev => {

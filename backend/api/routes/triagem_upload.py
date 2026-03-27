@@ -24,10 +24,11 @@ from api.upload_utils import validar_arquivo
 
 router = APIRouter()
 
-# Nomes de coluna de waybill que o Arrival pode ter
+# Nomes de coluna de waybill que o Arrival pode ter (exact match, prioridade)
 _ARRIVAL_WB_COLS = [
     "Waybill No.", "Waybill Number", "waybill_no", "WaybillNo",
     "Tracking No.", "Tracking Number", "WAYBILL NO.", "WAYBILL NUMBER",
+    "运单号", "单号",
 ]
 
 
@@ -63,6 +64,12 @@ def _ler_arrival(conteudos: list[bytes]) -> set[str]:
                 lower_map = {x.lower(): x for x in df.columns}
                 col = next(
                     (lower_map[x.lower()] for x in _ARRIVAL_WB_COLS if x.lower() in lower_map),
+                    None,
+                )
+            if col is None:
+                # Fallback: qualquer coluna cujo nome contenha "waybill" ou "tracking"
+                col = next(
+                    (c for c in df.columns if any(k in c.lower() for k in ("waybill", "tracking", "运单"))),
                     None,
                 )
             if col is None:

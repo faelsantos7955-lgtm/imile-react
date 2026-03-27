@@ -14,7 +14,7 @@ router = APIRouter()
 def listar_uploads(user: dict = Depends(get_current_user)):
     sb = get_supabase()
     res = (sb.table("triagem_uploads")
-           .select("id,data_ref,criado_por,total,qtd_ok,qtd_erro,taxa")
+           .select("id,data_ref,criado_por,total,qtd_ok,qtd_erro,taxa,tem_arrival,qtd_recebidos")
            .order("criado_em", desc=True).limit(30).execute())
     return res.data or []
 
