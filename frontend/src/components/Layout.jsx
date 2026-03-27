@@ -2,12 +2,14 @@
  * components/Layout.jsx — Sidebar corporativa iMile + área de conteúdo
  * Mobile: sidebar como drawer com overlay
  */
-import { useState } from 'react'
-import { Outlet, NavLink, useLocation } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import { useQuery } from '@tanstack/react-query'
+import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
-  LogOut, Bell, Package, ChevronRight, Menu, X,
+  LogOut, Bell, Package, ChevronRight, Menu, X, History,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -19,19 +21,21 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_ITEMS = [
-  { to: '/admin',        icon: Upload,   label: 'Upload / Processar' },
-  { to: '/admin/users',  icon: Users,    label: 'Solicitações' },
-  { to: '/admin/config', icon: Settings, label: 'Configurações' },
+  { to: '/admin',           icon: Upload,   label: 'Upload / Processar' },
+  { to: '/admin/users',     icon: Users,    label: 'Solicitações' },
+  { to: '/admin/config',    icon: Settings, label: 'Configurações' },
+  { to: '/admin/auditlog',  icon: History,  label: 'Histórico' },
 ]
 
 const PAGE_TITLES = [
-  { path: '/',             label: 'Análise' },
-  { path: '/operacional',  label: 'Operacional' },
-  { path: '/reclamacoes',  label: 'Reclamações' },
-  { path: '/backlog',      label: 'Backlog SLA' },
-  { path: '/admin',        label: 'Upload / Processar' },
-  { path: '/admin/users',  label: 'Solicitações de Acesso' },
-  { path: '/admin/config', label: 'Configurações' },
+  { path: '/',                label: 'Análise' },
+  { path: '/operacional',     label: 'Operacional' },
+  { path: '/reclamacoes',     label: 'Reclamações' },
+  { path: '/backlog',         label: 'Backlog SLA' },
+  { path: '/admin',           label: 'Upload / Processar' },
+  { path: '/admin/users',     label: 'Solicitações de Acesso' },
+  { path: '/admin/config',    label: 'Configurações' },
+  { path: '/admin/auditlog',  label: 'Histórico de Ações' },
 ]
 
 function SideLink({ to, icon: Icon, label, onClick }) {
@@ -136,8 +140,79 @@ function Sidebar({ onClose }) {
   )
 }
 
+function BellMenu({ isAdmin }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef()
+  const navigate = useNavigate()
+
+  const { data: pendentes = [] } = useQuery({
+    queryKey: ['solicitacoes-pendentes'],
+    queryFn: () => api.get('/api/admin/solicitacoes?status=pendente').then(r => r.data),
+    enabled: isAdmin,
+    refetchInterval: 60_000,
+  })
+
+  // Fecha ao clicar fora
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  if (!isAdmin) return null
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="relative p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+      >
+        <Bell size={17} />
+        {pendentes.length > 0 && (
+          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+            {pendentes.length > 9 ? '9+' : pendentes.length}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-10 w-72 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-700">Solicitações Pendentes</p>
+            {pendentes.length > 0 && (
+              <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-full">
+                {pendentes.length}
+              </span>
+            )}
+          </div>
+          {pendentes.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-6">Nenhuma solicitação pendente</p>
+          ) : (
+            <ul className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+              {pendentes.map(s => (
+                <li key={s.id} className="px-4 py-3">
+                  <p className="text-xs font-semibold text-slate-800 truncate">{s.nome || s.email}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{s.email}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="border-t border-slate-100 px-4 py-2.5">
+            <button
+              onClick={() => { navigate('/admin/users'); setOpen(false) }}
+              className="text-xs font-semibold text-imile-600 hover:text-imile-700"
+            >
+              Ver todas as solicitações →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Layout() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -191,9 +266,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-1">
-            <button className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
-              <Bell size={17} />
-            </button>
+            <BellMenu isAdmin={isAdmin} />
             <div className="w-px h-5 bg-slate-200 mx-1" />
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-default transition-colors">
               <div className="w-7 h-7 rounded-full bg-imile-500 flex items-center justify-center text-white text-xs font-bold shrink-0">

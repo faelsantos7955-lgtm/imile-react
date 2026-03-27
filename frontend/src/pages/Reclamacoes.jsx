@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
@@ -136,6 +136,16 @@ export default function Reclamacoes() {
               <Download size={14} /> Excel
             </button>
           )}
+          <UploadGuide
+            title="Arquivo de Reclamações"
+            items={[
+              'Relatório de Fake Delivery / Reclamações — arquivo único (.xlsx)',
+              'Coluna de motorista: nome completo do entregador',
+              'Coluna de reclamações: quantidade de tickets no período',
+              'Colunas adicionais: Supervisor e Station (base DS)',
+              'Não misture semanas diferentes no mesmo arquivo',
+            ]}
+          />
           <button onClick={() => inputRef.current?.click()} disabled={uploading}
             className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50">
             {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}

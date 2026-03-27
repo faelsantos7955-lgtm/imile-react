@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, Card, Alert } from '../components/ui'
+import { PageHeader, Card, Alert, UploadGuide } from '../components/ui'
 import { Upload, Loader, RefreshCw, Trash2, TrendingUp, Package, Truck, AlertTriangle } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 
@@ -134,6 +134,15 @@ export default function Monitoramento() {
       <div className="flex items-start justify-between">
         <PageHeader icon="📊" title="Monitoramento Diário" subtitle="Controle operacional diário por DS — estoque, expedição, entrega" />
         <div className="flex gap-2">
+          <UploadGuide
+            title="Arquivo de Monitoramento Diário"
+            items={[
+              'Arquivo .xlsm do relatório diário de entregas',
+              'Deve conter a aba "Relatorio" com as colunas na ordem: DS, Supervisor, Região, RDC_DS, Estoque DS, Estoque Motorista, Estoque Total, Estoque >7d, Recebimento, Volume Total, Pendência Scan, Volume Saída, Taxa Expedição, Qtd Motoristas, Eficiência Pessoal, Entregue, Eficiência Assinatura',
+              'A primeira coluna (DS) deve começar com "DS"',
+              'Não altere a ordem das colunas nem o nome da aba',
+            ]}
+          />
           <button onClick={() => inputRef.current?.click()} disabled={uploading}
             className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50">
             {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}

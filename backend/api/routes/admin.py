@@ -112,6 +112,25 @@ def rejeitar(sol_id: int, user: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+# ── Audit Log ─────────────────────────────────────────────────
+@router.get("/audit-log")
+def listar_audit_log(
+    limit: int = 50,
+    offset: int = 0,
+    acao: str = "",
+    email: str = "",
+    user: dict = Depends(require_admin),
+):
+    sb = get_supabase()
+    q = sb.table("audit_log").select("*").order("criado_em", desc=True).range(offset, offset + limit - 1)
+    if acao:
+        q = q.eq("acao", acao)
+    if email:
+        q = q.ilike("email", f"%{email}%")
+    res = q.execute()
+    return res.data or []
+
+
 # ── Motoristas ────────────────────────────────────────────────
 class MotoristaRequest(BaseModel):
     id_motorista: str

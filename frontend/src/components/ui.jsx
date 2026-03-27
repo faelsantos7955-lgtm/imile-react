@@ -176,6 +176,45 @@ export function Badge({ children, color = 'blue' }) {
   )
 }
 
+// ── Upload Guide ──────────────────────────────────────────────
+import { useState as _useState } from 'react'
+export function UploadGuide({ title, items = [], accent = 'blue' }) {
+  const [open, setOpen] = _useState(false)
+  const colors = {
+    blue:   { btn: 'text-imile-500 hover:bg-imile-50', box: 'bg-imile-50 border-imile-200 text-imile-900' },
+    orange: { btn: 'text-orange-500 hover:bg-orange-50', box: 'bg-orange-50 border-orange-200 text-orange-900' },
+  }
+  const c = colors[accent] || colors.blue
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={clsx('w-7 h-7 rounded-full text-xs font-bold border border-current flex items-center justify-center transition-colors', c.btn)}
+        title="O que devo subir?"
+      >
+        ?
+      </button>
+      {open && (
+        <div className={clsx(
+          'absolute right-0 top-9 z-50 w-72 rounded-xl border p-4 shadow-lg text-sm',
+          c.box
+        )}>
+          <p className="font-semibold mb-2">{title}</p>
+          <ul className="space-y-1.5">
+            {items.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs leading-snug">
+                <span className="mt-0.5 shrink-0 font-bold">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Button ────────────────────────────────────────────────────
 export function Button({ children, variant = 'primary', size = 'md', className = '', ...props }) {
   const variants = {

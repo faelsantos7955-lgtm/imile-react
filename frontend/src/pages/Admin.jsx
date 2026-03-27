@@ -4,12 +4,13 @@
  */
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 import { PageHeader, Alert, Card, SectionHeader } from '../components/ui'
 import {
   Upload, Users, Settings, CheckCircle, XCircle,
   ShieldOff, ShieldCheck, Loader, Terminal,
-  UserCheck, UserX, Edit2, Save, X, Check
+  UserCheck, UserX, Edit2, Save, X, Check, History, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 
 // ── Definição de permissões disponíveis ──────────────────────
@@ -448,6 +449,143 @@ function ConfigPage() {
   )
 }
 
+// ── Audit Log ─────────────────────────────────────────────────
+const ACOES_LABEL = {
+  upload_deletado:         { label: 'Upload excluído',       cor: 'text-red-600 bg-red-50' },
+  permissoes_atualizadas:  { label: 'Permissões alteradas',  cor: 'text-blue-600 bg-blue-50' },
+  solicitacao_aprovada:    { label: 'Acesso aprovado',       cor: 'text-emerald-600 bg-emerald-50' },
+  solicitacao_rejeitada:   { label: 'Acesso rejeitado',      cor: 'text-orange-600 bg-orange-50' },
+}
+
+function AuditLogPage() {
+  const [filtroAcao, setFiltroAcao] = useState('')
+  const [filtroEmail, setFiltroEmail] = useState('')
+  const [emailInput, setEmailInput] = useState('')
+  const [page, setPage] = useState(0)
+  const limit = 25
+
+  const params = new URLSearchParams({ limit, offset: page * limit })
+  if (filtroAcao)  params.set('acao', filtroAcao)
+  if (filtroEmail) params.set('email', filtroEmail)
+
+  const { data: registros = [], isLoading, isFetching } = useQuery({
+    queryKey: ['audit-log', filtroAcao, filtroEmail, page],
+    queryFn: () => api.get(`/api/admin/audit-log?${params}`).then(r => r.data),
+  })
+
+  const fmtData = iso => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+
+  return (
+    <div>
+      <PageHeader icon="📋" title="Histórico de Ações" subtitle="Registro de todas as ações administrativas" />
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <select
+          value={filtroAcao}
+          onChange={e => { setFiltroAcao(e.target.value); setPage(0) }}
+          className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+        >
+          <option value="">Todas as ações</option>
+          {Object.entries(ACOES_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>{v.label}</option>
+          ))}
+        </select>
+
+        <div className="flex gap-2 flex-1 min-w-[200px] max-w-xs">
+          <input
+            value={emailInput}
+            onChange={e => setEmailInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { setFiltroEmail(emailInput); setPage(0) } }}
+            placeholder="Filtrar por e-mail..."
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm flex-1"
+          />
+          {filtroEmail && (
+            <button onClick={() => { setFiltroEmail(''); setEmailInput(''); setPage(0) }}
+              className="px-2 text-slate-400 hover:text-slate-600">
+              <X size={14} />
+            </button>
+          )}
+          <button onClick={() => { setFiltroEmail(emailInput); setPage(0) }}
+            className="px-3 py-2 bg-imile-500 text-white rounded-lg text-sm hover:bg-imile-600">
+            Buscar
+          </button>
+        </div>
+      </div>
+
+      <Card className="p-0 overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-12 text-slate-400">
+            <Loader size={16} className="animate-spin" /> Carregando...
+          </div>
+        ) : registros.length === 0 ? (
+          <p className="text-center text-slate-400 text-sm py-12">Nenhum registro encontrado</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-800 text-white text-xs">
+                  <th className="px-4 py-3 text-left">Data/Hora</th>
+                  <th className="px-4 py-3 text-left">Ação</th>
+                  <th className="px-4 py-3 text-left">Alvo</th>
+                  <th className="px-4 py-3 text-left">Executado por</th>
+                  <th className="px-4 py-3 text-left">Detalhes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {registros.map(r => {
+                  const meta = ACOES_LABEL[r.acao] || { label: r.acao, cor: 'text-slate-600 bg-slate-100' }
+                  return (
+                    <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap font-mono">
+                        {fmtData(r.criado_em)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${meta.cor}`}>
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600 font-mono">{r.alvo}</td>
+                      <td className="px-4 py-3 text-xs text-slate-700 truncate max-w-[180px]">{r.email}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500 max-w-[200px]">
+                        {r.detalhe && Object.keys(r.detalhe).length > 0
+                          ? Object.entries(r.detalhe).map(([k, v]) => (
+                              <span key={k} className="inline-block mr-2">
+                                <span className="text-slate-400">{k}:</span>{' '}
+                                <span className="font-medium">{JSON.stringify(v)}</span>
+                              </span>
+                            ))
+                          : '—'
+                        }
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Paginação */}
+      <div className="flex items-center justify-between mt-4 text-sm text-slate-500">
+        <span>{isFetching ? 'Atualizando...' : `${registros.length} registros`}</span>
+        <div className="flex gap-2">
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+            className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50">
+            <ChevronLeft size={16} />
+          </button>
+          <span className="px-3 py-1 text-xs font-medium">Pág. {page + 1}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={registros.length < limit}
+            className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-slate-50">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Admin root ────────────────────────────────────────────────
 export default function Admin() {
   const tabClass = isActive =>
@@ -457,7 +595,7 @@ export default function Admin() {
 
   return (
     <div>
-      <div className="flex gap-2 mb-6 bg-white border border-slate-200 p-1.5 rounded-xl w-fit">
+      <div className="flex flex-wrap gap-2 mb-6 bg-white border border-slate-200 p-1.5 rounded-xl w-fit">
         <NavLink to="/admin" end className={({ isActive }) => tabClass(isActive)}>
           <Upload size={15} /> Upload / Processar
         </NavLink>
@@ -467,12 +605,16 @@ export default function Admin() {
         <NavLink to="/admin/config" className={({ isActive }) => tabClass(isActive)}>
           <Settings size={15} /> Configurações
         </NavLink>
+        <NavLink to="/admin/auditlog" className={({ isActive }) => tabClass(isActive)}>
+          <History size={15} /> Histórico
+        </NavLink>
       </div>
 
       <Routes>
         <Route index element={<UploadPage />} />
         <Route path="users" element={<SolicitacoesPage />} />
         <Route path="config" element={<ConfigPage />} />
+        <Route path="auditlog" element={<AuditLogPage />} />
       </Routes>
     </div>
   )

@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import { PageHeader, Card, Alert } from '../components/ui'
+import { PageHeader, Card, Alert, UploadGuide } from '../components/ui'
 import { Upload, Download, Loader, RefreshCw, Trash2, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 import { useAuth } from '../lib/AuthContext'
@@ -214,6 +214,16 @@ export default function Backlog() {
               Excel
             </button>
           )}
+          <UploadGuide
+            title="Arquivo de Backlog SLA"
+            items={[
+              'Excel exportado do sistema de SLA (.xlsx ou .xlsm)',
+              'Obrigatório: aba "Backlog_Details" com colunas waybillNo, range_backlog, process, actual_region, lastScanSite, clientName, stageStatus, lastScanStatus, CARGOS.SUPERVISOR',
+              'Obrigatório: aba "Resume_" com colunas CARGOS.SUPERVISOR, lastScanSite, clientName, actual region, orders',
+              'Não renomeie as abas nem altere o cabeçalho das colunas',
+            ]}
+            accent="orange"
+          />
           <button onClick={() => inputRef.current?.click()} disabled={uploading}
             className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50">
             {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}

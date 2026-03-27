@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -143,6 +143,15 @@ export default function Triagem() {
               <Download size={14} /> Excel
             </button>
           )}
+          <UploadGuide
+            title="Arquivos de Triagem DC×DS"
+            items={[
+              'Arquivos LoadingScan (.xlsx) gerados pelo sistema do RDC',
+              'Podem ser múltiplos arquivos de um mesmo lote',
+              'Colunas necessárias: DS de Destino, DC de Origem, Waybill/Número de rastreio',
+              'Gerado via sistema de scan na expedição — não altere o arquivo original',
+            ]}
+          />
           <button onClick={() => inputRef.current?.click()} disabled={uploading}
             className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50">
             {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}

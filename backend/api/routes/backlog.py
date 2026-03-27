@@ -26,9 +26,38 @@ def _faixas_to_dict(row):
 
 def _ler_excel(conteudo: bytes):
     buf = io.BytesIO(conteudo)
+
+    # Valida abas antes de tentar ler
+    try:
+        xl = pd.ExcelFile(buf)
+    except Exception:
+        raise ValueError("Arquivo inválido ou corrompido. Envie um .xlsx ou .xlsm gerado pelo sistema de SLA.")
+    abas = xl.sheet_names
+    if 'Backlog_Details' not in abas:
+        raise ValueError(
+            f"Aba 'Backlog_Details' não encontrada. Abas presentes: {abas}. "
+            "Certifique-se de exportar o arquivo correto sem renomear as abas."
+        )
+    if 'Resume_' not in abas:
+        raise ValueError(
+            f"Aba 'Resume_' não encontrada. Abas presentes: {abas}. "
+            "O arquivo precisa conter as abas 'Backlog_Details' e 'Resume_'."
+        )
+
+    buf.seek(0)
     df = pd.read_excel(buf, sheet_name='Backlog_Details',
                        dtype={'waybillNo': str, 'range_backlog': str, 'process': str, 'actual_region': str})
     df.columns = df.columns.str.strip()
+
+    # Valida colunas obrigatórias
+    cols_obrigatorias = ['waybillNo', 'range_backlog', 'process']
+    faltando = [c for c in cols_obrigatorias if c not in df.columns]
+    if faltando:
+        raise ValueError(
+            f"Colunas obrigatórias ausentes na aba 'Backlog_Details': {faltando}. "
+            f"Colunas encontradas: {list(df.columns)}"
+        )
+
     df.rename(columns={'CARGOS.SUPERVISOR': 'supervisor', 'actual_region': 'regiao',
                        'lastScanSite': 'ds', 'clientName': 'cliente',
                        'stageStatus': 'estagio', 'lastScanStatus': 'motivo'}, inplace=True)
