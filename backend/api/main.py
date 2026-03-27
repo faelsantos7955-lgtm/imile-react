@@ -16,6 +16,8 @@ from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, 
 from api.routes.reclamacoes_upload_route import router as reclamacoes_upload_router
 from api.routes.dashboard_upload import router as dashboard_upload_router
 from api.routes.triagem_upload import router as triagem_upload_router
+from api.routes.not_arrived import router as not_arrived_router
+from api.routes.not_arrived_upload import router as not_arrived_upload_router
 
 app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs")
 app.state.limiter = limiter
@@ -45,6 +47,8 @@ app.include_router(admin.router,                prefix="/api/admin",         tag
 app.include_router(excel.router,                prefix="/api/excel",         tags=["Excel"])
 app.include_router(backlog.router,              prefix="/api/backlog",       tags=["Backlog"])
 app.include_router(monitoramento.router,        prefix="/api/monitoramento", tags=["Monitoramento"])
+app.include_router(not_arrived_router,          prefix="/api/not-arrived",   tags=["Not Arrived"])
+app.include_router(not_arrived_upload_router,   prefix="/api/not-arrived",   tags=["Not Arrived"])  # POST /processar
 
 @app.get("/api/health")
 def health():

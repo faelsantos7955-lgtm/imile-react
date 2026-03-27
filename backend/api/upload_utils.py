@@ -4,7 +4,7 @@ api/upload_utils.py — Helpers de validação de arquivos de upload
 from fastapi import HTTPException, UploadFile
 
 EXTENSOES_PERMITIDAS = {".xlsx", ".xls", ".xlsm"}
-TAMANHO_MAX_BYTES    = 50 * 1024 * 1024  # 50 MB
+TAMANHO_MAX_BYTES    = 150 * 1024 * 1024  # 150 MB
 
 
 async def validar_arquivo(arquivo: UploadFile, obrigatorio: bool = True) -> bytes | None:
@@ -31,7 +31,7 @@ async def validar_arquivo(arquivo: UploadFile, obrigatorio: bool = True) -> byte
         raise HTTPException(
             400,
             f'Arquivo "{arquivo.filename}" muito grande '
-            f'({len(conteudo)/1024/1024:.1f} MB). Máximo: 50 MB.',
+            f'({len(conteudo)/1024/1024:.1f} MB). Máximo: 150 MB.',
         )
     if len(conteudo) == 0:
         raise HTTPException(400, f'Arquivo "{arquivo.filename}" está vazio.')
