@@ -82,101 +82,6 @@ def _ler_relatorio(conteudo: bytes):
     return df, data_ref
 
 
-def _computar_do_raw(conteudo: bytes):
-    """Fallback: computa KPIs a partir das abas brutas caso Relatorio não exista."""
-    buf = io.BytesIO(conteudo)
-    xls = pd.ExcelFile(buf)
-
-    # Supervisores
-    sup_df = pd.read_excel(xls, sheet_name='Supervisores' if 'Supervisores' in xls.sheet_names else xls.sheet_names[0])
-    sup_df.columns = sup_df.columns.str.strip()
-    sigla_col = [c for c in sup_df.columns if 'SIGLA' in c.upper()]
-    sup_col = [c for c in sup_df.columns if 'SUPERVISOR' in c.upper()]
-    reg_col = [c for c in sup_df.columns if 'REGION' in c.upper()]
-
-    sup_map = {}
-    if sigla_col and sup_col:
-        for _, r in sup_df.iterrows():
-            ds = str(r[sigla_col[0]]).strip().upper()
-            sup_map[ds] = {
-                'supervisor': str(r[sup_col[0]]).strip().upper() if pd.notna(r[sup_col[0]]) else '',
-                'regiao': str(r[reg_col[0]]).strip() if reg_col and pd.notna(r[reg_col[0]]) else '',
-            }
-
-    all_ds = sorted(sup_map.keys())
-
-    rdc = pd.read_excel(xls, sheet_name='RDC_') if 'RDC_' in xls.sheet_names else pd.DataFrame()
-    rdc_col = 'Destination Statio' if 'Destination Statio' in rdc.columns else (rdc.columns[12] if len(rdc.columns) > 12 else None)
-
-    est = pd.read_excel(xls, sheet_name='Estoque_') if 'Estoque_' in xls.sheet_names else pd.DataFrame()
-    est_ds_col = 'last_scan_station' if 'last_scan_station' in est.columns else (est.columns[10] if len(est.columns) > 10 else None)
-
-    est7 = pd.read_excel(xls, sheet_name='Estoque +7') if 'Estoque +7' in xls.sheet_names else pd.DataFrame()
-    est7_ds_col = 'last_scan_station' if 'last_scan_station' in est7.columns else (est7.columns[10] if len(est7.columns) > 10 else None)
-
-    rec = pd.read_excel(xls, sheet_name='Pacotes recebidos hoje_') if 'Pacotes recebidos hoje_' in xls.sheet_names else pd.DataFrame()
-    rec_ds_col = 'Scan Station' if 'Scan Station' in rec.columns else (rec.columns[10] if len(rec.columns) > 10 else None)
-
-    exp = pd.read_excel(xls, sheet_name='Pacotes expedidos de hoje_') if 'Pacotes expedidos de hoje_' in xls.sheet_names else pd.DataFrame()
-    exp_ds_col = 'Scan station' if 'Scan station' in exp.columns else (exp.columns[24] if len(exp.columns) > 24 else None)
-    exp_da_col = 'DA Name' if 'DA Name' in exp.columns else (exp.columns[6] if len(exp.columns) > 6 else None)
-
-    ass = pd.read_excel(xls, sheet_name='Assinaturas-Entregas de hoje_') if 'Assinaturas-Entregas de hoje_' in xls.sheet_names else pd.DataFrame()
-    ass_ds_col = 'Scan Station' if 'Scan Station' in ass.columns else (ass.columns[15] if len(ass.columns) > 15 else None)
-
-    def count_ds(df, col, ds):
-        if df.empty or col is None:
-            return 0
-        return int((df[col].fillna('').str.strip().str.upper() == ds).sum())
-
-    rows = []
-    for ds in all_ds:
-        info = sup_map.get(ds, {})
-        rdc_count = count_ds(rdc, rdc_col, ds)
-        est_total = count_ds(est, est_ds_col, ds)
-        est7_count = count_ds(est7, est7_ds_col, ds)
-        receb = count_ds(rec, rec_ds_col, ds)
-        vol_total = est_total + receb
-        saida = count_ds(exp, exp_ds_col, ds)
-
-        if not exp.empty and exp_ds_col and exp_da_col:
-            mask = exp[exp_ds_col].fillna('').str.strip().str.upper() == ds
-            drivers = exp.loc[mask, exp_da_col].dropna().str.strip()
-            drivers = drivers[drivers != '']
-            n_drivers = drivers.nunique()
-        else:
-            n_drivers = 0
-
-        entreg = count_ds(ass, ass_ds_col, ds)
-        taxa_exp = round(saida / vol_total, 4) if vol_total else 0
-        ef_pessoal = round(saida / n_drivers, 2) if n_drivers else 0
-        ef_assin = round(entreg / n_drivers, 2) if n_drivers else 0
-
-        rows.append({
-            'ds': ds,
-            'supervisor': info.get('supervisor', ''),
-            'regiao': info.get('regiao', ''),
-            'rdc_ds': rdc_count,
-            'estoque_ds': est_total,
-            'estoque_motorista': 0,
-            'estoque_total': est_total,
-            'estoque_7d': est7_count,
-            'recebimento': receb,
-            'volume_total': vol_total,
-            'pendencia_scan': rdc_count - receb,
-            'volume_saida': saida,
-            'taxa_expedicao': taxa_exp,
-            'qtd_motoristas': n_drivers,
-            'eficiencia_pessoal': ef_pessoal,
-            'entregue': entreg,
-            'eficiencia_assinatura': ef_assin,
-        })
-
-    # Remover DS duplicados, manter apenas a primeira ocorrência
-    df = pd.DataFrame(rows)
-    df = df.drop_duplicates(subset=['ds'], keep='first')
-    return df, ''
-
 
 # ── GET /uploads ──────────────────────────────────────────────
 @router.get("/uploads")
@@ -238,12 +143,11 @@ async def processar_monitoramento(request: Request, file: UploadFile = File(...)
     buf = io.BytesIO(conteudo)
     xls = pd.ExcelFile(buf)
 
-    if 'Relatorio' in xls.sheet_names:
-        buf.seek(0)
-        df, data_ref = _ler_relatorio(conteudo)
-    else:
-        buf.seek(0)
-        df, data_ref = _computar_do_raw(conteudo)
+    if 'Relatorio' not in xls.sheet_names:
+        raise HTTPException(400, "Aba 'Relatorio' não encontrada no arquivo. Envie o relatório diário no formato correto.")
+
+    buf.seek(0)
+    df, data_ref = _ler_relatorio(conteudo)
 
     if df.empty:
         raise HTTPException(400, "Nenhuma DS encontrada no arquivo")
