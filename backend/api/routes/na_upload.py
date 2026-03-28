@@ -39,11 +39,14 @@ def _ler_sheet1(xl: pd.ExcelFile) -> tuple[int, str, list[dict], list[dict], lis
     df = df.iloc[header_row + 1:].copy()
     df.columns = range(len(headers))
 
-    # Threshold col (índice 2, nome "大于10D" ou "大于15D")
+    # Sheet1: col A (idx 0) = vazio, col B (idx 1) = Supervisor,
+    #         col C (idx 2) = DS, col D (idx 3) = 大于10D, cols E+ = datas
+    sup_col       = 1
+    ds_col        = 2
+    threshold_idx = 3
     threshold_name = "大于10D"
-    threshold_idx  = 2
-    if len(headers) > 2 and isinstance(headers[2], str) and "大于" in str(headers[2]):
-        threshold_name = str(headers[2]).strip()
+    if len(headers) > 3 and isinstance(headers[3], str) and "大于" in str(headers[3]):
+        threshold_name = str(headers[3]).strip()
 
     # Coluna 总计
     total_col_idx = None
@@ -65,9 +68,9 @@ def _ler_sheet1(xl: pd.ExcelFile) -> tuple[int, str, list[dict], list[dict], lis
         except Exception:
             pass
 
-    # Forward-fill supervisor (células mescladas no Excel)
-    df[0] = df[0].replace("", None)
-    df[0] = df[0].ffill()
+    # Forward-fill supervisor (células mescladas no Excel — col B)
+    df[sup_col] = df[sup_col].replace("", None)
+    df[sup_col] = df[sup_col].ffill()
 
     SKIP = {"总计", "合计", "NAN", "NAN%", "", "FONTE", "FONTE%"}
 
@@ -76,8 +79,8 @@ def _ler_sheet1(xl: pd.ExcelFile) -> tuple[int, str, list[dict], list[dict], lis
     por_sup_map: dict       = {}
 
     for _, row in df.iterrows():
-        ds_val  = str(row[1]).strip() if pd.notna(row[1]) else ""
-        sup_val = str(row[0]).strip().upper() if pd.notna(row[0]) else ""
+        sup_val = str(row[sup_col]).strip().upper() if pd.notna(row[sup_col]) else ""
+        ds_val  = str(row[ds_col]).strip()          if pd.notna(row[ds_col])  else ""
 
         if not ds_val or ds_val.upper() in SKIP or not sup_val or sup_val.upper() in SKIP:
             continue
