@@ -426,7 +426,16 @@ export default function Na() {
       a.href = URL.createObjectURL(new Blob([r.data]))
       a.download = `NotArrived_${upload?.data_ref || 'relatorio'}.xlsx`
       a.click()
-    } catch { alert('Erro ao gerar Excel') }
+    } catch (err) {
+      // Tenta ler mensagem de erro do blob de resposta
+      let msg = 'Erro ao gerar Excel.'
+      try {
+        const text = await err.response?.data?.text?.()
+        const json = JSON.parse(text || '{}')
+        msg = json.detail || msg
+      } catch {}
+      alert(msg)
+    }
     finally { setDownloading(false) }
   }
 

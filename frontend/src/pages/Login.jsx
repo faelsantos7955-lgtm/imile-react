@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 import api from '../lib/api'
 
 export default function Login() {

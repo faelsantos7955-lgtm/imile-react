@@ -67,13 +67,17 @@ def _ler_relatorio(conteudo: bytes):
     # Remover DS duplicados, manter apenas a primeira ocorrência
     df = df.drop_duplicates(subset=['ds'], keep='first')
 
-    # Extrair data do nome da primeira coluna (ex: "03-03 DS")
-    # FIX: first_col pode ser NaN quando a coluna não tem nome no Excel
+    # Extrair data de referência da primeira coluna (que é uma data no Excel)
     data_ref = ''
-    first_col_str = str(first_col) if pd.notna(first_col) else ''
-    match = re.search(r'(\d{2}-\d{2})', first_col_str)
-    if match:
-        data_ref = match.group(1)
+    try:
+        ts = pd.Timestamp(first_col)
+        if not pd.isna(ts):
+            data_ref = ts.date().isoformat()
+    except Exception:
+        first_col_str = str(first_col) if pd.notna(first_col) else ''
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', first_col_str)
+        if match:
+            data_ref = match.group(1)
 
     return df, data_ref
 

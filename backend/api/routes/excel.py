@@ -776,9 +776,9 @@ def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_
     threshold = up.get("threshold_col", ">10D")
 
     tend = sb.table("na_tendencia").select("supervisor,ds,data,total").eq("upload_id", upload_id).order("data").execute().data or []
-    por_sup = sb.table("na_por_supervisor").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
-    por_ds  = sb.table("na_por_ds").select("*").eq("upload_id", upload_id).order("supervisor,total", desc=True).execute().data or []
-    por_proc= sb.table("na_por_processo").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
+    por_sup = sb.table("na_por_supervisor").select("supervisor,total,grd10d").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
+    por_ds  = sb.table("na_por_ds").select("supervisor,ds,total,grd10d").eq("upload_id", upload_id).order("supervisor").order("total", desc=True).execute().data or []
+    por_proc= sb.table("na_por_processo").select("processo,total").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
 
     # Monta pivot: supervisor → ds → date → count
     pivot = {}
@@ -891,8 +891,11 @@ def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_
     ws2 = wb.create_sheet("Supervisores")
     _titulo_aba(ws2, f"Por Supervisor — {data_ref}", 4)
     _write_header(ws2, ["Supervisor", threshold, "Total", "% Backlog"], 2)
-    df_sup = pd.DataFrame(por_sup)[["supervisor", "grd10d", "total"]] if por_sup else pd.DataFrame(columns=["supervisor","grd10d","total"])
-    grand  = df_sup["total"].sum() or 1
+    df_sup = pd.DataFrame(por_sup if por_sup else [], columns=["supervisor","grd10d","total"])
+    if por_sup:
+        df_sup = df_sup[["supervisor","grd10d","total"]]
+    grand  = int(df_sup["total"].sum()) or 1
+    df_sup = df_sup.copy()
     df_sup["pct"] = df_sup["total"] / grand
     df_sup.columns = ["Supervisor", threshold, "Total", "% do Total"]
     _write_data(ws2, df_sup, 3, pct_cols=["% do Total"])
@@ -902,7 +905,9 @@ def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_
     ws3 = wb.create_sheet("Por DS")
     _titulo_aba(ws3, f"Por DS — {data_ref}", 4)
     _write_header(ws3, ["Supervisor", "DS", threshold, "Total"], 2)
-    df_ds = pd.DataFrame(por_ds)[["supervisor","ds","grd10d","total"]] if por_ds else pd.DataFrame(columns=["supervisor","ds","grd10d","total"])
+    df_ds = pd.DataFrame(por_ds if por_ds else [], columns=["supervisor","ds","grd10d","total"])
+    if por_ds:
+        df_ds = df_ds[["supervisor","ds","grd10d","total"]]
     df_ds.columns = ["Supervisor","DS", threshold, "Total"]
     _write_data(ws3, df_ds, 3)
     _auto_width(ws3); ws3.freeze_panes = "A3"
@@ -911,7 +916,9 @@ def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_
     ws4 = wb.create_sheet("Por Processo")
     _titulo_aba(ws4, f"Por Processo — {data_ref}", 2)
     _write_header(ws4, ["Processo", "Total"], 2)
-    df_proc = pd.DataFrame(por_proc) if por_proc else pd.DataFrame(columns=["processo","total"])
+    df_proc = pd.DataFrame(por_proc if por_proc else [], columns=["processo","total"])
+    if por_proc:
+        df_proc = df_proc[["processo","total"]]
     df_proc.columns = ["Processo","Total"]
     _write_data(ws4, df_proc, 3)
     _auto_width(ws4); ws4.freeze_panes = "A3"

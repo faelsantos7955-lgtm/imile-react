@@ -4,7 +4,6 @@ api/routes/dashboard.py — Dashboard + Heatmap + Funil
 from fastapi import APIRouter, Depends
 from api.deps import get_supabase, get_current_user
 import pandas as pd
-import numpy as np
 
 router = APIRouter()
 
