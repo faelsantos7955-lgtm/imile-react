@@ -77,8 +77,8 @@ function UploadPanel({ onClose, onSuccess }) {
 
           <div className="px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100 text-[11px] text-slate-500 space-y-1">
             <p className="font-semibold text-slate-600 text-xs mb-1">Formato esperado</p>
-            <p>· Aba <strong>Sheet1</strong> — pivot supervisor × DS × data</p>
             <p>· Aba <strong>Export</strong> — dados brutos por waybill</p>
+            <p>· Colunas: <strong>Destination Station</strong>, Supervisor, 日期, Process, Situation</p>
           </div>
 
           {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}

@@ -131,6 +131,13 @@ export default function Monitoramento() {
 
   return (
     <div>
+      {uploading && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
+          <span className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+          <p className="text-white font-semibold text-sm">Processando arquivo…</p>
+          <p className="text-white/60 text-xs">Isso pode levar alguns segundos</p>
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <PageHeader icon="📊" title="Monitoramento Diário" subtitle="Controle operacional diário por DS — estoque, expedição, entrega" />
         <div className="flex gap-2">
