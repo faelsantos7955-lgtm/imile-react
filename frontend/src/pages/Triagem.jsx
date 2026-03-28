@@ -24,23 +24,36 @@ const COLOR_TOP = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 
 // ── Painel de upload com LoadingScan + Arrival ────────────────
 function UploadPanel({ onClose, onSuccess }) {
-  const [lsFiles, setLsFiles]         = useState([])
-  const [arrFiles, setArrFiles]       = useState([])
-  const [uploading, setUploading]     = useState(false)
-  const [erro, setErro]               = useState('')
-  const lsRef  = useRef()
-  const arrRef = useRef()
+  // Cada arquivo tem: { file: File, isArrival: boolean }
+  const [files, setFiles]       = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [erro, setErro]           = useState('')
+  const inputRef = useRef()
 
-  const addFiles = (existing, incoming) => {
-    const names = new Set(existing.map(f => f.name))
-    return [...existing, ...Array.from(incoming).filter(f => !names.has(f.name))]
+  const addFiles = (incoming) => {
+    const err = validarArquivos(Array.from(incoming))
+    if (err) { setErro(err); return }
+    setErro('')
+    setFiles(prev => {
+      const names = new Set(prev.map(e => e.file.name))
+      const novos = Array.from(incoming)
+        .filter(f => !names.has(f.name))
+        .map(f => ({ file: f, isArrival: false }))
+      return [...prev, ...novos]
+    })
   }
 
-  const handleLs  = e => { const err = validarArquivos([...e.target.files]); if (err) { setErro(err); return } setLsFiles(p => addFiles(p, e.target.files)); e.target.value = '' }
-  const handleArr = e => { const err = validarArquivos([...e.target.files]); if (err) { setErro(err); return } setArrFiles(p => addFiles(p, e.target.files)); e.target.value = '' }
+  const toggleArrival = (idx) =>
+    setFiles(prev => prev.map((e, i) => i === idx ? { ...e, isArrival: !e.isArrival } : e))
+
+  const removeFile = (idx) =>
+    setFiles(prev => prev.filter((_, i) => i !== idx))
+
+  const lsFiles  = files.filter(e => !e.isArrival).map(e => e.file)
+  const arrFiles = files.filter(e =>  e.isArrival).map(e => e.file)
 
   const handleSubmit = async () => {
-    if (!lsFiles.length) { setErro('Selecione pelo menos um arquivo LoadingScan.'); return }
+    if (!lsFiles.length) { setErro('Nenhum arquivo LoadingScan selecionado. Desmarque "Arrival" em pelo menos um arquivo.'); return }
     setUploading(true); setErro('')
     try {
       const form = new FormData()
@@ -49,7 +62,7 @@ function UploadPanel({ onClose, onSuccess }) {
       arrFiles.forEach(f => form.append('files', f))
       form.append('arrival_count', String(arrFiles.length))
       const res = await api.post('/api/triagem/processar', form, {
-        timeout: 300_000, // 5 min — arquivos grandes
+        timeout: 300_000,
       })
       onSuccess(res.data.upload_id)
     } catch (e) {
@@ -61,13 +74,6 @@ function UploadPanel({ onClose, onSuccess }) {
     } finally { setUploading(false) }
   }
 
-  const FileChip = ({ name, onRemove }) => (
-    <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg text-xs text-slate-600 max-w-[180px]">
-      <span className="truncate flex-1">{name}</span>
-      <button onClick={onRemove} className="text-slate-400 hover:text-red-500 shrink-0"><X size={11} /></button>
-    </div>
-  )
-
   return (
     <div className="mb-6 bg-white border border-slate-200 rounded-xl p-5 animate-scale">
       <div className="flex items-center justify-between mb-4">
@@ -75,63 +81,74 @@ function UploadPanel({ onClose, onSuccess }) {
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* LoadingScan */}
-        <div className="border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <FileUp size={14} className="text-imile-500" />
-            <p className="text-xs font-semibold text-slate-700">LoadingScan <span className="text-red-500">*</span></p>
-          </div>
-          <p className="text-[10px] text-slate-400 mb-3">
-            Arquivos de scan de expedição do RDC.<br/>
-            Colunas: <code className="bg-slate-100 px-1 rounded">Waybill No.</code>, <code className="bg-slate-100 px-1 rounded">Destination Statio</code>, <code className="bg-slate-100 px-1 rounded">Delivery Station</code>
-          </p>
-          <button onClick={() => lsRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-1.5 border border-dashed border-imile-300 text-imile-600 rounded-lg text-xs font-medium hover:bg-imile-50 transition-colors w-full justify-center mb-2">
-            <Upload size={13} /> Selecionar arquivos (múltiplos)
-          </button>
-          <input ref={lsRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleLs} />
-          {lsFiles.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {lsFiles.map((f, i) => (
-                <FileChip key={i} name={f.name} onRemove={() => setLsFiles(p => p.filter((_, j) => j !== i))} />
-              ))}
-            </div>
-          )}
-          {!lsFiles.length && <p className="text-[10px] text-slate-300 text-center">Nenhum arquivo selecionado</p>}
-        </div>
-
-        {/* Arrival */}
-        <div className="border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <PackageCheck size={14} className="text-emerald-500" />
-            <p className="text-xs font-semibold text-slate-700">Arrival <span className="text-slate-400 font-normal">(opcional)</span></p>
-          </div>
-          <p className="text-[10px] text-slate-400 mb-3">
-            Arquivo de chegada nos DS — permite cruzar quantos pacotes expedidos foram recebidos.<br/>
-            Coluna: <code className="bg-slate-100 px-1 rounded">Waybill No.</code> (ou similar)
-          </p>
-          <button onClick={() => arrRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-1.5 border border-dashed border-emerald-300 text-emerald-600 rounded-lg text-xs font-medium hover:bg-emerald-50 transition-colors w-full justify-center mb-2">
-            <Upload size={13} /> Selecionar arquivos (múltiplos)
-          </button>
-          <input ref={arrRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleArr} />
-          {arrFiles.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {arrFiles.map((f, i) => (
-                <FileChip key={i} name={f.name} onRemove={() => setArrFiles(p => p.filter((_, j) => j !== i))} />
-              ))}
-            </div>
-          )}
-          {!arrFiles.length && <p className="text-[10px] text-slate-300 text-center">Nenhum arquivo selecionado</p>}
-        </div>
+      {/* Zona única de seleção */}
+      <div
+        onClick={() => inputRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files) }}
+        className="border-2 border-dashed border-slate-200 hover:border-imile-300 hover:bg-imile-50/10 rounded-xl p-5 text-center cursor-pointer transition-all mb-4"
+      >
+        <Upload size={22} className="mx-auto mb-1.5 text-slate-300" />
+        <p className="text-xs font-semibold text-slate-600">Clique ou arraste os arquivos aqui</p>
+        <p className="text-[10px] text-slate-400 mt-0.5">
+          Selecione todos de uma vez — LoadingScan e Arrival juntos
+        </p>
+        <input
+          ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm" multiple className="hidden"
+          onChange={e => { addFiles(e.target.files); e.target.value = '' }}
+        />
       </div>
 
-      {erro && <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{erro}</p>}
+      {/* Lista de arquivos com toggle Arrival */}
+      {files.length > 0 && (
+        <div className="space-y-1.5 mb-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Arquivos selecionados — marque os que são <span className="text-emerald-600">Arrival</span>
+          </p>
+          {files.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+              <FileUp size={13} className={entry.isArrival ? 'text-emerald-500' : 'text-imile-400'} />
+              <span className="flex-1 text-xs text-slate-700 truncate min-w-0">{entry.file.name}</span>
+              {/* Toggle Arrival */}
+              <button
+                type="button"
+                onClick={() => toggleArrival(i)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all ${
+                  entry.isArrival
+                    ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:border-emerald-200 hover:text-emerald-600'
+                }`}
+              >
+                <PackageCheck size={10} />
+                {entry.isArrival ? 'Arrival' : 'LoadingScan'}
+              </button>
+              <button onClick={() => removeFile(i)} className="text-slate-300 hover:text-red-400 transition-colors ml-1">
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-slate-100">
+      {/* Resumo */}
+      {files.length > 0 && (
+        <div className="flex gap-3 text-[11px] mb-3">
+          <span className="px-2 py-0.5 bg-imile-50 text-imile-700 rounded-full font-medium">
+            {lsFiles.length} LoadingScan
+          </span>
+          {arrFiles.length > 0 && (
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full font-medium">
+              {arrFiles.length} Arrival
+            </span>
+          )}
+        </div>
+      )}
+
+      {erro && <p className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{erro}</p>}
+
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
         <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-        <button onClick={handleSubmit} disabled={uploading || !lsFiles.length}
+        <button onClick={handleSubmit} disabled={uploading || !files.length}
           className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 transition-colors">
           {uploading ? <><Loader size={14} className="animate-spin" /> Processando...</> : <><Upload size={14} /> Processar</>}
         </button>
