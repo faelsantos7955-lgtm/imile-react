@@ -4,13 +4,14 @@
  */
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { PageHeader, Alert, Card, SectionHeader } from '../components/ui'
 import {
   Upload, Users, Settings, CheckCircle, XCircle,
   ShieldOff, ShieldCheck, Loader, Terminal,
   UserCheck, UserX, Edit2, Save, X, Check, History, ChevronLeft, ChevronRight,
+  Target, Plus, Trash2,
 } from 'lucide-react'
 
 // ── Definição de permissões disponíveis ──────────────────────
@@ -586,6 +587,178 @@ function AuditLogPage() {
   )
 }
 
+// ── Metas por DS ──────────────────────────────────────────────
+function MetasPage() {
+  const qc = useQueryClient()
+  const { data: metas = [], isLoading } = useQuery({
+    queryKey: ['admin-metas'],
+    queryFn: () => api.get('/api/admin/metas').then(r => r.data),
+  })
+
+  const [edits, setEdits]   = useState({})   // ds → { meta_expedicao, meta_entrega, regiao }
+  const [novoDs, setNovoDs] = useState('')
+  const [novoExp, setNovoExp]  = useState('90')
+  const [novoEnt, setNovoEnt]  = useState('90')
+  const [novoReg, setNovoReg]  = useState('')
+  const [adicionando, setAdicionando] = useState(false)
+
+  const mutation = useMutation({
+    mutationFn: (rows) => api.put('/api/admin/metas', rows),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-metas'] }),
+  })
+
+  const delMutation = useMutation({
+    mutationFn: (ds) => api.delete(`/api/admin/metas/${encodeURIComponent(ds)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-metas'] }),
+  })
+
+  const setEdit = (ds, field, val) =>
+    setEdits(p => ({ ...p, [ds]: { ...(p[ds] || {}), [field]: val } }))
+
+  const saveRow = (m) => {
+    const e = edits[m.ds] || {}
+    mutation.mutate([{
+      ds:             m.ds,
+      meta_expedicao: parseFloat(e.meta_expedicao ?? m.meta_expedicao) / 100,
+      meta_entrega:   parseFloat(e.meta_entrega   ?? m.meta_entrega)   / 100,
+      regiao:         e.regiao ?? m.regiao ?? '',
+    }])
+    setEdits(p => { const n = { ...p }; delete n[m.ds]; return n })
+  }
+
+  const adicionar = async () => {
+    if (!novoDs.trim()) return
+    setAdicionando(true)
+    try {
+      await mutation.mutateAsync([{
+        ds:             novoDs.trim().toUpperCase(),
+        meta_expedicao: parseFloat(novoExp) / 100,
+        meta_entrega:   parseFloat(novoEnt) / 100,
+        regiao:         novoReg.trim(),
+      }])
+      setNovoDs(''); setNovoExp('90'); setNovoEnt('90'); setNovoReg('')
+    } finally { setAdicionando(false) }
+  }
+
+  const pct = (v) => `${Math.round((v ?? 0.9) * 100)}%`
+
+  if (isLoading) return (
+    <div className="flex items-center gap-2 text-slate-500 mt-8">
+      <Loader size={16} className="animate-spin" /> Carregando...
+    </div>
+  )
+
+  return (
+    <div>
+      <PageHeader icon="🎯" title="Metas por DS" subtitle="Defina as metas de expedição e entrega por estação de destino" />
+
+      <SectionHeader title="Adicionar / Atualizar Meta" />
+      <Card>
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500 font-medium">DS *</label>
+            <input value={novoDs} onChange={e => setNovoDs(e.target.value.toUpperCase())}
+              placeholder="Ex: DS-001" className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-36" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500 font-medium">Meta Expedição (%)</label>
+            <input type="number" min="0" max="100" value={novoExp} onChange={e => setNovoExp(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-32" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500 font-medium">Meta Entrega (%)</label>
+            <input type="number" min="0" max="100" value={novoEnt} onChange={e => setNovoEnt(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-32" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500 font-medium">Região</label>
+            <input value={novoReg} onChange={e => setNovoReg(e.target.value)}
+              placeholder="SP, RJ..." className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-28" />
+          </div>
+          <button onClick={adicionar} disabled={adicionando || !novoDs.trim()}
+            className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm hover:bg-imile-600 disabled:opacity-50">
+            {adicionando ? <Loader size={13} className="animate-spin" /> : <Plus size={13} />} Salvar
+          </button>
+        </div>
+      </Card>
+
+      {metas.length === 0 ? (
+        <Alert type="info">Nenhuma meta cadastrada ainda. Adicione a primeira acima.</Alert>
+      ) : (
+        <>
+          <SectionHeader title={`Metas cadastradas (${metas.length})`} />
+          <Card className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-800 text-white text-xs">
+                    <th className="px-4 py-3 text-left">DS</th>
+                    <th className="px-4 py-3 text-left">Região</th>
+                    <th className="px-4 py-3 text-center">Meta Expedição</th>
+                    <th className="px-4 py-3 text-center">Meta Entrega</th>
+                    <th className="px-4 py-3 text-left">Atualizado por</th>
+                    <th className="px-4 py-3 text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metas.map(m => {
+                    const e = edits[m.ds] || {}
+                    const dirty = !!edits[m.ds]
+                    return (
+                      <tr key={m.ds} className={`border-t border-slate-100 hover:bg-slate-50 ${dirty ? 'bg-blue-50' : ''}`}>
+                        <td className="px-4 py-3 font-mono text-xs font-semibold">{m.ds}</td>
+                        <td className="px-4 py-3">
+                          <input value={e.regiao ?? (m.regiao || '')} onChange={ev => setEdit(m.ds, 'regiao', ev.target.value)}
+                            className="px-2 py-1 border border-slate-200 rounded text-xs w-20 bg-white" />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <input type="number" min="0" max="100" step="1"
+                              value={e.meta_expedicao ?? Math.round((m.meta_expedicao ?? 0.9) * 100)}
+                              onChange={ev => setEdit(m.ds, 'meta_expedicao', ev.target.value)}
+                              className="px-2 py-1 border border-slate-200 rounded text-xs w-16 text-center bg-white" />
+                            <span className="text-slate-400 text-xs">%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <input type="number" min="0" max="100" step="1"
+                              value={e.meta_entrega ?? Math.round((m.meta_entrega ?? 0.9) * 100)}
+                              onChange={ev => setEdit(m.ds, 'meta_entrega', ev.target.value)}
+                              className="px-2 py-1 border border-slate-200 rounded text-xs w-16 text-center bg-white" />
+                            <span className="text-slate-400 text-xs">%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400 truncate max-w-[140px]">{m.atualizado_por || '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {dirty && (
+                              <button onClick={() => saveRow(m)} disabled={mutation.isPending}
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                                {mutation.isPending ? <Loader size={11} className="animate-spin" /> : <Save size={11} />} Salvar
+                              </button>
+                            )}
+                            <button onClick={() => { if (window.confirm(`Remover meta de ${m.ds}?`)) delMutation.mutate(m.ds) }}
+                              disabled={delMutation.isPending}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
+
 // ── Admin root ────────────────────────────────────────────────
 export default function Admin() {
   const tabClass = isActive =>
@@ -608,6 +781,9 @@ export default function Admin() {
         <NavLink to="/admin/auditlog" className={({ isActive }) => tabClass(isActive)}>
           <History size={15} /> Histórico
         </NavLink>
+        <NavLink to="/admin/metas" className={({ isActive }) => tabClass(isActive)}>
+          <Target size={15} /> Metas por DS
+        </NavLink>
       </div>
 
       <Routes>
@@ -615,6 +791,7 @@ export default function Admin() {
         <Route path="users" element={<SolicitacoesPage />} />
         <Route path="config" element={<ConfigPage />} />
         <Route path="auditlog" element={<AuditLogPage />} />
+        <Route path="metas" element={<MetasPage />} />
       </Routes>
     </div>
   )

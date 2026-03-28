@@ -13,6 +13,7 @@ load_dotenv()
 
 from api.limiter import limiter
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel, backlog, monitoramento
+from api.routes.correlacao import router as correlacao_router
 from api.routes.reclamacoes_upload_route import router as reclamacoes_upload_router
 from api.routes.dashboard_upload import router as dashboard_upload_router
 from api.routes.triagem_upload import router as triagem_upload_router
@@ -53,6 +54,7 @@ app.include_router(not_arrived_router,          prefix="/api/not-arrived",   tag
 app.include_router(not_arrived_upload_router,   prefix="/api/not-arrived",   tags=["Not Arrived"])  # POST /processar
 app.include_router(na_router,                   prefix="/api/na",            tags=["NA"])
 app.include_router(na_upload_router,            prefix="/api/na",            tags=["NA"])            # POST /processar
+app.include_router(correlacao_router,           prefix="/api/correlacao",    tags=["Correlação"])
 
 @app.get("/api/health")
 def health():

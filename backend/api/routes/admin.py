@@ -152,3 +152,45 @@ def upsert_motorista(req: MotoristaRequest, user: dict = Depends(require_admin))
         "atualizado_por": user["email"],
     }, on_conflict="id_motorista").execute()
     return {"ok": True}
+
+
+# ── Metas por DS ──────────────────────────────────────────────
+class MetaDS(BaseModel):
+    ds: str
+    meta_expedicao: float = 0.9
+    meta_entrega: float = 0.9
+    regiao: str = ""
+
+
+@router.get("/metas")
+def listar_metas(user: dict = Depends(require_admin)):
+    sb = get_supabase()
+    return sb.table("config_metas").select("*").order("ds").execute().data or []
+
+
+@router.put("/metas")
+def upsert_metas(metas: list[MetaDS], user: dict = Depends(require_admin)):
+    from datetime import datetime
+    sb = get_supabase()
+    rows = [
+        {
+            "ds":              m.ds.strip().upper(),
+            "meta_expedicao":  round(m.meta_expedicao, 4),
+            "meta_entrega":    round(m.meta_entrega, 4),
+            "regiao":          m.regiao.strip(),
+            "atualizado_em":   datetime.utcnow().isoformat(),
+            "atualizado_por":  user["email"],
+        }
+        for m in metas
+        if m.ds.strip()
+    ]
+    if rows:
+        sb.table("config_metas").upsert(rows, on_conflict="ds").execute()
+    return {"ok": True, "saved": len(rows)}
+
+
+@router.delete("/metas/{ds}")
+def deletar_meta(ds: str, user: dict = Depends(require_admin)):
+    sb = get_supabase()
+    sb.table("config_metas").delete().eq("ds", ds.strip().upper()).execute()
+    return {"ok": True}
