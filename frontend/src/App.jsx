@@ -11,6 +11,7 @@ import Reclamacoes from './pages/Reclamacoes'
 import Admin from './pages/Admin'
 import Backlog from './pages/Backlog'
 import NotArrived from './pages/NotArrived'
+import Na from './pages/Na'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -33,6 +34,7 @@ function AppRoutes() {
         <Route path="reclamacoes" element={<Reclamacoes />} />
         <Route path="backlog" element={<Backlog />} />
         <Route path="not-arrived" element={<NotArrived />} />
+        <Route path="na" element={<Na />} />
         <Route path="admin/*" element={
           <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
         } />

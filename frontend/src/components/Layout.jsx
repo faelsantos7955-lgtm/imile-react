@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
-  LogOut, Bell, Package, Menu, X, History, AlertCircle,
+  LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -18,7 +18,8 @@ const NAV_ITEMS = [
   { to: '/operacional', icon: Wrench,      label: 'Operacional' },
   { to: '/reclamacoes', icon: FileWarning, label: 'Reclamações' },
   { to: '/backlog',      icon: Package,       label: 'Backlog SLA' },
-  { to: '/not-arrived', icon: AlertCircle,   label: 'Not Arrived' },
+  { to: '/na',          icon: PackageX,      label: 'Not Arrived' },
+  { to: '/not-arrived', icon: AlertCircle,   label: 'Not Arrived Mov.' },
 ]
 
 const ADMIN_ITEMS = [
@@ -33,6 +34,7 @@ const PAGE_TITLES = [
   { path: '/operacional',     label: 'Operacional' },
   { path: '/reclamacoes',     label: 'Reclamações' },
   { path: '/backlog',         label: 'Backlog SLA' },
+  { path: '/na',             label: 'Not Arrived' },
   { path: '/not-arrived',    label: 'Not Arrived com Movimentação' },
   { path: '/admin',           label: 'Upload / Processar' },
   { path: '/admin/users',     label: 'Solicitações de Acesso' },
