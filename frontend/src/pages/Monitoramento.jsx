@@ -6,9 +6,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { PageHeader, Card, Alert, UploadGuide } from '../components/ui'
-import { Upload, Loader, RefreshCw, Trash2, TrendingUp, Package, Truck, AlertTriangle } from 'lucide-react'
+import {
+  Upload, Loader, RefreshCw, Trash2, TrendingUp, Package,
+  Truck, AlertTriangle, GitCompare,
+} from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
+import clsx from 'clsx'
 
+const F   = n  => n?.toLocaleString('pt-BR') ?? '0'
+const pct = n  => `${((n || 0) * 100).toFixed(1)}%`
+const dec = n  => (n || 0).toFixed(1)
+
+// ── KPI simples ────────────────────────────────────────────────
 function KPI({ label, value, icon: Icon, color = '#334155', suffix = '' }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm"
@@ -16,9 +25,7 @@ function KPI({ label, value, icon: Icon, color = '#334155', suffix = '' }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase text-slate-400">{label}</p>
-          <p className="text-xl font-bold font-mono mt-1" style={{ color }}>
-            {value}{suffix}
-          </p>
+          <p className="text-xl font-bold font-mono mt-1" style={{ color }}>{value}{suffix}</p>
         </div>
         {Icon && <Icon size={20} className="text-slate-300" />}
       </div>
@@ -26,24 +33,220 @@ function KPI({ label, value, icon: Icon, color = '#334155', suffix = '' }) {
   )
 }
 
+// ── KPI comparativo A vs B ─────────────────────────────────────
+function KPICompare({ label, a, b, fmt, invertDelta = false }) {
+  const delta  = (b ?? 0) - (a ?? 0)
+  const isGood = invertDelta ? delta < 0 : delta > 0
+  const isBad  = invertDelta ? delta > 0 : delta < 0
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+      <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">{label}</p>
+      <div className="flex items-end gap-2">
+        <div className="flex-1 text-center">
+          <p className="text-[10px] text-slate-400 mb-0.5">Data A</p>
+          <p className="text-base font-bold font-mono text-slate-700">{fmt(a)}</p>
+        </div>
+        <div className="text-slate-300 pb-1 text-lg font-light">→</div>
+        <div className="flex-1 text-center">
+          <p className="text-[10px] text-slate-400 mb-0.5">Data B</p>
+          <p className="text-base font-bold font-mono text-slate-700">{fmt(b)}</p>
+        </div>
+      </div>
+      <div className={clsx(
+        'mt-2 text-center text-xs font-bold rounded-lg py-1',
+        delta === 0 ? 'bg-slate-100 text-slate-500' :
+        isGood     ? 'bg-emerald-50 text-emerald-700' :
+                     'bg-red-50 text-red-700'
+      )}>
+        {delta === 0 ? '=' : delta > 0 ? `+${fmt(delta)}` : fmt(delta)}
+      </div>
+    </div>
+  )
+}
+
+// ── Célula de taxa colorida ────────────────────────────────────
 function TaxaCell({ value }) {
-  const pct = (value * 100)
-  const cor = pct >= 90 ? 'text-emerald-600' : pct >= 70 ? 'text-amber-600' : pct > 0 ? 'text-red-600' : 'text-slate-400'
+  const p   = (value * 100)
+  const cor = p >= 90 ? 'text-emerald-600' : p >= 70 ? 'text-amber-600' : p > 0 ? 'text-red-600' : 'text-slate-400'
   return (
     <td className={`px-2 py-2 text-center border border-slate-200 font-mono font-bold text-xs ${cor}`}>
-      {pct > 0 ? `${pct.toFixed(1)}%` : '-'}
+      {p > 0 ? `${p.toFixed(1)}%` : '-'}
     </td>
   )
 }
 
+// ── Delta inline (seta + valor) ───────────────────────────────
+function Delta({ a, b, fmt = F, invert = false, isPct = false }) {
+  const va = a ?? 0
+  const vb = b ?? 0
+  const d  = vb - va
+  if (d === 0) return <span className="text-slate-300 text-[10px]">—</span>
+  const isGood = invert ? d < 0 : d > 0
+  const sign   = d > 0 ? '+' : ''
+  const label  = isPct
+    ? `${sign}${((d) * 100).toFixed(1)}pp`
+    : `${sign}${fmt(Math.round(d))}`
+  return (
+    <span className={clsx('text-[10px] font-bold', isGood ? 'text-emerald-600' : 'text-red-600')}>
+      {label}
+    </span>
+  )
+}
+
+// ── Tabela comparativa ────────────────────────────────────────
+function TabelaComparativo({ dadosA, dadosB }) {
+  const [sort, setSort] = useState('ds')
+  const [asc,  setAsc]  = useState(true)
+
+  const mapA = Object.fromEntries((dadosA?.dados || []).map(r => [r.ds, r]))
+  const mapB = Object.fromEntries((dadosB?.dados || []).map(r => [r.ds, r]))
+  const dsList = [...new Set([
+    ...(dadosA?.dados || []).map(r => r.ds),
+    ...(dadosB?.dados || []).map(r => r.ds),
+  ])]
+
+  const rows = dsList.map(ds => ({
+    ds,
+    supervisor: mapA[ds]?.supervisor || mapB[ds]?.supervisor || '—',
+    a: mapA[ds] || {},
+    b: mapB[ds] || {},
+  })).sort((x, y) => {
+    let va, vb
+    if (sort === 'ds')         { va = x.ds; vb = y.ds }
+    else if (sort === 'taxa')  { va = x.a.taxa_expedicao ?? 0; vb = y.a.taxa_expedicao ?? 0 }
+    else if (sort === 'delta') { va = (x.b.taxa_expedicao ?? 0) - (x.a.taxa_expedicao ?? 0); vb = (y.b.taxa_expedicao ?? 0) - (y.a.taxa_expedicao ?? 0) }
+    else                       { va = 0; vb = 0 }
+    if (typeof va === 'string') return asc ? va.localeCompare(vb) : vb.localeCompare(va)
+    return asc ? va - vb : vb - va
+  })
+
+  const Th = ({ col, children, center }) => (
+    <th onClick={() => { setSort(col); setAsc(s => sort === col ? !s : true) }}
+      className={clsx(
+        'px-2 py-2.5 border border-slate-700 cursor-pointer hover:bg-slate-700 whitespace-nowrap text-xs font-bold',
+        center ? 'text-center' : 'text-left',
+        sort === col && 'text-imile-300'
+      )}>
+      {children}{sort === col ? (asc ? ' ↑' : ' ↓') : ''}
+    </th>
+  )
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-800 text-white">
+              <Th col="ds">DS</Th>
+              <th className="px-2 py-2.5 border border-slate-700 text-left text-xs font-bold">Supervisor</th>
+              {/* Taxa Expedição */}
+              <th colSpan={3} className="px-2 py-2 border border-slate-700 text-center text-xs font-bold text-imile-300">
+                Taxa Expedição
+              </th>
+              {/* Entregue */}
+              <th colSpan={3} className="px-2 py-2 border border-slate-700 text-center text-xs font-bold text-violet-300">
+                Entregue
+              </th>
+              {/* Volume Saída */}
+              <th colSpan={3} className="px-2 py-2 border border-slate-700 text-center text-xs font-bold text-sky-300">
+                Saída
+              </th>
+              {/* Estoque >7d */}
+              <th colSpan={3} className="px-2 py-2 border border-slate-700 text-center text-xs font-bold text-amber-300">
+                Est. &gt;7d
+              </th>
+            </tr>
+            <tr className="bg-slate-700 text-white/70 text-[10px]">
+              <th className="px-2 py-1.5 border border-slate-600" />
+              <th className="px-2 py-1.5 border border-slate-600" />
+              {['Data A','Data B','Δ','Data A','Data B','Δ','Data A','Data B','Δ','Data A','Data B','Δ'].map((h, i) => (
+                <th key={i} className="px-2 py-1.5 border border-slate-600 text-center font-medium">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const dTaxa  = (row.b.taxa_expedicao ?? 0) - (row.a.taxa_expedicao ?? 0)
+              const rowBg  = i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'
+              return (
+                <tr key={row.ds} className={`${rowBg} hover:bg-imile-50/40`}>
+                  <td className="px-2 py-2 border border-slate-200 font-semibold text-slate-800 whitespace-nowrap">{row.ds}</td>
+                  <td className="px-2 py-2 border border-slate-200 text-slate-500 whitespace-nowrap">{row.supervisor}</td>
+                  {/* Taxa Exp */}
+                  <TaxaCell value={row.a.taxa_expedicao || 0} />
+                  <TaxaCell value={row.b.taxa_expedicao || 0} />
+                  <td className="px-2 py-2 border border-slate-200 text-center">
+                    <Delta a={row.a.taxa_expedicao} b={row.b.taxa_expedicao} isPct />
+                  </td>
+                  {/* Entregue */}
+                  <td className="px-2 py-2 border border-slate-200 text-center font-mono text-slate-700">{F(row.a.entregue)}</td>
+                  <td className="px-2 py-2 border border-slate-200 text-center font-mono text-slate-700">{F(row.b.entregue)}</td>
+                  <td className="px-2 py-2 border border-slate-200 text-center">
+                    <Delta a={row.a.entregue} b={row.b.entregue} />
+                  </td>
+                  {/* Saída */}
+                  <td className="px-2 py-2 border border-slate-200 text-center font-mono text-slate-700">{F(row.a.volume_saida)}</td>
+                  <td className="px-2 py-2 border border-slate-200 text-center font-mono text-slate-700">{F(row.b.volume_saida)}</td>
+                  <td className="px-2 py-2 border border-slate-200 text-center">
+                    <Delta a={row.a.volume_saida} b={row.b.volume_saida} />
+                  </td>
+                  {/* Estoque >7d */}
+                  <td className={clsx('px-2 py-2 border border-slate-200 text-center font-mono font-bold', row.a.estoque_7d > 0 ? 'text-red-600 bg-red-50' : 'text-slate-400')}>
+                    {F(row.a.estoque_7d)}
+                  </td>
+                  <td className={clsx('px-2 py-2 border border-slate-200 text-center font-mono font-bold', row.b.estoque_7d > 0 ? 'text-red-600 bg-red-50' : 'text-slate-400')}>
+                    {F(row.b.estoque_7d)}
+                  </td>
+                  <td className="px-2 py-2 border border-slate-200 text-center">
+                    <Delta a={row.a.estoque_7d} b={row.b.estoque_7d} invert />
+                  </td>
+                </tr>
+              )
+            })}
+
+            {/* Linha de totais */}
+            <tr className="bg-slate-800 text-white font-bold text-xs">
+              <td className="px-2 py-2 border border-slate-700" colSpan={2}>TOTAL</td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{pct(dadosA?.totais?.taxa_expedicao)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{pct(dadosB?.totais?.taxa_expedicao)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center">
+                <Delta a={dadosA?.totais?.taxa_expedicao} b={dadosB?.totais?.taxa_expedicao} isPct />
+              </td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{F(dadosA?.totais?.entregue)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{F(dadosB?.totais?.entregue)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center">
+                <Delta a={dadosA?.totais?.entregue} b={dadosB?.totais?.entregue} />
+              </td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{F(dadosA?.totais?.volume_saida)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{F(dadosB?.totais?.volume_saida)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center">
+                <Delta a={dadosA?.totais?.volume_saida} b={dadosB?.totais?.volume_saida} />
+              </td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{F(dadosA?.totais?.estoque_7d)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center font-mono">{F(dadosB?.totais?.estoque_7d)}</td>
+              <td className="px-2 py-2 border border-slate-700 text-center">
+                <Delta a={dadosA?.totais?.estoque_7d} b={dadosB?.totais?.estoque_7d} invert />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────
 export default function Monitoramento() {
-  const { isAdmin }               = useAuth()
-  const queryClient               = useQueryClient()
-  const [uploadSel, setUploadSel] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [erro, setErro]           = useState('')
-  const [sortCol, setSortCol]     = useState(null)
-  const [sortAsc, setSortAsc]     = useState(true)
+  const { isAdmin }                   = useAuth()
+  const queryClient                   = useQueryClient()
+  const [uploadSel,  setUploadSel]    = useState(null)
+  const [compareId,  setCompareId]    = useState(null)
+  const [comparing,  setComparing]    = useState(false)
+  const [uploading,  setUploading]    = useState(false)
+  const [erro,       setErro]         = useState('')
+  const [sortCol,    setSortCol]      = useState(null)
+  const [sortAsc,    setSortAsc]      = useState(true)
   const inputRef = useRef()
 
   const { data: uploads = [] } = useQuery({
@@ -55,10 +258,23 @@ export default function Monitoramento() {
     if (uploads.length && !uploadSel) setUploadSel(uploads[0].id)
   }, [uploads])
 
+  // Quando ativa o modo comparativo, pré-seleciona o segundo upload
+  useEffect(() => {
+    if (comparing && !compareId && uploads.length > 1) {
+      setCompareId(uploads[1].id)
+    }
+  }, [comparing, uploads])
+
   const { data: dados, isLoading: loading } = useQuery({
     queryKey: ['monitoramento-dados', uploadSel],
     queryFn: () => api.get(`/api/monitoramento/upload/${uploadSel}`).then(r => r.data),
     enabled: !!uploadSel,
+  })
+
+  const { data: dadosCompare, isLoading: loadingCompare } = useQuery({
+    queryKey: ['monitoramento-dados', compareId],
+    queryFn: () => api.get(`/api/monitoramento/upload/${compareId}`).then(r => r.data),
+    enabled: !!compareId && comparing,
   })
 
   const carregarUploads = () => queryClient.invalidateQueries({ queryKey: ['monitoramento-uploads'] })
@@ -99,7 +315,6 @@ export default function Monitoramento() {
   }
 
   const fmtDate = d => d || '—'
-  const F = n => n?.toLocaleString('pt-BR') ?? '0'
 
   const sortedDados = dados?.dados ? [...dados.dados].sort((a, b) => {
     if (!sortCol) return 0
@@ -110,24 +325,27 @@ export default function Monitoramento() {
   }) : []
 
   const COLS = [
-    { key: 'ds',                   label: 'DS',             align: 'left', bold: true },
-    { key: 'supervisor',           label: 'Supervisor',     align: 'left' },
-    { key: 'regiao',               label: 'Região',         align: 'left' },
-    { key: 'rdc_ds',               label: 'RDC→DS',         align: 'center', num: true },
-    { key: 'estoque_ds',           label: 'Est. DS',        align: 'center', num: true },
-    { key: 'estoque_motorista',    label: 'Est. Mot.',      align: 'center', num: true },
-    { key: 'estoque_total',        label: 'Est. Total',     align: 'center', num: true },
-    { key: 'estoque_7d',           label: '>7d',            align: 'center', num: true, danger: true },
-    { key: 'recebimento',          label: 'Recebido',       align: 'center', num: true },
-    { key: 'volume_total',         label: 'Vol. Total',     align: 'center', num: true },
-    { key: 'pendencia_scan',       label: 'Pendência',      align: 'center', num: true },
-    { key: 'volume_saida',         label: 'Saída',          align: 'center', num: true },
-    { key: 'taxa_expedicao',       label: 'Taxa Exp.',      align: 'center', pct: true },
-    { key: 'qtd_motoristas',       label: 'DV',             align: 'center', num: true },
-    { key: 'eficiencia_pessoal',   label: 'Ef. Pessoal',    align: 'center', dec: true },
-    { key: 'entregue',             label: 'Entregue',       align: 'center', num: true },
-    { key: 'eficiencia_assinatura', label: 'Ef. Assin.',    align: 'center', dec: true },
+    { key: 'ds',                    label: 'DS',          align: 'left', bold: true },
+    { key: 'supervisor',            label: 'Supervisor',  align: 'left' },
+    { key: 'regiao',                label: 'Região',      align: 'left' },
+    { key: 'rdc_ds',                label: 'RDC→DS',      align: 'center', num: true },
+    { key: 'estoque_ds',            label: 'Est. DS',     align: 'center', num: true },
+    { key: 'estoque_motorista',     label: 'Est. Mot.',   align: 'center', num: true },
+    { key: 'estoque_total',         label: 'Est. Total',  align: 'center', num: true },
+    { key: 'estoque_7d',            label: '>7d',         align: 'center', num: true, danger: true },
+    { key: 'recebimento',           label: 'Recebido',    align: 'center', num: true },
+    { key: 'volume_total',          label: 'Vol. Total',  align: 'center', num: true },
+    { key: 'pendencia_scan',        label: 'Pendência',   align: 'center', num: true },
+    { key: 'volume_saida',          label: 'Saída',       align: 'center', num: true },
+    { key: 'taxa_expedicao',        label: 'Taxa Exp.',   align: 'center', pct: true },
+    { key: 'qtd_motoristas',        label: 'DV',          align: 'center', num: true },
+    { key: 'eficiencia_pessoal',    label: 'Ef. Pessoal', align: 'center', dec: true },
+    { key: 'entregue',              label: 'Entregue',    align: 'center', num: true },
+    { key: 'eficiencia_assinatura', label: 'Ef. Assin.',  align: 'center', dec: true },
   ]
+
+  const uploadA = uploads.find(u => u.id === uploadSel)
+  const uploadB = uploads.find(u => u.id === compareId)
 
   return (
     <div>
@@ -138,6 +356,7 @@ export default function Monitoramento() {
           <p className="text-white/60 text-xs">Isso pode levar alguns segundos</p>
         </div>
       )}
+
       <div className="flex items-start justify-between">
         <PageHeader icon="📊" title="Monitoramento Diário" subtitle="Controle operacional diário por DS — estoque, expedição, entrega" />
         <div className="flex gap-2">
@@ -164,7 +383,10 @@ export default function Monitoramento() {
       {/* Seletor de upload */}
       {uploads.length > 0 && (
         <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3">
-          <span className="text-xs font-semibold text-slate-500 uppercase">Upload</span>
+          {/* Data A */}
+          <span className="text-xs font-semibold text-slate-500 uppercase shrink-0">
+            {comparing ? 'Data A' : 'Upload'}
+          </span>
           <select value={uploadSel || ''} onChange={e => setUploadSel(Number(e.target.value))}
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
             {uploads.map(u => (
@@ -173,11 +395,43 @@ export default function Monitoramento() {
               </option>
             ))}
           </select>
-          <button onClick={() => carregarUploads()} className="p-1.5 text-slate-400 hover:text-slate-600">
+
+          {/* Data B (modo comparativo) */}
+          {comparing && (
+            <>
+              <span className="text-slate-400 font-bold text-sm shrink-0">vs</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase shrink-0">Data B</span>
+              <select value={compareId || ''} onChange={e => setCompareId(Number(e.target.value))}
+                className="px-3 py-1.5 border border-imile-300 rounded-lg text-sm bg-imile-50 flex-1 max-w-xs text-imile-700 font-medium">
+                {uploads.filter(u => u.id !== uploadSel).map(u => (
+                  <option key={u.id} value={u.id}>
+                    {fmtDate(u.data_ref)} — {u.total_ds} bases
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          {/* Botão comparar */}
+          {uploads.length > 1 && (
+            <button
+              onClick={() => { setComparing(v => !v); if (comparing) setCompareId(null) }}
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0',
+                comparing
+                  ? 'bg-imile-500 text-white hover:bg-imile-600'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              )}>
+              <GitCompare size={13} />
+              {comparing ? 'Comparando' : 'Comparar'}
+            </button>
+          )}
+
+          <button onClick={() => carregarUploads()} className="p-1.5 text-slate-400 hover:text-slate-600 shrink-0">
             <RefreshCw size={14} />
           </button>
-          {isAdmin && uploadSel && (
-            <button onClick={handleDelete} className="p-1.5 text-red-400 hover:text-red-600" title="Excluir upload">
+          {isAdmin && uploadSel && !comparing && (
+            <button onClick={handleDelete} className="p-1.5 text-red-400 hover:text-red-600 shrink-0" title="Excluir upload">
               <Trash2 size={14} />
             </button>
           )}
@@ -192,116 +446,135 @@ export default function Monitoramento() {
         </Card>
       )}
 
-      {loading && (
+      {(loading || (comparing && loadingCompare)) && (
         <div className="flex items-center gap-2 text-slate-500 mt-8 justify-center">
           <Loader size={18} className="animate-spin" /> Carregando...
         </div>
       )}
 
-      {!loading && dados && <>
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-          <KPI label="Volume Total" value={F(dados.totais.volume_total)} icon={Package} color="#095EF7" />
-          <KPI label="Recebimento" value={F(dados.totais.recebimento)} icon={TrendingUp} color="#16A34A" />
-          <KPI label="Saída" value={F(dados.totais.volume_saida)} icon={Truck} color="#7C3AED" />
-          <KPI label="Taxa Expedição" value={`${(dados.totais.taxa_expedicao * 100).toFixed(1)}`} suffix="%" icon={TrendingUp}
-            color={dados.totais.taxa_expedicao >= 0.9 ? '#16A34A' : dados.totais.taxa_expedicao >= 0.7 ? '#EA580C' : '#DC2626'} />
-          <KPI label="Entregue" value={F(dados.totais.entregue)} icon={Package} color="#0891B2" />
-          <KPI label="Estoque >7d" value={F(dados.totais.estoque_7d)} icon={AlertTriangle}
-            color={dados.totais.estoque_7d > 100 ? '#DC2626' : '#334155'} />
-        </div>
+      {/* ── MODO COMPARATIVO ─────────────────────────────────── */}
+      {comparing && dados && dadosCompare && !loading && !loadingCompare && (
+        <>
+          {/* Cabeçalho comparativo */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 bg-slate-800 text-white rounded-xl px-4 py-2 text-center text-sm font-semibold">
+              📅 Data A — {uploadA?.data_ref || '—'}
+            </div>
+            <div className="text-slate-400 font-bold text-lg">vs</div>
+            <div className="flex-1 bg-imile-600 text-white rounded-xl px-4 py-2 text-center text-sm font-semibold">
+              📅 Data B — {uploadB?.data_ref || '—'}
+            </div>
+          </div>
 
-        {/* Tabela principal */}
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-6">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-800 text-white">
-                  {COLS.map(col => (
-                    <th key={col.key}
-                      onClick={() => handleSort(col.key)}
-                      className={`px-2 py-2.5 border border-slate-700 cursor-pointer hover:bg-slate-700 whitespace-nowrap
-                        ${col.align === 'left' ? 'text-left' : 'text-center'}`}>
-                      {col.label}
-                      {sortCol === col.key && (sortAsc ? ' ↑' : ' ↓')}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedDados.map((row, i) => (
-                  <tr key={i} className={`${i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'} hover:bg-imile-50/60`}>
-                    {COLS.map(col => {
-                      const val = row[col.key]
+          {/* KPIs comparativos */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <KPICompare label="Taxa Expedição"
+              a={dados.totais.taxa_expedicao} b={dadosCompare.totais.taxa_expedicao}
+              fmt={v => `${((v || 0) * 100).toFixed(1)}%`} />
+            <KPICompare label="Entregue"
+              a={dados.totais.entregue} b={dadosCompare.totais.entregue}
+              fmt={F} />
+            <KPICompare label="Volume Saída"
+              a={dados.totais.volume_saida} b={dadosCompare.totais.volume_saida}
+              fmt={F} />
+            <KPICompare label="Estoque >7d"
+              a={dados.totais.estoque_7d} b={dadosCompare.totais.estoque_7d}
+              fmt={F} invertDelta />
+          </div>
 
-                      if (col.pct) return <TaxaCell key={col.key} value={val || 0} />
+          {/* Tabela comparativa por DS */}
+          <TabelaComparativo dadosA={dados} dadosB={dadosCompare} />
+        </>
+      )}
 
-                      if (col.danger && val > 0) {
-                        return (
+      {/* ── MODO NORMAL ──────────────────────────────────────── */}
+      {!comparing && !loading && dados && (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+            <KPI label="Volume Total"   value={F(dados.totais.volume_total)}   icon={Package}       color="#095EF7" />
+            <KPI label="Recebimento"    value={F(dados.totais.recebimento)}     icon={TrendingUp}    color="#16A34A" />
+            <KPI label="Saída"          value={F(dados.totais.volume_saida)}    icon={Truck}         color="#7C3AED" />
+            <KPI label="Taxa Expedição" value={`${(dados.totais.taxa_expedicao * 100).toFixed(1)}`} suffix="%" icon={TrendingUp}
+              color={dados.totais.taxa_expedicao >= 0.9 ? '#16A34A' : dados.totais.taxa_expedicao >= 0.7 ? '#EA580C' : '#DC2626'} />
+            <KPI label="Entregue"       value={F(dados.totais.entregue)}        icon={Package}       color="#0891B2" />
+            <KPI label="Estoque >7d"    value={F(dados.totais.estoque_7d)}      icon={AlertTriangle}
+              color={dados.totais.estoque_7d > 100 ? '#DC2626' : '#334155'} />
+          </div>
+
+          {/* Tabela principal */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-6">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-800 text-white">
+                    {COLS.map(col => (
+                      <th key={col.key} onClick={() => handleSort(col.key)}
+                        className={`px-2 py-2.5 border border-slate-700 cursor-pointer hover:bg-slate-700 whitespace-nowrap
+                          ${col.align === 'left' ? 'text-left' : 'text-center'}`}>
+                        {col.label}{sortCol === col.key && (sortAsc ? ' ↑' : ' ↓')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedDados.map((row, i) => (
+                    <tr key={i} className={`${i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'} hover:bg-imile-50/60`}>
+                      {COLS.map(col => {
+                        const val = row[col.key]
+                        if (col.pct) return <TaxaCell key={col.key} value={val || 0} />
+                        if (col.danger && val > 0) return (
                           <td key={col.key} className="px-2 py-2 text-center border border-slate-200 font-mono font-bold text-xs text-red-600 bg-red-50">
                             {(val || 0).toLocaleString('pt-BR')}
                           </td>
                         )
-                      }
-
-                      if (col.dec) {
-                        return (
+                        if (col.dec) return (
                           <td key={col.key} className="px-2 py-2 text-center border border-slate-200 font-mono text-xs text-slate-600">
                             {val ? val.toFixed(1) : '0'}
                           </td>
                         )
-                      }
-
-                      if (col.num) {
-                        return (
+                        if (col.num) return (
                           <td key={col.key} className="px-2 py-2 text-center border border-slate-200 font-mono text-xs text-slate-700">
                             {(val || 0).toLocaleString('pt-BR')}
                           </td>
                         )
-                      }
+                        return (
+                          <td key={col.key} className={`px-2 py-2 border border-slate-200 text-xs
+                            ${col.bold ? 'font-semibold text-slate-800' : 'text-slate-600'}
+                            ${col.align === 'left' ? 'text-left' : 'text-center'}`}>
+                            {val || '—'}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
 
-                      return (
-                        <td key={col.key} className={`px-2 py-2 border border-slate-200 text-xs
-                          ${col.bold ? 'font-semibold text-slate-800' : 'text-slate-600'}
-                          ${col.align === 'left' ? 'text-left' : 'text-center'}`}>
-                          {val || '—'}
-                        </td>
-                      )
-                    })}
+                  {/* Linha de total */}
+                  <tr className="bg-slate-800 text-white font-bold">
+                    <td className="px-2 py-2 border border-slate-700 text-xs">TOTAL</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center">—</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center">—</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.rdc_ds)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_ds)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_motorista)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_total)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_7d)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.recebimento)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.volume_total)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">—</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.volume_saida)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{(dados.totais.taxa_expedicao * 100).toFixed(1)}%</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.qtd_motoristas)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{dados.totais.eficiencia_pessoal?.toFixed(1)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.entregue)}</td>
+                    <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{dados.totais.eficiencia_assinatura?.toFixed(1)}</td>
                   </tr>
-                ))}
-
-                {/* Linha de total */}
-                <tr className="bg-slate-800 text-white font-bold">
-                  <td className="px-2 py-2 border border-slate-700 text-xs">TOTAL</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center">—</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center">—</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.rdc_ds)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_ds)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_motorista)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_total)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.estoque_7d)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.recebimento)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.volume_total)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">—</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.volume_saida)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">
-                    {(dados.totais.taxa_expedicao * 100).toFixed(1)}%
-                  </td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.qtd_motoristas)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">
-                    {dados.totais.eficiencia_pessoal?.toFixed(1)}
-                  </td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">{F(dados.totais.entregue)}</td>
-                  <td className="px-2 py-2 border border-slate-700 text-xs text-center font-mono">
-                    {dados.totais.eficiencia_assinatura?.toFixed(1)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </>}
+        </>
+      )}
     </div>
   )
 }
