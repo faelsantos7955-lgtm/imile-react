@@ -6,17 +6,17 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Upload, X, FileSpreadsheet, PackageX, ChevronUp, ChevronDown,
-  TruckIcon, PackageCheck, AlertTriangle, BarChart2,
+  TruckIcon, PackageCheck, AlertTriangle, Download,
 } from 'lucide-react'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
-  KpiCard, Card, SectionHeader, EmptyState, Alert, Badge, Button,
+  KpiCard, Card, SectionHeader, EmptyState, Alert, Button,
 } from '../components/ui'
 import clsx from 'clsx'
 
-const fmt  = (n) => (n ?? 0).toLocaleString('pt-BR')
-const pct  = (n) => `${(n ?? 0).toFixed(1)}%`
+const fmt = (n) => (n ?? 0).toLocaleString('pt-BR')
+const pct = (n) => `${(n ?? 0).toFixed(1)}%`
 
 // ── Upload Panel ───────────────────────────────────────────────
 function UploadPanel({ onClose, onSuccess }) {
@@ -97,96 +97,166 @@ function UploadPanel({ onClose, onSuccess }) {
   )
 }
 
-// ── Heatmap supervisor × data ──────────────────────────────────
-function TabelaTendencia({ rows, thresholdLabel }) {
-  if (!rows || rows.length === 0) return <EmptyState icon={BarChart2} title="Sem dados de tendência" />
+// ── Tabela Sheet1 — pivot Supervisor → DS × Datas ─────────────
+function TabelaSheet1({ tendencia, porSupervisor, porDs, thresholdLabel }) {
+  if (!tendencia?.length) return <EmptyState icon={PackageX} title="Sem dados de tendência" />
 
-  // Agrupar por (supervisor, data) somando DS
-  const supDateMap: Record<string, Record<string, number>> = {}
-  const dateSet = new Set<string>()
-  rows.forEach(r => {
-    if (!supDateMap[r.supervisor]) supDateMap[r.supervisor] = {}
-    supDateMap[r.supervisor][r.data] = (supDateMap[r.supervisor][r.data] || 0) + r.total
+  // Pivot: supervisor → ds → date → count
+  const pivot = {}
+  const dateSet = new Set()
+  tendencia.forEach(r => {
+    if (!pivot[r.supervisor]) pivot[r.supervisor] = {}
+    if (!pivot[r.supervisor][r.ds]) pivot[r.supervisor][r.ds] = {}
+    pivot[r.supervisor][r.ds][r.data] = (pivot[r.supervisor][r.ds][r.data] || 0) + r.total
     dateSet.add(r.data)
   })
 
-  const datas        = [...dateSet].sort()
-  const datasVisiveis = datas.slice(-20)
-  const sups = Object.keys(supDateMap).sort((a, b) => {
-    const ta = Object.values(supDateMap[a]).reduce((s, v) => s + v, 0)
-    const tb = Object.values(supDateMap[b]).reduce((s, v) => s + v, 0)
-    return tb - ta
-  })
+  const datas = [...dateSet].sort()
+  const datasVisiveis = datas.slice(-20) // últimas 20 datas
 
-  const allVals = Object.values(supDateMap).flatMap(m => Object.values(m))
-  const maxVal  = allVals.length ? Math.max(...allVals) : 1
+  // Lookups
+  const supLookup = {}
+  porSupervisor?.forEach(r => { supLookup[r.supervisor] = r })
+  const dsLookup = {}
+  porDs?.forEach(r => { dsLookup[`${r.supervisor}|${r.ds}`] = r })
+
+  // Ordem supervisores por total desc
+  const sups = Object.keys(pivot).sort((a, b) =>
+    (supLookup[b]?.total || 0) - (supLookup[a]?.total || 0)
+  )
+
+  // Escala de cor
+  const allVals = tendencia.map(r => r.total)
+  const maxVal  = Math.max(...allVals, 1)
 
   function cellColor(val) {
-    if (!val) return 'bg-slate-50 text-slate-300'
-    const r = Math.min(val / maxVal, 1)
+    if (!val) return ''
+    const r = val / maxVal
     if (r >= 0.75) return 'bg-red-500 text-white font-semibold'
     if (r >= 0.50) return 'bg-red-300 text-red-900 font-medium'
-    if (r >= 0.25) return 'bg-amber-200 text-amber-900'
+    if (r >= 0.25) return 'bg-amber-200 text-amber-800'
     return 'bg-amber-50 text-amber-700'
   }
 
-  const fmtData = (iso) => { const [, m, d] = iso.split('-'); return `${d}/${m}` }
+  const fmtData = iso => { const [, m, d] = iso.split('-'); return `${d}/${m}` }
+
+  // Totais por data (rodapé)
+  const dateGrandTotals = {}
+  datasVisiveis.forEach(d => {
+    dateGrandTotals[d] = sups.reduce((s, sup) =>
+      s + Object.values(pivot[sup] || {}).reduce((a, dsMap) => a + (dsMap[d] || 0), 0), 0)
+  })
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
       <table className="text-[11px] w-full border-collapse">
-        <thead>
+        <thead className="sticky top-0 z-20">
           <tr className="bg-slate-800">
-            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-white/60 sticky left-0 bg-slate-800 z-10 min-w-[130px]">
+            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-white/60 sticky left-0 bg-slate-800 z-30 min-w-[120px] border-r border-white/10">
               Supervisor
             </th>
+            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-white/60 sticky left-[120px] bg-slate-800 z-30 min-w-[100px] border-r border-white/10">
+              DS
+            </th>
+            <th className="px-2 py-2 text-center text-[10px] font-bold text-red-300 min-w-[52px] whitespace-nowrap">
+              {thresholdLabel}
+            </th>
             {datasVisiveis.map(d => (
-              <th key={d} className="px-1 py-2 text-center text-[10px] font-bold text-white/60 min-w-[42px] whitespace-nowrap">
+              <th key={d} className="px-1 py-2 text-center text-[10px] font-bold text-white/60 min-w-[40px] whitespace-nowrap">
                 {fmtData(d)}
               </th>
             ))}
-            <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-white sticky right-0 bg-slate-800 z-10">
+            <th className="px-3 py-2 text-right text-[10px] font-bold text-white sticky right-0 bg-slate-800 z-30 border-l border-white/10">
               Total
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+
+        <tbody>
           {sups.map(sup => {
-            const supData  = supDateMap[sup] || {}
-            const totalSup = Object.values(supData).reduce((s, v) => s + v, 0)
+            const supInf   = supLookup[sup] || { total: 0, grd10d: 0 }
+            const supDsMap = pivot[sup] || {}
+            const dsList   = Object.keys(supDsMap).sort((a, b) =>
+              Object.values(supDsMap[b]).reduce((s,v)=>s+v,0) -
+              Object.values(supDsMap[a]).reduce((s,v)=>s+v,0)
+            )
+
+            // Totais do supervisor por data visível
+            const supDateTotals = {}
+            datasVisiveis.forEach(d => {
+              supDateTotals[d] = dsList.reduce((s, ds) => s + (supDsMap[ds]?.[d] || 0), 0)
+            })
+
             return (
-              <tr key={sup} className="hover:bg-slate-50/60 transition-colors">
-                <td className="px-3 py-1.5 font-semibold text-slate-700 sticky left-0 bg-white z-10 border-r border-slate-100">
-                  {sup}
-                </td>
-                {datasVisiveis.map(d => {
-                  const val = supData[d] || 0
-                  return (
-                    <td key={d} className={clsx('px-1 py-1.5 text-center font-mono transition-colors', cellColor(val))}>
-                      {val || '—'}
+              <>
+                {/* Linha supervisor */}
+                <tr key={`sup-${sup}`} className="bg-slate-700 border-t-2 border-slate-600">
+                  <td className="px-3 py-2 font-bold text-white sticky left-0 bg-slate-700 z-10 border-r border-slate-600">
+                    {sup}
+                  </td>
+                  <td className="px-3 py-2 sticky left-[120px] bg-slate-700 z-10 border-r border-slate-600" />
+                  <td className="px-2 py-2 text-center font-mono font-bold text-red-300">
+                    {supInf.grd10d || '—'}
+                  </td>
+                  {datasVisiveis.map(d => (
+                    <td key={d} className="px-1 py-2 text-center font-mono text-white/70">
+                      {supDateTotals[d] || '—'}
                     </td>
+                  ))}
+                  <td className="px-3 py-2 text-right font-mono font-bold text-white sticky right-0 bg-slate-700 z-10 border-l border-slate-600">
+                    {fmt(supInf.total)}
+                  </td>
+                </tr>
+
+                {/* Linhas DS */}
+                {dsList.map(ds => {
+                  const dsDateMap = supDsMap[ds] || {}
+                  const dsInf     = dsLookup[`${sup}|${ds}`] || { total: 0, grd10d: 0 }
+                  const dsTotal   = Object.values(dsDateMap).reduce((s,v)=>s+v,0)
+                  return (
+                    <tr key={`ds-${sup}-${ds}`} className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+                      <td className="sticky left-0 bg-white z-10 border-r border-slate-100" />
+                      <td className="px-3 py-1.5 text-slate-700 font-medium sticky left-[120px] bg-white z-10 border-r border-slate-100">
+                        {ds}
+                      </td>
+                      <td className="px-2 py-1.5 text-center font-mono text-red-600">
+                        {dsInf.grd10d || '—'}
+                      </td>
+                      {datasVisiveis.map(d => {
+                        const val = dsDateMap[d] || 0
+                        return (
+                          <td key={d} className={clsx('px-1 py-1.5 text-center font-mono transition-colors', val ? cellColor(val) : 'text-slate-200')}>
+                            {val || '—'}
+                          </td>
+                        )
+                      })}
+                      <td className="px-3 py-1.5 text-right font-mono font-semibold text-slate-700 sticky right-0 bg-white z-10 border-l border-slate-100">
+                        {fmt(dsTotal)}
+                      </td>
+                    </tr>
                   )
                 })}
-                <td className="px-3 py-1.5 text-right font-mono font-bold text-slate-800 sticky right-0 bg-white z-10 border-l border-slate-100">
-                  {fmt(totalSup)}
-                </td>
-              </tr>
+              </>
             )
           })}
         </tbody>
-        <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-          <tr>
-            <td className="px-3 py-2 font-bold text-xs text-slate-700 sticky left-0 bg-slate-50 z-10">Total</td>
-            {datasVisiveis.map(d => {
-              const tot = sups.reduce((s, sup) => s + (supDateMap[sup]?.[d] || 0), 0)
-              return (
-                <td key={d} className="px-1 py-2 text-center font-mono font-semibold text-slate-700 text-[10px]">
-                  {tot || '—'}
-                </td>
-              )
-            })}
-            <td className="px-3 py-2 text-right font-mono font-bold text-slate-900 text-xs sticky right-0 bg-slate-50 z-10">
-              {fmt(sups.reduce((s, sup) => s + Object.values(supDateMap[sup] || {}).reduce((a, v) => a + v, 0), 0))}
+
+        <tfoot className="sticky bottom-0 z-20">
+          <tr className="bg-slate-100 border-t-2 border-slate-300">
+            <td className="px-3 py-2 font-bold text-slate-800 text-xs sticky left-0 bg-slate-100 z-30 border-r border-slate-200">
+              Total
+            </td>
+            <td className="sticky left-[120px] bg-slate-100 z-30 border-r border-slate-200" />
+            <td className="px-2 py-2 text-center font-mono font-bold text-red-700 text-xs">
+              {fmt(porSupervisor?.reduce((s, r) => s + r.grd10d, 0) || 0)}
+            </td>
+            {datasVisiveis.map(d => (
+              <td key={d} className="px-1 py-2 text-center font-mono font-semibold text-slate-700 text-[10px]">
+                {dateGrandTotals[d] || '—'}
+              </td>
+            ))}
+            <td className="px-3 py-2 text-right font-mono font-bold text-slate-900 text-xs sticky right-0 bg-slate-100 z-30 border-l border-slate-200">
+              {fmt(porSupervisor?.reduce((s, r) => s + r.total, 0) || 0)}
             </td>
           </tr>
         </tfoot>
@@ -195,52 +265,7 @@ function TabelaTendencia({ rows, thresholdLabel }) {
   )
 }
 
-// ── Tabela supervisores ────────────────────────────────────────
-function TabelaSupervisores({ rows, thresholdLabel }) {
-  const totalGeral = rows.reduce((s, r) => s + r.total, 0)
-  return (
-    <div className="rounded-xl overflow-hidden border border-slate-100">
-      <table className="w-full text-xs">
-        <thead className="bg-slate-800">
-          <tr>
-            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-white/60">Supervisor</th>
-            <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-white/60">Total</th>
-            <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-red-300">{thresholdLabel}</th>
-            <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-white/60">% do Total</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-50">
-          {rows.map((r, i) => {
-            const pctTot = totalGeral > 0 ? (r.total / totalGeral * 100) : 0
-            const pctGrd = r.total > 0 ? (r.grd10d / r.total * 100) : 0
-            return (
-              <tr key={i} className="hover:bg-slate-50/60 transition-colors">
-                <td className="px-3 py-2.5 font-semibold text-slate-800">{r.supervisor}</td>
-                <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">{fmt(r.total)}</td>
-                <td className="px-3 py-2.5 text-right font-mono">
-                  <span className={clsx('font-semibold', pctGrd > 20 ? 'text-red-600' : pctGrd > 5 ? 'text-amber-600' : 'text-slate-600')}>
-                    {fmt(r.grd10d)}
-                    {r.total > 0 && <span className="ml-1 font-normal text-slate-400 text-[10px]">({pct(pctGrd)})</span>}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-imile-400 rounded-full" style={{ width: `${pctTot}%` }} />
-                    </div>
-                    <span className="font-mono text-[11px] text-slate-400 w-8 text-right">{pct(pctTot)}</span>
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ── Tabela DS ──────────────────────────────────────────────────
+// ── Tabela DS paginada ─────────────────────────────────────────
 function TabelaDs({ rows, thresholdLabel }) {
   const [search,  setSearch]  = useState('')
   const [sortCol, setSortCol] = useState('total')
@@ -248,14 +273,13 @@ function TabelaDs({ rows, thresholdLabel }) {
   const [page,    setPage]    = useState(0)
   const PER_PAGE = 15
 
-  const toggle = (col) => {
+  const toggle = col => {
     if (sortCol === col) setSortAsc(v => !v); else { setSortCol(col); setSortAsc(false) }
     setPage(0)
   }
 
   const filtered = rows
-    .filter(r => r.ds?.toLowerCase().includes(search.toLowerCase()) ||
-                 r.supervisor?.toLowerCase().includes(search.toLowerCase()))
+    .filter(r => (r.ds + r.supervisor).toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       const v = sortAsc ? 1 : -1
       if (typeof a[sortCol] === 'string') return v * a[sortCol].localeCompare(b[sortCol])
@@ -268,7 +292,7 @@ function TabelaDs({ rows, thresholdLabel }) {
   const Th = ({ col, children, right }) => (
     <th onClick={() => toggle(col)}
       className={clsx(
-        'px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none transition-colors',
+        'px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none',
         right ? 'text-right' : 'text-left',
         sortCol === col ? 'text-white' : 'text-white/60 hover:text-white/90'
       )}>
@@ -288,10 +312,10 @@ function TabelaDs({ rows, thresholdLabel }) {
         <table className="w-full text-xs">
           <thead className="bg-slate-800">
             <tr>
-              <Th col="ds">DS</Th>
               <Th col="supervisor">Supervisor</Th>
-              <Th col="total" right>Total</Th>
+              <Th col="ds">DS</Th>
               <Th col="grd10d" right>{thresholdLabel}</Th>
+              <Th col="total" right>Total</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -299,14 +323,14 @@ function TabelaDs({ rows, thresholdLabel }) {
               const pctGrd = r.total > 0 ? (r.grd10d / r.total * 100) : 0
               return (
                 <tr key={i} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-3 py-2.5 font-semibold text-slate-800">{r.ds}</td>
                   <td className="px-3 py-2.5 text-slate-500">{r.supervisor}</td>
-                  <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">{fmt(r.total)}</td>
+                  <td className="px-3 py-2.5 font-semibold text-slate-800">{r.ds}</td>
                   <td className="px-3 py-2.5 text-right font-mono">
                     <span className={clsx('font-semibold', pctGrd > 20 ? 'text-red-600' : pctGrd > 5 ? 'text-amber-600' : 'text-slate-600')}>
                       {fmt(r.grd10d)}
                     </span>
                   </td>
+                  <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">{fmt(r.total)}</td>
                 </tr>
               )
             })}
@@ -334,7 +358,7 @@ function TabelaDs({ rows, thresholdLabel }) {
 // ── Tabela processo ────────────────────────────────────────────
 function TabelaProcesso({ rows }) {
   const total = rows.reduce((s, r) => s + r.total, 0)
-  const COLORS = ['bg-imile-400', 'bg-blue-400', 'bg-violet-400', 'bg-sky-400', 'bg-slate-400', 'bg-cyan-400']
+  const COLORS = ['bg-imile-400','bg-blue-400','bg-violet-400','bg-sky-400','bg-slate-400','bg-cyan-400']
   return (
     <div className="space-y-2.5">
       {rows.map((r, i) => {
@@ -354,27 +378,14 @@ function TabelaProcesso({ rows }) {
   )
 }
 
-// ── Selector de upload ─────────────────────────────────────────
-function UploadSelector({ uploads, selected, onChange }) {
-  return (
-    <select value={selected || ''} onChange={e => onChange(Number(e.target.value))}
-      className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-400 text-slate-700">
-      {uploads.map(u => (
-        <option key={u.id} value={u.id}>
-          {u.data_ref} — {fmt(u.total)} waybills · {fmt(u.grd10d)} {u.threshold_col || '>10D'}
-        </option>
-      ))}
-    </select>
-  )
-}
-
 // ── Page ───────────────────────────────────────────────────────
 export default function Na() {
-  const { isAdmin }    = useAuth()
-  const qc             = useQueryClient()
-  const [showPanel, setShowPanel] = useState(false)
+  const { isAdmin }  = useAuth()
+  const qc           = useQueryClient()
+  const [showPanel,  setShowPanel]  = useState(false)
   const [selectedId, setSelectedId] = useState(null)
-  const [flashResult, setFlashResult] = useState(null)
+  const [flashResult,setFlashResult]= useState(null)
+  const [downloading,setDownloading]= useState(false)
 
   const { data: uploads = [], isLoading: loadingUploads } = useQuery({
     queryKey: ['na-uploads'],
@@ -397,13 +408,26 @@ export default function Na() {
     enabled:  !!selectedId,
   })
 
-  const upload = uploads.find(u => u.id === selectedId)
+  const upload        = uploads.find(u => u.id === selectedId)
   const thresholdLabel = upload?.threshold_col || '>10D'
 
   const handleUploadSuccess = (data) => {
     setFlashResult(data)
     qc.invalidateQueries({ queryKey: ['na-uploads'] })
     setSelectedId(data.upload_id)
+  }
+
+  const handleExcel = async () => {
+    if (!selectedId) return
+    setDownloading(true)
+    try {
+      const r = await api.get(`/api/excel/na/${selectedId}`, { responseType: 'blob' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([r.data]))
+      a.download = `NotArrived_${upload?.data_ref || 'relatorio'}.xlsx`
+      a.click()
+    } catch { alert('Erro ao gerar Excel') }
+    finally { setDownloading(false) }
   }
 
   if (loadingUploads) {
@@ -415,7 +439,7 @@ export default function Na() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 max-w-[1600px]">
 
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -428,9 +452,18 @@ export default function Na() {
             Pacotes expedidos que ainda não chegaram ao destino (有发未到)
           </p>
         </div>
-        <Button onClick={() => setShowPanel(true)} size="md">
-          <Upload size={14} /> Novo Upload
-        </Button>
+        <div className="flex gap-2">
+          {selectedId && (
+            <button onClick={handleExcel} disabled={downloading}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors">
+              <Download size={14} />
+              {downloading ? 'Gerando…' : 'Excel'}
+            </button>
+          )}
+          <Button onClick={() => setShowPanel(true)} size="md">
+            <Upload size={14} /> Novo Upload
+          </Button>
+        </div>
       </div>
 
       {/* Flash */}
@@ -440,7 +473,6 @@ export default function Na() {
         </Alert>
       )}
 
-      {/* Sem uploads */}
       {uploads.length === 0 ? (
         <EmptyState
           icon={PackageX}
@@ -453,7 +485,14 @@ export default function Na() {
           {/* Seletor */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-500 font-medium">Data de referência:</span>
-            <UploadSelector uploads={uploads} selected={selectedId} onChange={setSelectedId} />
+            <select value={selectedId || ''} onChange={e => setSelectedId(Number(e.target.value))}
+              className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-400 text-slate-700">
+              {uploads.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.data_ref} — {fmt(u.total)} waybills · {fmt(u.grd10d)} {u.threshold_col || '>10D'}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* KPIs */}
@@ -491,27 +530,49 @@ export default function Na() {
             </div>
           ) : detalhe && (
             <>
-              {/* Heatmap */}
-              <SectionHeader title="Tendência por Supervisor" />
+              {/* Sheet1 heatmap — supervisor × DS × datas */}
+              <SectionHeader title="Supervisor × DS × Data" />
               <Card padding={false}>
-                <TabelaTendencia rows={tendencia} thresholdLabel={thresholdLabel} />
+                <TabelaSheet1
+                  tendencia={tendencia}
+                  porSupervisor={detalhe.por_supervisor}
+                  porDs={detalhe.por_ds}
+                  thresholdLabel={thresholdLabel}
+                />
               </Card>
 
-              {/* Supervisor + Processo lado a lado */}
+              {/* Supervisor + Processo */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <Card title="Por Supervisor" subtitle={`Total e backlog ${thresholdLabel}`}>
-                  {detalhe.por_supervisor.length > 0
-                    ? <TabelaSupervisores rows={detalhe.por_supervisor} thresholdLabel={thresholdLabel} />
-                    : <EmptyState icon={PackageX} title="Sem dados" />}
-                </Card>
                 <Card title="Por Processo" subtitle="Tipo de transferência">
                   {detalhe.por_processo.length > 0
                     ? <TabelaProcesso rows={detalhe.por_processo} />
                     : <EmptyState icon={PackageX} title="Sem dados" />}
                 </Card>
+                <Card title={`Backlog ${thresholdLabel} por Supervisor`}>
+                  {detalhe.por_supervisor.length > 0
+                    ? (
+                      <div className="space-y-2">
+                        {detalhe.por_supervisor.map((r, i) => {
+                          const pctGrd = r.total > 0 ? (r.grd10d / r.total * 100) : 0
+                          return (
+                            <div key={i} className="flex items-center gap-3">
+                              <span className="w-24 text-xs text-slate-600 truncate shrink-0 font-medium">{r.supervisor}</span>
+                              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={clsx('h-full rounded-full', pctGrd > 20 ? 'bg-red-400' : pctGrd > 5 ? 'bg-amber-400' : 'bg-imile-400')}
+                                  style={{ width: `${Math.min(pctGrd, 100)}%` }} />
+                              </div>
+                              <span className="text-xs font-mono font-semibold text-slate-700 w-10 text-right">{fmt(r.grd10d)}</span>
+                              <span className="text-[11px] font-mono text-slate-400 w-12 text-right">{pct(pctGrd)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                    : <EmptyState icon={PackageX} title="Sem dados" />}
+                </Card>
               </div>
 
-              {/* DS */}
+              {/* DS detail */}
               <SectionHeader title="Por DS" />
               <Card>
                 {detalhe.por_ds.length > 0
