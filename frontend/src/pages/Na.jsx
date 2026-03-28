@@ -6,8 +6,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Upload, X, FileSpreadsheet, PackageX, ChevronUp, ChevronDown,
-  TruckIcon, PackageCheck, AlertTriangle, Download,
+  TruckIcon, PackageCheck, AlertTriangle, Download, History,
 } from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
@@ -378,10 +381,139 @@ function TabelaProcesso({ rows }) {
   )
 }
 
+// ── Histórico ──────────────────────────────────────────────────
+const SUP_COLORS = ['#095EF7','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#64748b','#92400e','#065f46']
+const fmtDate = iso => { const [,m,d] = (iso||'').split('-'); return `${d}/${m}` }
+
+function HistoricoNA({ uploads }) {
+  const uploadsSorted = [...uploads].sort((a, b) => a.data_ref?.localeCompare(b.data_ref))
+
+  const { data: supData = [], isLoading } = useQuery({
+    queryKey: ['na-historico-supervisores'],
+    queryFn:  () => api.get('/api/na/historico/supervisores').then(r => r.data),
+    enabled:  uploads.length > 1,
+  })
+
+  // Dados para gráfico global
+  const globalData = uploadsSorted.map(u => ({
+    data:    fmtDate(u.data_ref),
+    Total:   u.total,
+    [u.threshold_col || '>10D']: u.grd10d,
+  }))
+
+  // Pivot supervisor por data
+  const supervisores = [...new Set(supData.map(r => r.supervisor))].sort()
+  const supByDate = {}
+  supData.forEach(r => {
+    const d = fmtDate(r.data_ref)
+    if (!supByDate[d]) supByDate[d] = { data: d }
+    supByDate[d][r.supervisor] = r.total
+  })
+  const supChartData = Object.values(supByDate).sort((a, b) => a.data.localeCompare(b.data))
+
+  if (uploads.length < 2) {
+    return (
+      <EmptyState icon={History} title="Dados insuficientes"
+        description="São necessários pelo menos 2 uploads para exibir o histórico de tendência." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Gráfico global */}
+      <Card title="Evolução Global" subtitle="Total de waybills e pacotes em atraso por semana">
+        {isLoading ? (
+          <div className="h-48 flex items-center justify-center">
+            <span className="w-5 h-5 border-2 border-imile-500/30 border-t-imile-500 rounded-full animate-spin" />
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={globalData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="data" tick={{ fontSize: 11, fill: '#64748b' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} width={50} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                formatter={(v, name) => [v?.toLocaleString('pt-BR'), name]}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line type="monotone" dataKey="Total" stroke="#095EF7" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              {globalData[0] && Object.keys(globalData[0]).filter(k => k !== 'data' && k !== 'Total').map(key => (
+                <Line key={key} type="monotone" dataKey={key} stroke="#dc2626" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 4 }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
+
+      {/* Gráfico por supervisor */}
+      {supervisores.length > 0 && (
+        <Card title="Total por Supervisor" subtitle="Evolução semanal de waybills em atraso por supervisor">
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={supChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="data" tick={{ fontSize: 11, fill: '#64748b' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} width={50} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                formatter={(v, name) => [v?.toLocaleString('pt-BR'), name]}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {supervisores.map((sup, i) => (
+                <Line key={sup} type="monotone" dataKey={sup}
+                  stroke={SUP_COLORS[i % SUP_COLORS.length]}
+                  strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* Tabela resumo */}
+      <Card title="Resumo por Upload">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-800 text-white">
+                <th className="px-3 py-2.5 text-left font-bold">Data Ref.</th>
+                <th className="px-3 py-2.5 text-right font-bold">Total</th>
+                <th className="px-3 py-2.5 text-right font-bold">Em Atraso</th>
+                <th className="px-3 py-2.5 text-right font-bold">% Atraso</th>
+                <th className="px-3 py-2.5 text-right font-bold">Offloaded</th>
+                <th className="px-3 py-2.5 text-right font-bold">Confirmados</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {uploadsSorted.map((u, i) => {
+                const pctGrd = u.total > 0 ? (u.grd10d / u.total * 100) : 0
+                return (
+                  <tr key={u.id} className={i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}>
+                    <td className="px-3 py-2 font-semibold text-slate-800">{u.data_ref}</td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-700">{fmt(u.total)}</td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-red-600">{fmt(u.grd10d)}</td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      <span className={clsx('font-bold', pctGrd > 20 ? 'text-red-600' : pctGrd > 10 ? 'text-amber-600' : 'text-emerald-600')}>
+                        {pctGrd.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-600">{fmt(u.total_offload)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-emerald-700">{fmt(u.total_arrive)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ── Page ───────────────────────────────────────────────────────
 export default function Na() {
   const { isAdmin }  = useAuth()
   const qc           = useQueryClient()
+  const [view,       setView]       = useState('dados')
   const [showPanel,  setShowPanel]  = useState(false)
   const [selectedId, setSelectedId] = useState(null)
   const [flashResult,setFlashResult]= useState(null)
@@ -461,8 +593,21 @@ export default function Na() {
             Pacotes expedidos que ainda não chegaram ao destino (有发未到)
           </p>
         </div>
-        <div className="flex gap-2">
-          {selectedId && (
+        <div className="flex items-center gap-2">
+          {/* Tabs */}
+          <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs font-semibold">
+            <button onClick={() => setView('dados')}
+              className={clsx('px-3 py-1.5 rounded-md transition-colors', view === 'dados' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              Dados
+            </button>
+            {uploads.length > 1 && (
+              <button onClick={() => setView('historico')}
+                className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors', view === 'historico' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+                <History size={12} /> Histórico
+              </button>
+            )}
+          </div>
+          {selectedId && view === 'dados' && (
             <button onClick={handleExcel} disabled={downloading}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors">
               <Download size={14} />
@@ -482,7 +627,9 @@ export default function Na() {
         </Alert>
       )}
 
-      {uploads.length === 0 ? (
+      {view === 'historico' && <HistoricoNA uploads={uploads} />}
+
+      {view === 'dados' && (uploads.length === 0 ? (
         <EmptyState
           icon={PackageX}
           title="Nenhum upload encontrado"
@@ -591,7 +738,7 @@ export default function Na() {
             </>
           )}
         </>
-      )}
+      ))}
 
       {showPanel && (
         <UploadPanel onClose={() => setShowPanel(false)} onSuccess={handleUploadSuccess} />

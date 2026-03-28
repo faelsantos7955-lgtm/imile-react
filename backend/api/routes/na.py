@@ -63,6 +63,38 @@ def tendencia_upload(upload_id: int, user: dict = Depends(get_current_user)):
     return res.data or []
 
 
+@router.get("/historico/supervisores")
+def historico_supervisores(user: dict = Depends(get_current_user)):
+    """Retorna totais por supervisor em cada upload, para gráfico de tendência."""
+    sb = get_supabase()
+    uploads = (
+        sb.table("na_uploads").select("id,data_ref")
+        .order("data_ref")
+        .execute().data or []
+    )
+    if not uploads:
+        return []
+
+    uid_to_date = {u["id"]: u["data_ref"] for u in uploads}
+    sup_data = (
+        sb.table("na_por_supervisor").select("upload_id,supervisor,total,grd10d")
+        .in_("upload_id", list(uid_to_date.keys()))
+        .execute().data or []
+    )
+
+    result = [
+        {
+            "data_ref":   uid_to_date[row["upload_id"]],
+            "supervisor": row["supervisor"],
+            "total":      row["total"],
+            "grd10d":     row["grd10d"],
+        }
+        for row in sup_data
+        if row["upload_id"] in uid_to_date
+    ]
+    return sorted(result, key=lambda r: (r["data_ref"], r["supervisor"]))
+
+
 @router.delete("/upload/{upload_id}")
 def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
