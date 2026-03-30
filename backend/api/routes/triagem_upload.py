@@ -138,6 +138,25 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
     else:
         qtd_recebidos = 0
 
+    # Detalhes: apenas NOK e Fora (vetorizado, sem iterar OK)
+    mask_det = df["_status"].isin(["nok", "fora"])
+    df_det   = df[mask_det][["_wb", "_dest", "_deliv", "_city", "_status"]].copy()
+    if tem_arrival:
+        df_det["foi_recebido"] = df_det["_wb"].isin(arrival_set)
+    else:
+        df_det["foi_recebido"] = False
+    detalhes = [
+        {
+            "waybill":      r["_wb"],
+            "ds_destino":   r["_dest"],
+            "ds_entrega":   r["_deliv"],
+            "cidade":       r["_city"],
+            "status":       r["_status"],
+            "foi_recebido": bool(r["foi_recebido"]),
+        }
+        for _, r in df_det.iterrows()
+    ]
+
     # Por DS
     por_ds_rows = []
     for ds, grp in df.groupby("_dest"):
@@ -199,18 +218,19 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
         })
 
     return {
-        "data_ref":     data_ref,
-        "total":        total,
-        "qtd_ok":       qtd_ok,
-        "qtd_erro":     qtd_nok,
-        "qtd_fora":     qtd_fora,
-        "taxa":         taxa,
-        "tem_arrival":  tem_arrival,
+        "data_ref":      data_ref,
+        "total":         total,
+        "qtd_ok":        qtd_ok,
+        "qtd_erro":      qtd_nok,
+        "qtd_fora":      qtd_fora,
+        "taxa":          taxa,
+        "tem_arrival":   tem_arrival,
         "qtd_recebidos": qtd_recebidos,
-        "por_ds":          por_ds_rows,
-        "top5":            top5,
-        "por_supervisor":  por_sup_rows,
-        "por_cidade":      por_cidade_rows,
+        "por_ds":        por_ds_rows,
+        "top5":          top5,
+        "por_supervisor": por_sup_rows,
+        "por_cidade":    por_cidade_rows,
+        "detalhes":      detalhes,
     }
 
 
@@ -260,7 +280,7 @@ async def processar_triagem(
         existing = sb.table("triagem_uploads").select("id").eq("data_ref", data_ref).execute()
         if existing.data:
             old_id = existing.data[0]["id"]
-            for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade"):
+            for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
                 try:
                     sb.table(tbl).delete().eq("upload_id", old_id).execute()
                 except Exception:
@@ -302,6 +322,12 @@ async def processar_triagem(
         cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
         for i in range(0, len(cidades), 500):
             sb.table("triagem_por_cidade").insert(cidades[i:i + 500]).execute()
+
+        # Detalhes NOK + Fora (em lotes)
+        if resultado["detalhes"]:
+            det_rows = [{"upload_id": uid, **r} for r in resultado["detalhes"]]
+            for i in range(0, len(det_rows), 500):
+                sb.table("triagem_detalhes").insert(det_rows[i:i + 500]).execute()
 
     except HTTPException:
         raise

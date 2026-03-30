@@ -2,7 +2,8 @@
 api/routes/triagem.py — Dados de triagem
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from api.deps import get_supabase, get_current_user, require_admin, audit_log
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
 @router.delete("/upload/{upload_id}")
 def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb = get_supabase()
-    for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade"):
+    for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
         try:
             sb.table(tbl).delete().eq("upload_id", upload_id).execute()
         except Exception:
@@ -46,6 +47,32 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
     sb.table("triagem_uploads").delete().eq("id", upload_id).execute()
     audit_log("upload_deletado", f"triagem_uploads:{upload_id}", {}, user)
     return {"ok": True}
+
+
+@router.get("/upload/{upload_id}/detalhes")
+def detalhes_upload(
+    upload_id: int,
+    ds:           str           = Query(default=""),
+    status:       str           = Query(default=""),   # 'nok' | 'fora' | ''
+    foi_recebido: Optional[bool] = Query(default=None),
+    busca:        str           = Query(default=""),   # waybill parcial
+    page:         int           = Query(default=0, ge=0),
+    limit:        int           = Query(default=50, ge=1, le=200),
+    user: dict = Depends(get_current_user),
+):
+    """Waybills NOK/Fora de um upload com filtros e paginação."""
+    sb = get_supabase()
+    q  = sb.table("triagem_detalhes").select("*").eq("upload_id", upload_id)
+    if ds:
+        q = q.eq("ds_destino", ds.strip().upper())
+    if status in ("nok", "fora"):
+        q = q.eq("status", status)
+    if foi_recebido is not None:
+        q = q.eq("foi_recebido", foi_recebido)
+    if busca:
+        q = q.ilike("waybill", f"%{busca.strip()}%")
+    q = q.order("status").order("waybill").range(page * limit, page * limit + limit - 1)
+    return q.execute().data or []
 
 
 @router.get("/upload/{upload_id}/cidades/{ds}")

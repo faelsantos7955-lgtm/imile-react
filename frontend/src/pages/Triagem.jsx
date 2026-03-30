@@ -14,6 +14,7 @@ import {
 import {
   Download, Upload, Trash2, CheckCircle, XCircle,
   ChevronRight, ChevronDown, Loader, X, FileUp, PackageCheck,
+  List, Search, ChevronLeft,
 } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 
@@ -157,6 +158,153 @@ function UploadPanel({ onClose, onSuccess }) {
   )
 }
 
+// ── Modal de Detalhes por DS ──────────────────────────────────
+function DetalhesModal({ uploadId, ds, temArrival, onClose }) {
+  const [filtroStatus, setFiltroStatus]   = useState('')       // '' | 'nok' | 'fora'
+  const [filtroReceb, setFiltroReceb]     = useState(null)     // null | true | false
+  const [busca, setBusca]                 = useState('')
+  const [buscaInput, setBuscaInput]       = useState('')
+  const [page, setPage]                   = useState(0)
+  const LIMIT = 50
+
+  const params = new URLSearchParams({ page, limit: LIMIT })
+  if (ds)           params.set('ds', ds)
+  if (filtroStatus) params.set('status', filtroStatus)
+  if (filtroReceb !== null) params.set('foi_recebido', filtroReceb)
+  if (busca)        params.set('busca', busca)
+
+  const { data: rows = [], isLoading, isFetching } = useQuery({
+    queryKey: ['triagem-detalhes', uploadId, ds, filtroStatus, filtroReceb, busca, page],
+    queryFn: () => api.get(`/api/triagem/upload/${uploadId}/detalhes?${params}`).then(r => r.data),
+    keepPreviousData: true,
+  })
+
+  const resetFiltros = () => { setFiltroStatus(''); setFiltroReceb(null); setBusca(''); setBuscaInput(''); setPage(0) }
+
+  const StatusBadge = ({ s }) => s === 'nok'
+    ? <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-100 text-red-700">NOK</span>
+    : <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-100 text-orange-700">FORA</span>
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="font-semibold text-slate-800">Waybills com erro — <span className="text-imile-600">{ds}</span></p>
+            <p className="text-xs text-slate-400 mt-0.5">Apenas pacotes NOK e Fora · OK não são armazenados</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50">
+          {/* Status */}
+          <div className="flex gap-1">
+            {[['', 'Todos'], ['nok', 'NOK'], ['fora', 'Fora']].map(([v, l]) => (
+              <button key={v} onClick={() => { setFiltroStatus(v); setPage(0) }}
+                className={`px-3 py-1 text-xs rounded-lg font-medium border transition-all ${
+                  filtroStatus === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                }`}>{l}</button>
+            ))}
+          </div>
+          {/* Recebido (só se tem Arrival) */}
+          {temArrival && (
+            <div className="flex gap-1">
+              {[[null, 'Todos'], [true, 'Recebido'], [false, 'Não Recebido']].map(([v, l]) => (
+                <button key={String(v)} onClick={() => { setFiltroReceb(v); setPage(0) }}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium border transition-all ${
+                    filtroReceb === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
+                  }`}>{l}</button>
+              ))}
+            </div>
+          )}
+          {/* Busca */}
+          <div className="flex gap-1 flex-1 min-w-[180px]">
+            <input value={buscaInput} onChange={e => setBuscaInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { setBusca(buscaInput); setPage(0) } }}
+              placeholder="Buscar waybill..." className="px-3 py-1 text-xs border border-slate-200 rounded-lg flex-1 bg-white" />
+            <button onClick={() => { setBusca(buscaInput); setPage(0) }}
+              className="px-2 py-1 bg-imile-500 text-white rounded-lg hover:bg-imile-600">
+              <Search size={12} />
+            </button>
+            {busca && (
+              <button onClick={() => { setBusca(''); setBuscaInput(''); setPage(0) }}
+                className="px-2 py-1 text-slate-400 hover:text-slate-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tabela */}
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-slate-400">
+              <Loader size={16} className="animate-spin" /> Carregando...
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="text-center text-slate-400 text-sm py-12">Nenhum registro encontrado.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-800 text-white text-xs">
+                <tr>
+                  <th className="px-4 py-2.5 text-left">Waybill</th>
+                  <th className="px-4 py-2.5 text-center">Status</th>
+                  <th className="px-4 py-2.5 text-left">DS Destino</th>
+                  <th className="px-4 py-2.5 text-left">DS Entrega (real)</th>
+                  <th className="px-4 py-2.5 text-left">Cidade</th>
+                  {temArrival && <th className="px-4 py-2.5 text-center">Recebido</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.waybill + i} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{r.waybill}</td>
+                    <td className="px-4 py-2.5 text-center"><StatusBadge s={r.status} /></td>
+                    <td className="px-4 py-2.5 text-xs font-medium">{r.ds_destino || '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-red-600 font-medium">{r.ds_entrega || '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500">{r.cidade || '—'}</td>
+                    {temArrival && (
+                      <td className="px-4 py-2.5 text-center">
+                        {r.foi_recebido
+                          ? <CheckCircle size={14} className="text-emerald-500 mx-auto" />
+                          : <XCircle    size={14} className="text-slate-300 mx-auto" />}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer paginação */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
+          <span className="text-xs text-slate-400">
+            {isFetching ? 'Atualizando...' : `${rows.length} registros (pág. ${page + 1})`}
+          </span>
+          <div className="flex gap-2">
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+              className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-white">
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={() => setPage(p => p + 1)} disabled={rows.length < LIMIT}
+              className="p-1.5 rounded-lg border border-slate-200 disabled:opacity-40 hover:bg-white">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 // ── Componente principal ──────────────────────────────────────
 export default function Triagem() {
   const { isAdmin }               = useAuth()
@@ -165,6 +313,7 @@ export default function Triagem() {
   const [expanded, setExpanded]   = useState({})
   const [showPanel, setShowPanel] = useState(false)
   const [erro, setErro]           = useState('')
+  const [modalDs, setModalDs]     = useState(null)   // DS selecionada para modal de detalhes
 
   const { data: uploads = [] } = useQuery({
     queryKey: ['triagem-uploads'],
@@ -427,6 +576,7 @@ export default function Triagem() {
                                 <th className="px-3 py-2.5 text-center text-blue-300">Recebidos</th>
                                 <th className="px-3 py-2.5 text-center text-orange-300">NOK Rec.</th>
                               </>}
+                              <th className="px-3 py-2.5" />
                             </tr>
                           </thead>
                           <tbody>
@@ -459,6 +609,16 @@ export default function Triagem() {
                                           <PctBadge value={r.recebidos_nok} total={r.nok} />
                                         </td>
                                       </>}
+                                      <td className="px-3 py-2 text-center">
+                                        {(r.nok > 0 || r.fora > 0) && (
+                                          <button
+                                            onClick={e => { e.stopPropagation(); setModalDs(r.ds) }}
+                                            className="p-1 text-slate-400 hover:text-imile-600 hover:bg-imile-50 rounded transition-colors"
+                                            title="Ver waybills com erro">
+                                            <List size={13} />
+                                          </button>
+                                        )}
+                                      </td>
                                     </tr>
 
                                     {exp.open && !exp.loadingCity && (
@@ -537,6 +697,16 @@ export default function Triagem() {
             </>
           )}
         </>
+      )}
+
+      {/* Modal de detalhes por DS */}
+      {modalDs && sel && (
+        <DetalhesModal
+          uploadId={sel}
+          ds={modalDs}
+          temArrival={temArrival}
+          onClose={() => setModalDs(null)}
+        />
       )}
     </div>
   )
