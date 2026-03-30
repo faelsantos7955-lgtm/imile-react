@@ -10,7 +10,7 @@ import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
-  GitMerge, Target, ShieldAlert, Clock,
+  GitMerge, Target, ShieldAlert, Clock, PackageSearch,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -27,11 +27,12 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_ITEMS = [
-  { to: '/admin',          icon: Upload,   label: 'Upload / Processar' },
-  { to: '/admin/users',    icon: Users,    label: 'Solicitações' },
-  { to: '/admin/config',   icon: Settings, label: 'Configurações' },
-  { to: '/admin/auditlog', icon: History,  label: 'Histórico' },
-  { to: '/admin/metas',    icon: Target,   label: 'Metas por DS' },
+  { to: '/admin',          icon: Upload,        label: 'Upload / Processar' },
+  { to: '/admin/lote',     icon: PackageSearch, label: 'Carga em Lote' },
+  { to: '/admin/users',    icon: Users,         label: 'Solicitações' },
+  { to: '/admin/config',   icon: Settings,      label: 'Configurações' },
+  { to: '/admin/auditlog', icon: History,       label: 'Histórico' },
+  { to: '/admin/metas',    icon: Target,        label: 'Metas por DS' },
 ]
 
 const PAGE_TITLES = [
@@ -45,6 +46,7 @@ const PAGE_TITLES = [
   { path: '/na',              label: 'Not Arrived' },
   { path: '/not-arrived',     label: 'Not Arrived com Movimentação' },
   { path: '/admin',           label: 'Upload / Processar' },
+  { path: '/admin/lote',      label: 'Carga em Lote' },
   { path: '/admin/users',     label: 'Solicitações de Acesso' },
   { path: '/admin/config',    label: 'Configurações' },
   { path: '/admin/auditlog',  label: 'Histórico de Ações' },

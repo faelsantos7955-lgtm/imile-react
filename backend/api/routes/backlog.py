@@ -24,58 +24,90 @@ def _faixas_to_dict(row):
     return {f: row.get(col, 0) or 0 for f, col in zip(FAIXAS, DB_COLS)}
 
 
-def _ler_excel(conteudo: bytes):
+def _ler_excel(conteudo: bytes, supervisor_map: dict | None = None):
+    """
+    Lê o Excel de Backlog SLA.
+    Aceita tanto o formato exportado (Backlog_Details / Resume_)
+    quanto o arquivo raw chinês (Backlog Details / resume).
+    supervisor_map: {ds_upper: supervisor_nome} — usado quando CARGOS.SUPERVISOR não existe.
+    """
     buf = io.BytesIO(conteudo)
 
-    # Valida abas antes de tentar ler
     try:
         xl = pd.ExcelFile(buf)
     except Exception:
         raise ValueError("Arquivo inválido ou corrompido. Envie um .xlsx ou .xlsm gerado pelo sistema de SLA.")
+
     abas = xl.sheet_names
-    if 'Backlog_Details' not in abas:
+    abas_lower = {a.lower().replace(' ', '_'): a for a in abas}
+
+    # Aba de detalhes
+    aba_det = next(
+        (a for a in abas if a.lower().replace(' ', '_') == 'backlog_details'),
+        None,
+    )
+    if aba_det is None:
         raise ValueError(
-            f"Aba 'Backlog_Details' não encontrada. Abas presentes: {abas}. "
-            "Certifique-se de exportar o arquivo correto sem renomear as abas."
-        )
-    if 'Resume_' not in abas:
-        raise ValueError(
-            f"Aba 'Resume_' não encontrada. Abas presentes: {abas}. "
-            "O arquivo precisa conter as abas 'Backlog_Details' e 'Resume_'."
+            f"Aba de detalhes não encontrada. Abas presentes: {abas}. "
+            "Esperado: 'Backlog_Details' ou 'Backlog Details'."
         )
 
+    # Aba de resumo (opcional — apenas para orders)
+    aba_res = next(
+        (a for a in abas if a.lower().replace('_', '').replace(' ', '') in ('resume', 'resume')),
+        None,
+    )
+
     buf.seek(0)
-    df = pd.read_excel(buf, sheet_name='Backlog_Details',
+    df = pd.read_excel(buf, sheet_name=aba_det,
                        dtype={'waybillNo': str, 'range_backlog': str, 'process': str, 'actual_region': str})
     df.columns = df.columns.str.strip()
 
-    # Valida colunas obrigatórias
     cols_obrigatorias = ['waybillNo', 'range_backlog', 'process']
     faltando = [c for c in cols_obrigatorias if c not in df.columns]
     if faltando:
         raise ValueError(
-            f"Colunas obrigatórias ausentes na aba 'Backlog_Details': {faltando}. "
+            f"Colunas obrigatórias ausentes: {faltando}. "
             f"Colunas encontradas: {list(df.columns)}"
         )
 
     df.rename(columns={'CARGOS.SUPERVISOR': 'supervisor', 'actual_region': 'regiao',
                        'lastScanSite': 'ds', 'clientName': 'cliente',
                        'stageStatus': 'estagio', 'lastScanStatus': 'motivo'}, inplace=True)
-    df['supervisor']    = df['supervisor'].fillna('Sem Supervisor').str.strip().str.upper()
+
     df['ds']            = df['ds'].fillna('').str.strip().str.upper()
     df['regiao']        = df['regiao'].fillna('').str.strip()
     df['motivo']        = df['motivo'].fillna('Outros').str.strip()
     df['cliente']       = df['cliente'].fillna('Sem Cliente').str.strip()
     df['range_backlog'] = df['range_backlog'].fillna('1-3').str.strip()
 
-    buf.seek(0)
-    df_res = pd.read_excel(buf, sheet_name='Resume_')
-    df_res.columns = df_res.columns.str.strip()
-    df_res.rename(columns={'CARGOS.SUPERVISOR': 'supervisor', 'lastScanSite': 'ds',
-                            'clientName': 'cliente', 'actual region': 'regiao'}, inplace=True)
-    df_res['supervisor'] = df_res['supervisor'].fillna('').str.strip().str.upper()
-    df_res['ds']         = df_res['ds'].fillna('').str.strip().str.upper() if 'ds' in df_res.columns else ''
-    df_res['orders']     = pd.to_numeric(df_res['orders'], errors='coerce').fillna(0).astype(int) if 'orders' in df_res.columns else 0
+    # Supervisor: coluna pode não existir no arquivo raw — usa mapa DS→Supervisor
+    if 'supervisor' not in df.columns:
+        if supervisor_map:
+            df['supervisor'] = df['ds'].map(supervisor_map).fillna('Sem Supervisor')
+        else:
+            df['supervisor'] = 'Sem Supervisor'
+    else:
+        df['supervisor'] = df['supervisor'].fillna('Sem Supervisor').str.strip().str.upper()
+
+    # Aba de resumo
+    df_res = pd.DataFrame()
+    if aba_res:
+        buf.seek(0)
+        df_res = pd.read_excel(buf, sheet_name=aba_res)
+        df_res.columns = df_res.columns.str.strip()
+        df_res.rename(columns={'CARGOS.SUPERVISOR': 'supervisor', 'lastScanSite': 'ds',
+                                'clientName': 'cliente', 'actual region': 'regiao'}, inplace=True)
+        df_res['ds']     = df_res['ds'].fillna('').str.strip().str.upper() if 'ds' in df_res.columns else ''
+        df_res['orders'] = pd.to_numeric(df_res['orders'], errors='coerce').fillna(0).astype(int) if 'orders' in df_res.columns else 0
+        if 'supervisor' not in df_res.columns:
+            if supervisor_map:
+                df_res['supervisor'] = df_res['ds'].map(supervisor_map).fillna('Sem Supervisor')
+            else:
+                df_res['supervisor'] = 'Sem Supervisor'
+        else:
+            df_res['supervisor'] = df_res['supervisor'].fillna('').str.strip().str.upper()
+
     return df, df_res
 
 
@@ -274,8 +306,12 @@ def detalhe_upload(upload_id: int, cliente: str = Query(None), user: dict = Depe
 @limiter.limit("5/minute")
 async def processar_backlog(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     conteudo = await validar_arquivo(file)
+
+    sb = get_supabase()
+    supervisor_map: dict = {}  # arquivo raw não tem supervisor — ficará 'Sem Supervisor'
+
     try:
-        df, df_res = _ler_excel(conteudo)
+        df, df_res = _ler_excel(conteudo, supervisor_map=supervisor_map)
     except Exception as e:
         raise HTTPException(400, f"Erro ao ler arquivo: {e}")
 

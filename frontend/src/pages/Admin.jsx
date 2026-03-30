@@ -11,8 +11,9 @@ import {
   Upload, Users, Settings, CheckCircle, XCircle,
   ShieldOff, ShieldCheck, Loader, Terminal,
   UserCheck, UserX, Edit2, Save, X, Check, History, ChevronLeft, ChevronRight,
-  Target, Plus, Trash2,
+  Target, Plus, Trash2, PackageSearch,
 } from 'lucide-react'
+import BulkUpload from './BulkUpload'
 
 // ── Definição de permissões disponíveis ──────────────────────
 export const PAGINAS = [
@@ -784,6 +785,9 @@ export default function Admin() {
         <NavLink to="/admin/metas" className={({ isActive }) => tabClass(isActive)}>
           <Target size={15} /> Metas por DS
         </NavLink>
+        <NavLink to="/admin/lote" className={({ isActive }) => tabClass(isActive)}>
+          <PackageSearch size={15} /> Carga em Lote
+        </NavLink>
       </div>
 
       <Routes>
@@ -792,6 +796,7 @@ export default function Admin() {
         <Route path="config" element={<ConfigPage />} />
         <Route path="auditlog" element={<AuditLogPage />} />
         <Route path="metas" element={<MetasPage />} />
+        <Route path="lote" element={<BulkUpload />} />
       </Routes>
     </div>
   )
