@@ -13,6 +13,8 @@ import Backlog from './pages/Backlog'
 import NotArrived from './pages/NotArrived'
 import Na from './pages/Na'
 import Correlacao from './pages/Correlacao'
+import Extravios from './pages/Extravios'
+import NoTracking from './pages/NoTracking'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -35,6 +37,8 @@ function AppRoutes() {
         <Route path="reclamacoes" element={<Reclamacoes />} />
         <Route path="backlog" element={<Backlog />} />
         <Route path="correlacao" element={<Correlacao />} />
+        <Route path="extravios" element={<Extravios />} />
+        <Route path="notracking" element={<NoTracking />} />
         <Route path="not-arrived" element={<NotArrived />} />
         <Route path="na" element={<Na />} />
         <Route path="admin/*" element={

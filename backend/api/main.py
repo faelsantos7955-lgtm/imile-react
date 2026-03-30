@@ -14,6 +14,10 @@ load_dotenv()
 from api.limiter import limiter
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel, backlog, monitoramento
 from api.routes.correlacao import router as correlacao_router
+from api.routes.extravios import router as extravios_router
+from api.routes.extravios_upload import router as extravios_upload_router
+from api.routes.notracking import router as notracking_router
+from api.routes.notracking_upload import router as notracking_upload_router
 from api.routes.reclamacoes_upload_route import router as reclamacoes_upload_router
 from api.routes.dashboard_upload import router as dashboard_upload_router
 from api.routes.triagem_upload import router as triagem_upload_router
@@ -55,6 +59,10 @@ app.include_router(not_arrived_upload_router,   prefix="/api/not-arrived",   tag
 app.include_router(na_router,                   prefix="/api/na",            tags=["NA"])
 app.include_router(na_upload_router,            prefix="/api/na",            tags=["NA"])            # POST /processar
 app.include_router(correlacao_router,           prefix="/api/correlacao",    tags=["Correlação"])
+app.include_router(extravios_router,            prefix="/api/extravios",     tags=["Extravios"])
+app.include_router(extravios_upload_router,     prefix="/api/extravios",     tags=["Extravios"])
+app.include_router(notracking_router,           prefix="/api/notracking",    tags=["No Tracking"])
+app.include_router(notracking_upload_router,    prefix="/api/notracking",    tags=["No Tracking"])
 
 @app.get("/api/health")
 def health():

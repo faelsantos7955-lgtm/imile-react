@@ -10,7 +10,7 @@ import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
-  GitMerge, Target,
+  GitMerge, Target, ShieldAlert, Clock,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -20,6 +20,8 @@ const NAV_ITEMS = [
   { to: '/reclamacoes', icon: FileWarning, label: 'Reclamações' },
   { to: '/backlog',     icon: Package,     label: 'Backlog SLA' },
   { to: '/correlacao',  icon: GitMerge,    label: 'Correlação' },
+  { to: '/extravios',   icon: ShieldAlert, label: 'Extravios' },
+  { to: '/notracking',  icon: Clock,       label: 'No Tracking' },
   { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
   { to: '/not-arrived', icon: AlertCircle, label: 'Not Arrived Mov.' },
 ]
@@ -38,6 +40,8 @@ const PAGE_TITLES = [
   { path: '/reclamacoes',     label: 'Reclamações' },
   { path: '/backlog',         label: 'Backlog SLA' },
   { path: '/correlacao',      label: 'Correlação Backlog × Reclamações' },
+  { path: '/extravios',       label: 'Controle de Extravios' },
+  { path: '/notracking',      label: 'No Tracking (断更)' },
   { path: '/na',              label: 'Not Arrived' },
   { path: '/not-arrived',     label: 'Not Arrived com Movimentação' },
   { path: '/admin',           label: 'Upload / Processar' },
