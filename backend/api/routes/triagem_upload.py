@@ -159,7 +159,7 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
 
     # Por DS
     por_ds_rows = []
-    for ds, grp in df.groupby("_dest"):
+    for ds, grp in df.groupby(df["_dest"]):
         if not ds:
             continue
         ok_c    = int((grp["_status"] == "ok").sum())
@@ -192,7 +192,7 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
 
     df["_sup"] = df["_dest"].map(sup_map).fillna("Sem Região")
     por_sup_rows = []
-    for sup, grp in df.groupby("_sup"):
+    for sup, grp in df.groupby(df["_sup"]):
         ok_c   = int((grp["_status"] == "ok").sum())
         nok_c  = int((grp["_status"] == "nok").sum())
         fora_c = int((grp["_status"] == "fora").sum())
@@ -205,7 +205,7 @@ def _processar(df: pd.DataFrame, sb, arrival_set: set[str] | None = None) -> dic
 
     # Por cidade
     por_cidade_rows = []
-    for (ds, city), grp in df.groupby(["_dest", "_city"]):
+    for (ds, city), grp in df.groupby([df["_dest"], df["_city"]]):
         if not ds:
             continue
         ok_c   = int((grp["_status"] == "ok").sum())
