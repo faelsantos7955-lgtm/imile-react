@@ -38,6 +38,10 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
     C_NOK    = "FF0000"
     C_ALT    = "D9E1F2"
     C_TOTAL  = "BDD7EE"
+    C_REC    = "2E75B6"   # azul — recebidos
+    C_ERR    = "C00000"   # vermelho escuro — chegou errado
+
+    tem_arrival = bool(u.get("tem_arrival", False))
 
     def _hfnt(color="FFFFFF"): return Font(name="Calibri", bold=True, color=color, size=11)
     def _bfnt(bold=False, color="000000"): return Font(name="Calibri", size=10, bold=bold, color=color)
@@ -56,9 +60,14 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
 
     # ── Tabela DS ─────────────────────────────────────────────
     DS_COLS = ["DS", "Total Expedido", "Triagem OK", "Triagem NOK", "Fora Abrang.", "Taxa (%)"]
+    if tem_arrival:
+        DS_COLS += ["Recebidos", "Chegou Errado"]
     for ci, cn in enumerate(DS_COLS, 1):
         c = ws.cell(3, ci, cn)
-        c.fill = PatternFill("solid", fgColor=C_HDR_DS)
+        fgColor = C_HDR_DS
+        if tem_arrival and cn == "Chegou Errado": fgColor = "C00000"
+        elif tem_arrival and cn == "Recebidos":   fgColor = "1F4E79"
+        c.fill = PatternFill("solid", fgColor=fgColor)
         c.font = _hfnt(); c.alignment = _CTR; c.border = _BRD
     ws.row_dimensions[3].height = 24
 
@@ -75,6 +84,11 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
                 int(row.get("fora", 0) or 0),
                 taxa_val / 100 if taxa_val > 1 else taxa_val,
             ]
+            if tem_arrival:
+                vals += [
+                    int(row.get("recebidos", 0) or 0),
+                    int(row.get("recebidos_nok", 0) or 0),
+                ]
             alt = ri % 2 == 0
             for ci, val in enumerate(vals, 1):
                 c = ws.cell(ri, ci, val)
@@ -85,8 +99,12 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
                     c.number_format = "0.0%"
                     c.fill = PatternFill("solid", fgColor=C_NOK if taxa_val < 90 else C_OK)
                     c.font = _bfnt(bold=True, color="FFFFFF")
-                elif ci in (2, 3, 4, 5):
+                elif ci in (2, 3, 4, 5): c.number_format = "#,##0"
+                elif tem_arrival and ci == 7: c.number_format = "#,##0"
+                elif tem_arrival and ci == 8:
                     c.number_format = "#,##0"
+                    if int(val) > 0:
+                        c.font = _bfnt(bold=True, color="C00000")
 
         last_row = 4 + len(df_ds)
         totals = [
@@ -97,6 +115,11 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
             int(df_ds.get("fora", pd.Series([0])).sum()),
             u["taxa"] / 100 if float(u["taxa"]) > 1 else float(u["taxa"]),
         ]
+        if tem_arrival:
+            totals += [
+                int(df_ds["recebidos"].sum()) if "recebidos" in df_ds.columns else 0,
+                int(df_ds["recebidos_nok"].sum()) if "recebidos_nok" in df_ds.columns else 0,
+            ]
         for ci, val in enumerate(totals, 1):
             c = ws.cell(last_row, ci, val)
             c.fill = PatternFill("solid", fgColor=C_TOTAL)
@@ -104,6 +127,11 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
             if ci == 1: c.alignment = Alignment(horizontal="left", vertical="center")
             if ci == 6: c.number_format = "0.0%"
             elif ci in (2, 3, 4, 5): c.number_format = "#,##0"
+            elif tem_arrival and ci == 7: c.number_format = "#,##0"
+            elif tem_arrival and ci == 8:
+                c.number_format = "#,##0"
+                c.fill = PatternFill("solid", fgColor="C00000")
+                c.font = _hfnt(color="FFFFFF")
 
     # ── Tabela Top 5 ─────────────────────────────────────────
     T5_START = 8
@@ -139,15 +167,36 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
     val_cell.alignment = _CTR; val_cell.number_format = "#,##0"
     ws.row_dimensions[box_row + 1].height = 36
 
-    for col, w in [(1, 22), (2, 18), (3, 14), (4, 16), (5, 16), (6, 10), (7, 4), (8, 22), (9, 14)]:
+    # Box "Chegou Errado" (apenas quando tem Arrival)
+    if tem_arrival and not por_ds.empty:
+        total_chegou_errado = int(por_ds["recebidos_nok"].sum()) if "recebidos_nok" in por_ds.columns else 0
+        box2_col = T5_START + 3
+        ws.merge_cells(start_row=box_row, start_column=box2_col, end_row=box_row, end_column=box2_col + 1)
+        lbl2 = ws.cell(box_row, box2_col, "CHEGOU ERRADO NA DS")
+        lbl2.fill = PatternFill("solid", fgColor="C00000"); lbl2.font = _hfnt(); lbl2.alignment = _CTR
+
+        ws.merge_cells(start_row=box_row + 1, start_column=box2_col, end_row=box_row + 1, end_column=box2_col + 1)
+        val2 = ws.cell(box_row + 1, box2_col, total_chegou_errado)
+        val2.fill = PatternFill("solid", fgColor="C00000")
+        val2.font = Font(name="Calibri", bold=True, size=20, color="FFFFFF")
+        val2.alignment = _CTR; val2.number_format = "#,##0"
+
+    for col, w in [(1, 22), (2, 18), (3, 14), (4, 16), (5, 16), (6, 10), (7, 4), (8, 22), (9, 14), (10, 4), (11, 22), (12, 18)]:
         ws.column_dimensions[get_column_letter(col)].width = w
     ws.freeze_panes = "A4"
 
     # ── Aba Por DS detalhada ──────────────────────────────────
     if not por_ds.empty:
         ws2 = wb.create_sheet("Por DS")
-        df_ds2 = por_ds[["ds", "total", "ok", "nok", "fora", "taxa"]].copy()
-        df_ds2.columns = ["DS", "Total Expedido", "Triagem OK", "Triagem NOK", "Fora Abrangência", "Taxa (%)"]
+        cols_ds2 = ["ds", "total", "ok", "nok", "fora", "taxa"]
+        col_names2 = ["DS", "Total Expedido", "Triagem OK", "Triagem NOK", "Fora Abrangência", "Taxa (%)"]
+        if tem_arrival:
+            if "recebidos" in por_ds.columns:
+                cols_ds2.append("recebidos"); col_names2.append("Recebidos")
+            if "recebidos_nok" in por_ds.columns:
+                cols_ds2.append("recebidos_nok"); col_names2.append("Chegou Errado na DS")
+        df_ds2 = por_ds[[c for c in cols_ds2 if c in por_ds.columns]].copy()
+        df_ds2.columns = col_names2[:len(df_ds2.columns)]
         df_ds2 = df_ds2.sort_values("Taxa (%)")
         _titulo_aba(ws2, f"Resultado por DS — {u['data_ref']}", len(df_ds2.columns))
         _write_header(ws2, df_ds2.columns.tolist(), 2)

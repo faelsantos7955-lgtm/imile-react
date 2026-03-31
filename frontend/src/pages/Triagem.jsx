@@ -385,6 +385,13 @@ export default function Triagem() {
     .sort((a, b) => a.taxa - b.taxa)
     .map(r => ({ ds: r.ds, ok: r.ok, nok: r.nok, taxa: parseFloat(r.taxa ?? 0) })) ?? []
 
+  // Total de pacotes NOK que foram confirmados recebidos na DS errada
+  const totalChegouErrado = detail?.por_ds?.reduce((s, r) => s + (r.recebidos_nok ?? 0), 0) ?? 0
+  const dsChegouErrado = detail?.por_ds
+    ?.filter(r => (r.recebidos_nok ?? 0) > 0)
+    .slice()
+    .sort((a, b) => (b.recebidos_nok ?? 0) - (a.recebidos_nok ?? 0)) ?? []
+
   const TaxaBadge = ({ taxa }) => {
     const v   = parseFloat(taxa)
     const cls = v >= 95 ? 'text-emerald-600' : v >= 85 ? 'text-amber-600' : 'text-red-600'
@@ -463,7 +470,7 @@ export default function Triagem() {
 
           {/* KPIs */}
           {u && (
-            <div className={`grid gap-4 mb-6 ${temArrival ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4'}`}>
+            <div className={`grid gap-4 mb-6 ${temArrival ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-7' : 'grid-cols-2 md:grid-cols-4'}`}>
               <KpiCard label="Total Expedido" value={F(u.total)}     color="blue"   />
               <KpiCard label="Triagem OK"     value={F(u.qtd_ok)}   color="green"  />
               <KpiCard label="Erros (NOK)"    value={F(u.qtd_erro)} color="red"    />
@@ -473,6 +480,8 @@ export default function Triagem() {
                   sub={u.total ? `${(u.qtd_recebidos / u.total * 100).toFixed(1)}% do expedido` : ''} />
                 <KpiCard label="Não Recebidos"  value={F(u.total - u.qtd_recebidos)} color="orange"
                   sub={u.total ? `${((u.total - u.qtd_recebidos) / u.total * 100).toFixed(1)}% do expedido` : ''} />
+                <KpiCard label="Chegaram Errado" value={F(totalChegouErrado)} color="red"
+                  sub={u.qtd_erro ? `${(totalChegouErrado / u.qtd_erro * 100).toFixed(1)}% dos NOK recebidos` : 'NOK confirmados na DS errada'} />
               </>}
             </div>
           )}
@@ -497,6 +506,45 @@ export default function Triagem() {
                 <Alert type="warning" className="mb-6">
                   Taxa de triagem abaixo de 90% — atenção necessária nas bases com mais erros.
                 </Alert>
+              )}
+
+              {/* Destaque: DSes que receberam pacotes errados */}
+              {temArrival && dsChegouErrado.length > 0 && (
+                <>
+                  <SectionHeader title="DSes que receberam pacotes errados (NOK confirmado no Arrival)" />
+                  <div className="mb-6 bg-red-50 border border-red-200 rounded-xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-red-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <PackageCheck size={15} className="text-red-500" />
+                        <span className="text-sm font-semibold text-red-800">
+                          {totalChegouErrado} pacotes confirmados na DS errada
+                        </span>
+                      </div>
+                      <span className="text-xs text-red-500 font-medium">
+                        {u?.qtd_erro ? `${(totalChegouErrado / u.qtd_erro * 100).toFixed(1)}% dos erros foram confirmados recebidos` : ''}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-px bg-red-200">
+                      {dsChegouErrado.map(r => (
+                        <div key={r.ds} className="bg-white px-4 py-3">
+                          <p className="text-xs font-bold text-slate-700 mb-1">{r.ds}</p>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-xl font-black text-red-600">{F(r.recebidos_nok)}</span>
+                            <span className="text-[10px] text-slate-400">chegaram errado</span>
+                          </div>
+                          <div className="mt-1 text-[10px] text-slate-400">
+                            de {F(r.nok)} NOK expedidos
+                            {r.nok > 0 && (
+                              <span className="ml-1 font-semibold text-red-500">
+                                ({(r.recebidos_nok / r.nok * 100).toFixed(0)}%)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Gráfico OK vs NOK por DS */}
@@ -574,7 +622,7 @@ export default function Triagem() {
                               <th className="px-3 py-2.5 text-right">Taxa</th>
                               {temArrival && <>
                                 <th className="px-3 py-2.5 text-center text-blue-300">Recebidos</th>
-                                <th className="px-3 py-2.5 text-center text-orange-300">NOK Rec.</th>
+                                <th className="px-3 py-2.5 text-center text-red-400" title="Pacotes NOK que foram confirmados recebidos na DS errada">Chegou Errado</th>
                               </>}
                               <th className="px-3 py-2.5" />
                             </tr>
