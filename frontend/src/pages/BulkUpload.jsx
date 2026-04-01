@@ -92,7 +92,7 @@ async function uploadFile(endpoint, field, file, onStatus) {
     try {
       onStatus('uploading')
       const res = await api.post(endpoint, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 300_000,
       })
       onStatus('success', res.data)
       return true

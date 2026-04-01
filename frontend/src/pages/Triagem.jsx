@@ -510,65 +510,65 @@ export default function Triagem() {
             </div>
           )}
 
+          {/* Triagem Errada — Histórico por dia (independente do detail) */}
+          {!loading && erradaPorDia.length > 0 && (
+            <>
+              <SectionHeader title="Triagem Errada — Histórico por Dia" />
+              <Card className="mb-4">
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={erradaPorDia} margin={{ top: 22, right: 50, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
+                    <Tooltip
+                      formatter={(value, name) =>
+                        name === '% Erro' ? [`${value}%`, name] : [value.toLocaleString('pt-BR'), name]
+                      }
+                    />
+                    <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                    <Bar yAxisId="left" dataKey="qtd" name="Qtd Erros (NOK)" fill={COLOR_NOK} radius={[4, 4, 0, 0]}
+                      label={{ position: 'top', fontSize: 10, fill: '#ef4444', formatter: v => v > 0 ? v.toLocaleString('pt-BR') : '' }}
+                    />
+                    <Line yAxisId="right" type="monotone" dataKey="pct" name="% Erro"
+                      stroke="#dc2626" strokeWidth={2} dot={{ r: 4, fill: '#dc2626' }}
+                      label={{ position: 'top', fontSize: 10, fill: '#dc2626', formatter: v => `${v}%` }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </Card>
+
+              {/* Top 5 abaixo do gráfico */}
+              {detail?.top5?.length > 0 && (
+                <div className="mb-6">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Top 5 DS com mais erros — upload selecionado
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {detail.top5.map((r, i) => (
+                      <div key={i} className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
+                        <span className="block text-[10px] font-bold text-red-300 mb-1">#{i + 1}</span>
+                        <span className="block text-xs font-semibold text-slate-700 mb-2 truncate" title={r.ds}>{r.ds}</span>
+                        <span className="block text-2xl font-black text-red-600">{F(r.total_erros)}</span>
+                        {u?.qtd_erro > 0 && (
+                          <span className="block text-[10px] text-slate-400 mt-1">
+                            {(r.total_erros / u.qtd_erro * 100).toFixed(0)}% dos erros
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           {!loading && detail && (
             <>
               {u && parseFloat(u.taxa) < 90 && (
                 <Alert type="warning" className="mb-6">
                   Taxa de triagem abaixo de 90% — atenção necessária nas bases com mais erros.
                 </Alert>
-              )}
-
-              {/* Triagem Errada — Histórico por dia */}
-              {erradaPorDia.length > 0 && (
-                <>
-                  <SectionHeader title="Triagem Errada — Histórico por Dia" />
-                  <Card className="mb-4">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <ComposedChart data={erradaPorDia} margin={{ top: 22, right: 50, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
-                        <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
-                        <Tooltip
-                          formatter={(value, name) =>
-                            name === '% Erro' ? [`${value}%`, name] : [value.toLocaleString('pt-BR'), name]
-                          }
-                        />
-                        <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                        <Bar yAxisId="left" dataKey="qtd" name="Qtd Erros (NOK)" fill={COLOR_NOK} radius={[4, 4, 0, 0]}
-                          label={{ position: 'top', fontSize: 10, fill: '#ef4444', formatter: v => v > 0 ? v.toLocaleString('pt-BR') : '' }}
-                        />
-                        <Line yAxisId="right" type="monotone" dataKey="pct" name="% Erro"
-                          stroke="#dc2626" strokeWidth={2} dot={{ r: 4, fill: '#dc2626' }}
-                          label={{ position: 'top', fontSize: 10, fill: '#dc2626', formatter: v => `${v}%` }}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </Card>
-
-                  {/* Top 5 abaixo do gráfico */}
-                  {detail?.top5?.length > 0 && (
-                    <div className="mb-6">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                        Top 5 DS com mais erros — upload selecionado
-                      </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                        {detail.top5.map((r, i) => (
-                          <div key={i} className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
-                            <span className="block text-[10px] font-bold text-red-300 mb-1">#{i + 1}</span>
-                            <span className="block text-xs font-semibold text-slate-700 mb-2 truncate" title={r.ds}>{r.ds}</span>
-                            <span className="block text-2xl font-black text-red-600">{F(r.total_erros)}</span>
-                            {u?.qtd_erro > 0 && (
-                              <span className="block text-[10px] text-slate-400 mt-1">
-                                {(r.total_erros / u.qtd_erro * 100).toFixed(0)}% dos erros
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
               )}
 
               {/* Destaque: DSes que receberam pacotes errados */}
