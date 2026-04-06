@@ -307,6 +307,18 @@ async def processar_notracking(
     resultado = _processar(conteudo)
 
     sb = get_supabase()
+
+    # Remove upload anterior da mesma data_ref
+    existing = sb.table("notracking_uploads").select("id").eq("data_ref", resultado['data_ref']).execute()
+    if existing.data:
+        old_id = existing.data[0]["id"]
+        for tbl in ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa"):
+            try:
+                sb.table(tbl).delete().eq("upload_id", old_id).execute()
+            except Exception:
+                pass
+        sb.table("notracking_uploads").delete().eq("id", old_id).execute()
+
     up = sb.table("notracking_uploads").insert({
         "data_ref":      resultado['data_ref'],
         "criado_por":    user["email"],
@@ -318,8 +330,8 @@ async def processar_notracking(
 
     if resultado['por_ds']:
         rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
-        for i in range(0, len(rows), 500):
-            sb.table("notracking_por_ds").insert(rows[i:i+500]).execute()
+        for i in range(0, len(rows), 1000):
+            sb.table("notracking_por_ds").insert(rows[i:i+1000]).execute()
 
     if resultado['por_sup']:
         sb.table("notracking_por_sup").insert(

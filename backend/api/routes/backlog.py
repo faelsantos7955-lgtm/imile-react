@@ -318,6 +318,18 @@ async def processar_backlog(request: Request, file: UploadFile = File(...), user
     kpis, por_rdc, por_supervisor, por_ds, por_motivo = _processar(df, df_res)
 
     sb = get_supabase()
+
+    # Remove upload anterior da mesma data_ref
+    existing = sb.table("backlog_uploads").select("id").eq("data_ref", kpis['data_ref']).execute()
+    if existing.data:
+        old_id = existing.data[0]["id"]
+        for tbl in ("backlog_detalhes", "backlog_por_ds", "backlog_por_supervisor", "backlog_por_rdc", "backlog_por_motivo"):
+            try:
+                sb.table(tbl).delete().eq("upload_id", old_id).execute()
+            except Exception:
+                pass
+        sb.table("backlog_uploads").delete().eq("id", old_id).execute()
+
     up = sb.table("backlog_uploads").insert({
         "data_ref":    kpis['data_ref'],
         "criado_por":  user["email"],
@@ -345,22 +357,27 @@ async def processar_backlog(request: Request, file: UploadFile = File(...), user
     sb.table("backlog_por_ds").insert(to_db(por_ds, ['supervisor', 'prioridade'])).execute()
     sb.table("backlog_por_motivo").insert(to_db(por_motivo)).execute()
 
-    detalhes = []
-    for _, r in df.iterrows():
-        detalhes.append({
-            "upload_id": uid,
-            "waybill":   str(r.get('waybillNo', '')),
-            "cliente":   str(r.get('cliente', '')),
-            "supervisor": str(r.get('supervisor', '')),
-            "ds":        str(r.get('ds', '')),
-            "process":   str(r.get('process', '')),
-            "range_backlog": str(r.get('range_backlog', '')),
-            "motivo":    str(r.get('motivo', '')),
-            "estagio":   str(r.get('estagio', '')),
-            "regiao":    str(r.get('regiao', '')),
-        })
-    for i in range(0, len(detalhes), 500):
-        sb.table("backlog_detalhes").insert(detalhes[i:i+500]).execute()
+    cols = ['waybillNo', 'cliente', 'supervisor', 'ds', 'process', 'range_backlog', 'motivo', 'estagio', 'regiao']
+    for col in cols:
+        if col not in df.columns:
+            df[col] = ''
+    detalhes = [
+        {
+            "upload_id":     uid,
+            "waybill":       str(r['waybillNo']),
+            "cliente":       str(r['cliente']),
+            "supervisor":    str(r['supervisor']),
+            "ds":            str(r['ds']),
+            "process":       str(r['process']),
+            "range_backlog": str(r['range_backlog']),
+            "motivo":        str(r['motivo']),
+            "estagio":       str(r['estagio']),
+            "regiao":        str(r['regiao']),
+        }
+        for r in df[cols].to_dict('records')
+    ]
+    for i in range(0, len(detalhes), 1000):
+        sb.table("backlog_detalhes").insert(detalhes[i:i+1000]).execute()
 
     return {"upload_id": uid, "kpis": kpis,
             "por_rdc": por_rdc, "por_supervisor": por_supervisor,

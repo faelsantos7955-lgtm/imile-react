@@ -221,7 +221,7 @@ async def processar_na(
         # Por DS (lotes de 500)
         por_ds = [{"upload_id": uid, **r} for r in resultado["por_ds"]]
         for i in range(0, len(por_ds), 500):
-            sb.table("na_por_ds").insert(por_ds[i:i + 500]).execute()
+            sb.table("na_por_ds").insert(por_ds[i:i + 1000]).execute()
 
         # Por processo
         if resultado["por_processo"]:
@@ -232,7 +232,7 @@ async def processar_na(
         # Tendência (lotes de 500)
         tend = [{"upload_id": uid, **r} for r in resultado["tendencia"]]
         for i in range(0, len(tend), 500):
-            sb.table("na_tendencia").insert(tend[i:i + 500]).execute()
+            sb.table("na_tendencia").insert(tend[i:i + 1000]).execute()
 
     except HTTPException:
         raise

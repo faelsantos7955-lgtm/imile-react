@@ -134,6 +134,18 @@ async def processar_extravios(
     resultado = _processar(conteudo)
 
     sb = get_supabase()
+
+    # Remove upload anterior da mesma data_ref
+    existing = sb.table("extravios_uploads").select("id").eq("data_ref", resultado['data_ref']).execute()
+    if existing.data:
+        old_id = existing.data[0]["id"]
+        for tbl in ("extravios_por_ds", "extravios_por_motivo", "extravios_por_semana"):
+            try:
+                sb.table(tbl).delete().eq("upload_id", old_id).execute()
+            except Exception:
+                pass
+        sb.table("extravios_uploads").delete().eq("id", old_id).execute()
+
     up = sb.table("extravios_uploads").insert({
         "data_ref":    resultado['data_ref'],
         "criado_por":  user["email"],
@@ -144,8 +156,8 @@ async def processar_extravios(
 
     if resultado['por_ds']:
         rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
-        for i in range(0, len(rows), 500):
-            sb.table("extravios_por_ds").insert(rows[i:i+500]).execute()
+        for i in range(0, len(rows), 1000):
+            sb.table("extravios_por_ds").insert(rows[i:i+1000]).execute()
 
     if resultado['por_motivo']:
         sb.table("extravios_por_motivo").insert(

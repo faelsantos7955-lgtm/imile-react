@@ -301,7 +301,7 @@ async def processar_not_arrived(
         # Por estação (lotes de 500 — pode ter centenas de estações)
         estacoes = [{"upload_id": uid, **r} for r in resultado["por_estacao"]]
         for i in range(0, len(estacoes), 500):
-            sb.table("not_arrived_por_estacao").insert(estacoes[i:i + 500]).execute()
+            sb.table("not_arrived_por_estacao").insert(estacoes[i:i + 1000]).execute()
 
         if resultado["por_regiao"]:
             sb.table("not_arrived_por_regiao").insert(
@@ -322,7 +322,7 @@ async def processar_not_arrived(
         if tendencia:
             for i in range(0, len(tendencia), 500):
                 sb.table("not_arrived_tendencia").insert(
-                    [{"upload_id": uid, **r} for r in tendencia[i:i + 500]]
+                    [{"upload_id": uid, **r} for r in tendencia[i:i + 1000]]
                 ).execute()
 
     except HTTPException:

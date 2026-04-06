@@ -321,13 +321,13 @@ async def processar_triagem(
         # Por cidade (em lotes)
         cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
         for i in range(0, len(cidades), 500):
-            sb.table("triagem_por_cidade").insert(cidades[i:i + 500]).execute()
+            sb.table("triagem_por_cidade").insert(cidades[i:i + 1000]).execute()
 
         # Detalhes NOK + Fora (em lotes)
         if resultado["detalhes"]:
             det_rows = [{"upload_id": uid, **r} for r in resultado["detalhes"]]
             for i in range(0, len(det_rows), 500):
-                sb.table("triagem_detalhes").insert(det_rows[i:i + 500]).execute()
+                sb.table("triagem_detalhes").insert(det_rows[i:i + 1000]).execute()
 
     except HTTPException:
         raise
