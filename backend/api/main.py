@@ -13,6 +13,7 @@ load_dotenv()
 
 from api.limiter import limiter
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel, backlog, monitoramento
+from api.routes.contestacoes import router as contestacoes_router
 from api.routes.correlacao import router as correlacao_router
 from api.routes.extravios import router as extravios_router
 from api.routes.extravios_upload import router as extravios_upload_router
@@ -54,6 +55,7 @@ app.include_router(admin.router,                prefix="/api/admin",         tag
 app.include_router(excel.router,                prefix="/api/excel",         tags=["Excel"])
 app.include_router(backlog.router,              prefix="/api/backlog",       tags=["Backlog"])
 app.include_router(monitoramento.router,        prefix="/api/monitoramento", tags=["Monitoramento"])
+app.include_router(contestacoes_router,         prefix="/api/contestacoes",  tags=["Contestações"])
 app.include_router(not_arrived_router,          prefix="/api/not-arrived",   tags=["Not Arrived"])
 app.include_router(not_arrived_upload_router,   prefix="/api/not-arrived",   tags=["Not Arrived"])  # POST /processar
 app.include_router(na_router,                   prefix="/api/na",            tags=["NA"])

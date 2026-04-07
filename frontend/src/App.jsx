@@ -15,6 +15,7 @@ import Na from './pages/Na'
 import Correlacao from './pages/Correlacao'
 import Extravios from './pages/Extravios'
 import NoTracking from './pages/NoTracking'
+import Contestacoes from './pages/Contestacoes'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -41,6 +42,7 @@ function AppRoutes() {
         <Route path="notracking" element={<NoTracking />} />
         <Route path="not-arrived" element={<NotArrived />} />
         <Route path="na" element={<Na />} />
+        <Route path="contestacoes" element={<Contestacoes />} />
         <Route path="admin/*" element={
           <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
         } />

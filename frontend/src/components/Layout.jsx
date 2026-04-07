@@ -10,7 +10,7 @@ import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
-  GitMerge, Target, ShieldAlert, Clock, PackageSearch,
+  GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -23,7 +23,8 @@ const NAV_ITEMS = [
   { to: '/extravios',   icon: ShieldAlert, label: 'Extravios' },
   { to: '/notracking',  icon: Clock,       label: 'No Tracking' },
   { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
-  { to: '/not-arrived', icon: AlertCircle, label: 'Not Arrived Mov.' },
+  { to: '/not-arrived',   icon: AlertCircle,  label: 'Not Arrived Mov.' },
+  { to: '/contestacoes', icon: Scale,        label: 'Contestações' },
 ]
 
 const ADMIN_ITEMS = [
@@ -45,6 +46,7 @@ const PAGE_TITLES = [
   { path: '/notracking',      label: 'No Tracking (断更)' },
   { path: '/na',              label: 'Not Arrived' },
   { path: '/not-arrived',     label: 'Not Arrived com Movimentação' },
+  { path: '/contestacoes',   label: 'Contestações de Descontos' },
   { path: '/admin',           label: 'Upload / Processar' },
   { path: '/admin/lote',      label: 'Carga em Lote' },
   { path: '/admin/users',     label: 'Solicitações de Acesso' },

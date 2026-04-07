@@ -613,3 +613,26 @@ CREATE INDEX idx_backlog_por_rdc_upload_id ON backlog_por_rdc(upload_id);
 CREATE INDEX idx_backlog_por_motivo_upload_id ON backlog_por_motivo(upload_id);
 CREATE INDEX idx_audit_log_criado_em ON audit_log(criado_em);
 CREATE INDEX idx_usuarios_email ON usuarios(email);
+
+-- ── Contestações de Descontos Logísticos ─────────────────────
+CREATE TABLE IF NOT EXISTS contestacoes (
+    id                SERIAL PRIMARY KEY,
+    data_contestacao  DATE         NOT NULL,
+    quem_solicitou    TEXT         DEFAULT '',
+    ds                TEXT         NOT NULL,
+    waybill           TEXT         NOT NULL,
+    motivo_desconto   TEXT         NOT NULL,
+    faturamento_b64   TEXT,
+    faturamento_nome  TEXT,
+    valor_desconto    NUMERIC(10,2),
+    status_analise    TEXT         NOT NULL DEFAULT 'Pendente',
+    observacao        TEXT         DEFAULT '',
+    evidencia_b64     TEXT,
+    evidencia_nome    TEXT,
+    previsao          DATE,
+    criado_em         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    atualizado_em     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_contestacoes_waybill ON contestacoes (UPPER(waybill));
+CREATE INDEX IF NOT EXISTS idx_contestacoes_status  ON contestacoes (status_analise);
