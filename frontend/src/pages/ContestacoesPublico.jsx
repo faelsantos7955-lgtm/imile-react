@@ -61,6 +61,23 @@ function StatusBadge({ status }) {
   )
 }
 
+// ── Helpers de formulário (fora de qualquer componente) ───────
+function inputCls(err) {
+  return `w-full border rounded-lg px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white transition-shadow ${err ? 'border-red-300 bg-red-50' : 'border-slate-200'}`
+}
+
+function F({ label, children, error, required }) {
+  return (
+    <div>
+      <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={10} />{error}</p>}
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════════════════
 // FORMULÁRIO
 // ══════════════════════════════════════════════════════════════
@@ -114,18 +131,6 @@ function Formulario() {
     mut.mutate({ ...form, valor_desconto: form.valor_desconto ? parseFloat(form.valor_desconto) : null, previsao: form.previsao || null })
   }
 
-  const inputCls = (err) =>
-    `w-full border rounded-lg px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white transition-shadow ${err ? 'border-red-300 bg-red-50' : 'border-slate-200'}`
-
-  const F = ({ label, children, error, required }) => (
-    <div>
-      <label className="block text-[12px] font-semibold text-slate-600 mb-1.5">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {children}
-      {error && <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={10} />{error}</p>}
-    </div>
-  )
 
   if (mut.isSuccess) return (
     <div className="text-center py-16">

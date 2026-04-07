@@ -301,6 +301,23 @@ function BaseDados() {
   )
 }
 
+// ── Helpers de formulário (fora de qualquer componente) ───────
+function inputCls(err) {
+  return `w-full border rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white ${err ? 'border-red-300' : 'border-slate-200'}`
+}
+
+function F({ label, children, error, required }) {
+  return (
+    <div>
+      <label className="block text-[12px] font-semibold text-slate-600 mb-1">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════════════════
 // ABA 2 — NOVO REGISTRO
 // ══════════════════════════════════════════════════════════════
@@ -372,19 +389,6 @@ function NovoRegistro({ onSaved }) {
       previsao: form.previsao || null,
     })
   }
-
-  const F = ({ label, children, error, required }) => (
-    <div>
-      <label className="block text-[12px] font-semibold text-slate-600 mb-1">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      {children}
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
-    </div>
-  )
-
-  const inputCls = (err) =>
-    `w-full border rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white ${err ? 'border-red-300' : 'border-slate-200'}`
 
   return (
     <div className="max-w-2xl">
