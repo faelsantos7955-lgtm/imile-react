@@ -9,8 +9,10 @@ from datetime import date
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from api.deps import get_current_user, get_supabase
+from api.deps import get_current_user, get_db
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, validar_varios
 
@@ -57,13 +59,12 @@ async def upload_dashboard(
     supervisores: UploadFile       = File(None, description="Planilha de Supervisores — opcional"),
     metas:        UploadFile       = File(None, description="Planilha de Metas — opcional"),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Processa os arquivos Excel de operação diária e salva em expedicao_diaria + expedicao_cidades.
     Equivalente ao processar_dashboard() do processar.py local.
     """
-    sb = get_supabase()
-
     # ── Valida data ────────────────────────────────────────────
     try:
         data_obj = date.fromisoformat(data_ref)
@@ -84,11 +85,21 @@ async def upload_dashboard(
             ds = pd.read_excel(io.BytesIO(sup_bytes), engine=_ENGINE)
             ds.columns = [c.strip().upper() for c in ds.columns]
             ds["SIGLA"] = _lc(ds["SIGLA"])
-            sb.table("config_supervisores").upsert(
-                [{"sigla": str(r["SIGLA"]), "region": str(r["REGION"]).strip(), "atualizado_por": "dashboard_upload"}
-                 for _, r in ds.iterrows() if str(r["SIGLA"]).strip()],
-                on_conflict="sigla",
-            ).execute()
+            rows_sup = [
+                {"sigla": str(r["SIGLA"]), "region": str(r["REGION"]).strip(), "atualizado_por": "dashboard_upload"}
+                for _, r in ds.iterrows() if str(r["SIGLA"]).strip()
+            ]
+            if rows_sup:
+                db.execute(
+                    text("""
+                        INSERT INTO config_supervisores (sigla, region, atualizado_por)
+                        VALUES (:sigla, :region, :atualizado_por)
+                        ON CONFLICT (sigla) DO UPDATE
+                        SET region = EXCLUDED.region, atualizado_por = EXCLUDED.atualizado_por
+                    """),
+                    rows_sup
+                )
+                db.commit()
             for _, r in ds.iterrows():
                 sig, reg = str(r["SIGLA"]).strip(), str(r["REGION"]).strip()
                 mapa[sig] = (sig, reg)
@@ -96,8 +107,8 @@ async def upload_dashboard(
                 if cod not in mapa:
                     mapa[cod] = (sig, reg)
         else:
-            res = sb.table("config_supervisores").select("sigla,region").execute()
-            for r in (res.data or []):
+            rows_sup = db.execute(text("SELECT sigla, region FROM config_supervisores")).mappings().all()
+            for r in rows_sup:
                 sig, reg = r["sigla"].strip().upper(), r["region"].strip()
                 mapa[sig] = (sig, reg)
                 cod = re.sub(r"^(RDC|DC|DS)[\s\-]+", "", sig).strip()
@@ -120,15 +131,25 @@ async def upload_dashboard(
                 mn = mn.where(mn <= 1.0, mn / 100)
                 dm["Meta"] = mn.fillna(0.5)
                 df_meta = dm[["DS", "Meta"]].dropna(subset=["DS"])
-                sb.table("config_metas").upsert(
-                    [{"ds": r["DS"], "meta": float(r["Meta"]), "atualizado_por": "dashboard_upload"}
-                     for _, r in df_meta.iterrows() if r["DS"]],
-                    on_conflict="ds",
-                ).execute()
+                rows_meta = [
+                    {"ds": r["DS"], "meta": float(r["Meta"]), "atualizado_por": "dashboard_upload"}
+                    for _, r in df_meta.iterrows() if r["DS"]
+                ]
+                if rows_meta:
+                    db.execute(
+                        text("""
+                            INSERT INTO config_metas (ds, meta, atualizado_por)
+                            VALUES (:ds, :meta, :atualizado_por)
+                            ON CONFLICT (ds) DO UPDATE
+                            SET meta = EXCLUDED.meta, atualizado_por = EXCLUDED.atualizado_por
+                        """),
+                        rows_meta
+                    )
+                    db.commit()
         if df_meta is None:
-            rm = sb.table("config_metas").select("ds,meta").execute()
-            if rm.data:
-                df_meta = pd.DataFrame(rm.data).rename(columns={"ds": "DS", "meta": "Meta"})
+            rows_m = db.execute(text("SELECT ds, meta FROM config_metas")).mappings().all()
+            if rows_m:
+                df_meta = pd.DataFrame([dict(r) for r in rows_m]).rename(columns={"ds": "DS", "meta": "Meta"})
 
         def _pad(df, col="Scan Station"):
             df = df.copy()
@@ -245,7 +266,23 @@ async def upload_dashboard(
             for _, r in p.iterrows()
         ]
         if rows_d:
-            sb.table("expedicao_diaria").upsert(rows_d, on_conflict="data_ref,scan_station").execute()
+            db.execute(
+                text("""
+                    INSERT INTO expedicao_diaria
+                        (data_ref, scan_station, region, recebido, expedido, entregas,
+                         taxa_exp, taxa_ent, meta, atingiu_meta, processado_por)
+                    VALUES (:data_ref, :scan_station, :region, :recebido, :expedido, :entregas,
+                            :taxa_exp, :taxa_ent, :meta, :atingiu_meta, :processado_por)
+                    ON CONFLICT (data_ref, scan_station) DO UPDATE
+                    SET region = EXCLUDED.region, recebido = EXCLUDED.recebido,
+                        expedido = EXCLUDED.expedido, entregas = EXCLUDED.entregas,
+                        taxa_exp = EXCLUDED.taxa_exp, taxa_ent = EXCLUDED.taxa_ent,
+                        meta = EXCLUDED.meta, atingiu_meta = EXCLUDED.atingiu_meta,
+                        processado_por = EXCLUDED.processado_por
+                """),
+                rows_d
+            )
+            db.commit()
 
         # ── Salva expedicao_cidades ───────────────────────────
         n_cidades = 0
@@ -298,7 +335,21 @@ async def upload_dashboard(
                 for _, r in rec_city.iterrows()
             ]
             if rows_c:
-                sb.table("expedicao_cidades").upsert(rows_c, on_conflict="data_ref,scan_station,destination_city").execute()
+                db.execute(
+                    text("""
+                        INSERT INTO expedicao_cidades
+                            (data_ref, scan_station, destination_city, recebido, expedido,
+                             entregas, taxa_exp, taxa_ent)
+                        VALUES (:data_ref, :scan_station, :destination_city, :recebido, :expedido,
+                                :entregas, :taxa_exp, :taxa_ent)
+                        ON CONFLICT (data_ref, scan_station, destination_city) DO UPDATE
+                        SET recebido = EXCLUDED.recebido, expedido = EXCLUDED.expedido,
+                            entregas = EXCLUDED.entregas, taxa_exp = EXCLUDED.taxa_exp,
+                            taxa_ent = EXCLUDED.taxa_ent
+                    """),
+                    rows_c
+                )
+                db.commit()
                 n_cidades = len(rows_c)
 
         return {
@@ -314,4 +365,5 @@ async def upload_dashboard(
     except HTTPException:
         raise
     except Exception as exc:
+        db.rollback()
         raise HTTPException(500, "Erro interno ao processar o arquivo") from exc

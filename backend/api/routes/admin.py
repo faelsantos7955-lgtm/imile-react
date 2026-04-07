@@ -4,7 +4,9 @@ api/routes/admin.py — Rotas administrativas
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Literal
-from api.deps import get_supabase, get_supabase_admin, require_admin, audit_log
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, require_admin, audit_log
 
 PAGINAS_VALIDAS = {'dashboard','historico','comparativos','triagem','reclamacoes','backlog','monitoramento','admin'}
 ACOES_VALIDAS   = {'excel','bloquear_motorista','aprovar_acesso'}
@@ -14,10 +16,9 @@ router = APIRouter()
 
 # ── Usuários ──────────────────────────────────────────────────
 @router.get("/usuarios")
-def listar_usuarios(user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    res = sb.table("usuarios").select("*").order("nome").execute()
-    return res.data or []
+def listar_usuarios(user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    rows = db.execute(text("SELECT * FROM usuarios ORDER BY nome")).mappings().all()
+    return [dict(r) for r in rows]
 
 
 class PermissoesRequest(BaseModel):
@@ -45,16 +46,25 @@ class PermissoesRequest(BaseModel):
 
 
 @router.put("/usuarios/{user_id}")
-def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    sb.table("usuarios").update({
-        "bases":    req.bases,
-        "paginas":  req.paginas,
-        "acoes":    req.acoes,
-        "role":     req.role,
-        "ativo":    req.ativo,
-        "atualizado_por": user["email"],
-    }).eq("id", user_id).execute()
+def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    db.execute(
+        text("""
+            UPDATE usuarios
+            SET bases = :bases, paginas = :paginas, acoes = :acoes,
+                role = :role, ativo = :ativo, atualizado_por = :atualizado_por
+            WHERE id = :id
+        """),
+        {
+            "bases": req.bases,
+            "paginas": req.paginas,
+            "acoes": req.acoes,
+            "role": req.role,
+            "ativo": req.ativo,
+            "atualizado_por": user["email"],
+            "id": user_id,
+        }
+    )
+    db.commit()
     audit_log("permissoes_atualizadas", f"usuario:{user_id}",
               {"role": req.role, "ativo": req.ativo, "paginas": req.paginas}, user)
     return {"ok": True}
@@ -62,52 +72,50 @@ def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends
 
 # ── Solicitações de Acesso ────────────────────────────────────
 @router.get("/solicitacoes")
-def listar_solicitacoes(status: str = "pendente", user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    res = (sb.table("solicitacoes_acesso").select("*")
-           .eq("status", status)
-           .order("criado_em", desc=True).execute())
-    return res.data or []
+def listar_solicitacoes(status: str = "pendente", user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    rows = db.execute(
+        text("SELECT * FROM solicitacoes_acesso WHERE status = :status ORDER BY criado_em DESC"),
+        {"status": status}
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.post("/solicitacoes/{sol_id}/aprovar")
-def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    sb_admin = get_supabase_admin()
-
-    sol = sb.table("solicitacoes_acesso").select("*").eq("id", sol_id).execute()
-    if not sol.data:
+def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.execute(
+        text("SELECT * FROM solicitacoes_acesso WHERE id = :id"),
+        {"id": sol_id}
+    ).mappings().first()
+    if not row:
         raise HTTPException(404, "Solicitação não encontrada")
 
-    s = sol.data[0]
-    sb.table("solicitacoes_acesso").update({"status": "aprovado"}).eq("id", sol_id).execute()
+    s = dict(row)
+    db.execute(
+        text("UPDATE solicitacoes_acesso SET status = 'aprovado' WHERE id = :id"),
+        {"id": sol_id}
+    )
+    db.execute(
+        text("""
+            INSERT INTO usuarios (email, nome, role, bases, ativo)
+            VALUES (:email, :nome, :role, :bases, true)
+            ON CONFLICT (email) DO UPDATE
+            SET nome = EXCLUDED.nome, role = EXCLUDED.role, ativo = EXCLUDED.ativo
+        """),
+        {"email": s["email"], "nome": s["nome"], "role": role, "bases": []}
+    )
+    db.commit()
     audit_log("solicitacao_aprovada", f"solicitacao:{sol_id}",
               {"email": s["email"], "role": role}, user)
-
-    # Convida no Auth
-    auth_id = None
-    try:
-        invite = sb_admin.auth.admin.invite_user_by_email(s["email"])
-        auth_id = invite.user.id if invite and invite.user else None
-    except Exception:
-        try:
-            users = sb_admin.auth.admin.list_users()
-            auth_id = next((u.id for u in users if u.email == s["email"]), None)
-        except Exception:
-            pass
-
-    row = {"email": s["email"], "nome": s["nome"], "role": role, "bases": [], "ativo": True}
-    if auth_id:
-        row["id"] = auth_id
-    sb.table("usuarios").upsert(row, on_conflict="email").execute()
-
     return {"ok": True}
 
 
 @router.post("/solicitacoes/{sol_id}/rejeitar")
-def rejeitar(sol_id: int, user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    sb.table("solicitacoes_acesso").update({"status": "rejeitado"}).eq("id", sol_id).execute()
+def rejeitar(sol_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    db.execute(
+        text("UPDATE solicitacoes_acesso SET status = 'rejeitado' WHERE id = :id"),
+        {"id": sol_id}
+    )
+    db.commit()
     audit_log("solicitacao_rejeitada", f"solicitacao:{sol_id}", {}, user)
     return {"ok": True}
 
@@ -120,15 +128,23 @@ def listar_audit_log(
     acao: str = "",
     email: str = "",
     user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
-    sb = get_supabase()
-    q = sb.table("audit_log").select("*").order("criado_em", desc=True).range(offset, offset + limit - 1)
+    conditions = []
+    params: dict = {"limit": limit, "offset": offset}
     if acao:
-        q = q.eq("acao", acao)
+        conditions.append("acao = :acao")
+        params["acao"] = acao
     if email:
-        q = q.ilike("email", f"%{email}%")
-    res = q.execute()
-    return res.data or []
+        conditions.append("email ILIKE :email")
+        params["email"] = f"%{email}%"
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    rows = db.execute(
+        text(f"SELECT * FROM audit_log {where} ORDER BY criado_em DESC LIMIT :limit OFFSET :offset"),
+        params
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 # ── Motoristas ────────────────────────────────────────────────
@@ -140,17 +156,29 @@ class MotoristaRequest(BaseModel):
 
 
 @router.post("/motoristas")
-def upsert_motorista(req: MotoristaRequest, user: dict = Depends(require_admin)):
+def upsert_motorista(req: MotoristaRequest, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     from datetime import datetime
-    sb = get_supabase()
-    sb.table("motoristas_status").upsert({
-        "id_motorista":   req.id_motorista,
-        "nome_motorista": req.nome_motorista,
-        "ativo":          req.ativo,
-        "motivo":         req.motivo,
-        "atualizado_em":  datetime.utcnow().isoformat(),
-        "atualizado_por": user["email"],
-    }, on_conflict="id_motorista").execute()
+    db.execute(
+        text("""
+            INSERT INTO motoristas_status (id_motorista, nome_motorista, ativo, motivo, atualizado_em, atualizado_por)
+            VALUES (:id_motorista, :nome_motorista, :ativo, :motivo, :atualizado_em, :atualizado_por)
+            ON CONFLICT (id_motorista) DO UPDATE
+            SET nome_motorista = EXCLUDED.nome_motorista,
+                ativo = EXCLUDED.ativo,
+                motivo = EXCLUDED.motivo,
+                atualizado_em = EXCLUDED.atualizado_em,
+                atualizado_por = EXCLUDED.atualizado_por
+        """),
+        {
+            "id_motorista":   req.id_motorista,
+            "nome_motorista": req.nome_motorista,
+            "ativo":          req.ativo,
+            "motivo":         req.motivo,
+            "atualizado_em":  datetime.utcnow().isoformat(),
+            "atualizado_por": user["email"],
+        }
+    )
+    db.commit()
     return {"ok": True}
 
 
@@ -163,15 +191,14 @@ class MetaDS(BaseModel):
 
 
 @router.get("/metas")
-def listar_metas(user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    return sb.table("config_metas").select("*").order("ds").execute().data or []
+def listar_metas(user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    rows = db.execute(text("SELECT * FROM config_metas ORDER BY ds")).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.put("/metas")
-def upsert_metas(metas: list[MetaDS], user: dict = Depends(require_admin)):
+def upsert_metas(metas: list[MetaDS], user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     from datetime import datetime
-    sb = get_supabase()
     rows = [
         {
             "ds":              m.ds.strip().upper(),
@@ -185,12 +212,28 @@ def upsert_metas(metas: list[MetaDS], user: dict = Depends(require_admin)):
         if m.ds.strip()
     ]
     if rows:
-        sb.table("config_metas").upsert(rows, on_conflict="ds").execute()
+        db.execute(
+            text("""
+                INSERT INTO config_metas (ds, meta_expedicao, meta_entrega, regiao, atualizado_em, atualizado_por)
+                VALUES (:ds, :meta_expedicao, :meta_entrega, :regiao, :atualizado_em, :atualizado_por)
+                ON CONFLICT (ds) DO UPDATE
+                SET meta_expedicao = EXCLUDED.meta_expedicao,
+                    meta_entrega = EXCLUDED.meta_entrega,
+                    regiao = EXCLUDED.regiao,
+                    atualizado_em = EXCLUDED.atualizado_em,
+                    atualizado_por = EXCLUDED.atualizado_por
+            """),
+            rows
+        )
+        db.commit()
     return {"ok": True, "saved": len(rows)}
 
 
 @router.delete("/metas/{ds}")
-def deletar_meta(ds: str, user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    sb.table("config_metas").delete().eq("ds", ds.strip().upper()).execute()
+def deletar_meta(ds: str, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    db.execute(
+        text("DELETE FROM config_metas WHERE ds = :ds"),
+        {"ds": ds.strip().upper()}
+    )
+    db.commit()
     return {"ok": True}

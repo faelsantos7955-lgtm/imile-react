@@ -1,12 +1,13 @@
 fastapi==0.115.0
 uvicorn==0.30.0
-supabase==2.4.0
-httpx==0.24.1
-gotrue==2.4.2
-postgrest==0.16.0
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 pandas==2.2.0
 numpy==1.26.0
 openpyxl==3.1.2
 python-multipart
 slowapi==0.1.9
+httpx==0.24.1

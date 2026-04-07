@@ -3,7 +3,9 @@ api/routes/excel_dashboard.py — Excel do Dashboard (DS + cidades + regiões)
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 from api.limiter import limiter
 from api.routes.excel_base import (
     _HF, _AF, _RF, _GF, _HFNT, _BFNT, _CTR, _LFT, _BRD,
@@ -19,17 +21,28 @@ router = APIRouter()
 
 @router.get("/dashboard/{data_ref}")
 @limiter.limit("20/minute")
-def excel_dashboard(request: Request, data_ref: str, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
+def excel_dashboard(request: Request, data_ref: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user["bases"]:
+        rows_dia = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref = :dr AND scan_station = ANY(:bases)"),
+            {"dr": data_ref, "bases": user["bases"]}
+        ).mappings().all()
+        rows_cid = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref = :dr AND scan_station = ANY(:bases)"),
+            {"dr": data_ref, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows_dia = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref = :dr"), {"dr": data_ref}
+        ).mappings().all()
+        rows_cid = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref = :dr"), {"dr": data_ref}
+        ).mappings().all()
 
-    q = sb.table("expedicao_diaria").select("*").eq("data_ref", data_ref)
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    dia = pd.DataFrame(q.execute().data or [])
-    if dia.empty: raise HTTPException(404, "Sem dados")
-
-    qc = sb.table("expedicao_cidades").select("*").eq("data_ref", data_ref)
-    if user["bases"]: qc = qc.in_("scan_station", user["bases"])
-    cid = pd.DataFrame(qc.execute().data or [])
+    dia = pd.DataFrame([dict(r) for r in rows_dia])
+    if dia.empty:
+        raise HTTPException(404, "Sem dados")
+    cid = pd.DataFrame([dict(r) for r in rows_cid])
 
     dia = dia.sort_values("recebido", ascending=False)
     wb = Workbook()

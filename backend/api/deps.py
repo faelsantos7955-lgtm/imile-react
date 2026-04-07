@@ -1,67 +1,79 @@
 """
-api/deps.py — Dependências compartilhadas (Supabase client, auth)
+api/deps.py — Dependências compartilhadas (SQLAlchemy + JWT)
 """
 import os
+import logging
 from functools import lru_cache
+from typing import Generator
+
 from fastapi import Depends, HTTPException, Header
-from supabase import create_client, Client
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, Session
+from jose import JWTError, jwt
 
+log = logging.getLogger(__name__)
 
-@lru_cache()
-def get_supabase() -> Client:
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL e SUPABASE_KEY não configurados")
-    return create_client(url, key)
-
+# ── Engine SQLAlchemy ─────────────────────────────────────────
 
 @lru_cache()
-def get_supabase_admin() -> Client:
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", os.getenv("SUPABASE_KEY", ""))
-    return create_client(url, key)
+def _engine():
+    url = os.getenv("DATABASE_URL", "")
+    if not url:
+        raise RuntimeError("DATABASE_URL não configurada")
+    return create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
 
 
-async def get_current_user(authorization: str = Header(None)) -> dict:
-    """Extrai e valida o usuário a partir do token JWT do Supabase."""
+def get_db() -> Generator[Session, None, None]:
+    SessionLocal = sessionmaker(bind=_engine(), autocommit=False, autoflush=False)
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ── JWT ───────────────────────────────────────────────────────
+
+SECRET_KEY  = os.getenv("SECRET_KEY", "changeme-secret-key-32chars-min!!")
+ALGORITHM   = "HS256"
+
+
+async def get_current_user(
+    authorization: str = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Valida o Bearer token JWT e retorna o perfil do usuário."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
 
-    token = authorization.replace("Bearer ", "")
-    sb = get_supabase()
+    token = authorization.removeprefix("Bearer ").strip()
 
     try:
-        user_res = sb.auth.get_user(token)
-        if not user_res or not user_res.user:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if not user_id:
             raise HTTPException(status_code=401, detail="Token inválido")
-
-        user = user_res.user
-
-        # Busca perfil na tabela usuarios
-        perfil = sb.table("usuarios").select("*").eq("id", str(user.id)).execute()
-        if not perfil.data:
-            perfil = sb.table("usuarios").select("*").eq("email", user.email).execute()
-
-        if not perfil.data:
-            raise HTTPException(status_code=403, detail="Usuário sem perfil no portal")
-
-        p = perfil.data[0]
-        if not p.get("ativo", True):
-            raise HTTPException(status_code=403, detail="Conta desativada")
-
-        return {
-            "id":       str(user.id),
-            "email":    user.email,
-            "nome":     p.get("nome", ""),
-            "role":     p.get("role", "viewer"),
-            "bases":    p.get("bases") or [],
-            "paginas":  p.get("paginas") or [],
-        }
-    except HTTPException:
-        raise
-    except Exception:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+
+    row = db.execute(
+        text("SELECT id, email, nome, role, bases, paginas, ativo FROM usuarios WHERE id = :id"),
+        {"id": user_id},
+    ).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=403, detail="Usuário sem perfil no portal")
+    if not row["ativo"]:
+        raise HTTPException(status_code=403, detail="Conta desativada")
+
+    return {
+        "id":      str(row["id"]),
+        "email":   row["email"],
+        "nome":    row["nome"] or "",
+        "role":    row["role"] or "viewer",
+        "bases":   row["bases"] or [],
+        "paginas": row["paginas"] or [],
+    }
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -73,16 +85,27 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
 def audit_log(action: str, target: str, detail: dict, user: dict) -> None:
     """Registra ação administrativa na tabela audit_log."""
     try:
-        get_supabase().table("audit_log").insert({
-            "acao":    action,
-            "alvo":    target,
-            "detalhe": detail,
-            "email":   user.get("email", ""),
-            "user_id": user.get("id", ""),
-        }).execute()
-    except Exception:
-        import logging
-        logging.getLogger(__name__).error(
-            "Falha ao gravar audit_log: action=%s target=%s user=%s",
-            action, target, user.get("email")
+        db_gen = get_db()
+        db = next(db_gen)
+        db.execute(
+            text("""
+                INSERT INTO audit_log (acao, alvo, detalhe, email, user_id)
+                VALUES (:acao, :alvo, :detalhe, :email, :user_id)
+            """),
+            {
+                "acao":    action,
+                "alvo":    target,
+                "detalhe": str(detail),
+                "email":   user.get("email", ""),
+                "user_id": user.get("id", ""),
+            },
         )
+        db.commit()
+    except Exception:
+        log.error("Falha ao gravar audit_log: action=%s target=%s user=%s",
+                  action, target, user.get("email"))
+    finally:
+        try:
+            db_gen.close()
+        except Exception:
+            pass

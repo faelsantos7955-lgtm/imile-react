@@ -1,26 +1,21 @@
 """
 api/routes/not_arrived_upload.py — Upload e processamento do relatório
 "Not Arrived com movimentação" (有发未到问题件后又有其他操作)
-
-Lê as abas 数据源 (DC) e Planilha1 (DS), combina, normaliza e agrega por:
-  - estação (oc_name)
-  - região (区域)
-  - última operação (last_operate)
-  - supervisor
 """
 import io
 from datetime import date
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from api.deps import get_current_user, get_supabase
+from api.deps import get_current_user, get_db
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 
 router = APIRouter()
 
-# Mapeamento last_operate (chinês → português)
 OPERACAO_MAP = {
     "到件扫描":    "Chegada",
     "发件扫描":    "Saída",
@@ -38,7 +33,6 @@ OPERACAO_MAP = {
     "退件到件扫描":  "Chegada Devolução",
 }
 
-# Normalização de regiões
 REGIAO_MAP = {
     "CDC":       "CDC",
     "Midwest":   "Centro-Oeste",
@@ -60,10 +54,6 @@ def _norm_regiao(s) -> str:
 
 
 def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
-    """
-    Lê a aba 汇总 e extrai a seção A (supervisor × data diária).
-    Retorna lista de {supervisor, data, total}.
-    """
     if "汇总" not in xl.sheet_names:
         return []
     try:
@@ -74,7 +64,6 @@ def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
     if df.shape[0] < 3 or df.shape[1] < 3:
         return []
 
-    # Linha 1: mapa col → data ISO
     date_map: dict[int, str] = {}
     for col in range(2, df.shape[1]):
         val = df.iloc[1, col]
@@ -84,14 +73,13 @@ def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
             ts = pd.Timestamp(val)
             date_map[col] = ts.date().isoformat()
         except Exception:
-            pass  # ignora Total, 趋势, etc.
+            pass
 
     if not date_map:
         return []
 
     SKIP = {"合计", "NAN", "", "NONE", "区域"}
     registros: list[dict] = []
-    # Seção A: linhas 2-15 (supervisores DS)
     for row_idx in range(2, min(16, df.shape[0])):
         sup_val = df.iloc[row_idx, 0]
         if pd.isna(sup_val):
@@ -123,7 +111,6 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     dc = xl.parse("数据源")
     ds_raw = xl.parse("Planilha1")
 
-    # Mapa supervisor DS: oc_name → supervisor (via aba DS do próprio arquivo)
     sup_map: dict[str, str] = {}
     if "DS" in xl.sheet_names:
         ds_dir = xl.parse("DS")
@@ -135,11 +122,9 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
                 if sigla and sup:
                     sup_map[sigla] = sup
 
-    # Combinar DC + DS
     df = pd.concat([dc, ds_raw], ignore_index=True)
     df.columns = df.columns.str.strip()
 
-    # Normalizar campos
     df["oc_name"] = df["oc_name"].fillna("").astype(str).str.strip()
     df["oc_code"] = df["oc_code"].fillna("").astype(str).str.strip() if "oc_code" in df.columns else ""
     df["tipo"]    = df["站点类型"].fillna("").astype(str).str.strip().str.upper()
@@ -147,12 +132,10 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     df["op_orig"] = df["last_operate"].fillna("").astype(str).str.strip()
     df["operacao"] = df["op_orig"].map(OPERACAO_MAP).fillna(df["op_orig"])
 
-    # Filtrar apenas São Paulo (CDC-SP + DS SP)
     df = df[df["regiao"].isin(["São Paulo", "CDC"])].copy()
     if df.empty:
         raise HTTPException(400, "Nenhum registro de São Paulo encontrado no arquivo.")
 
-    # Supervisor: coluna DC onde disponível, depois mapa pelo oc_name
     df["supervisor"] = ""
     if "Supervisor" in df.columns:
         df["supervisor"] = df["Supervisor"].fillna("").astype(str).str.strip()
@@ -160,21 +143,18 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     df.loc[mask, "supervisor"] = df.loc[mask, "oc_name"].str.upper().map(sup_map).fillna("")
     df["supervisor"] = df["supervisor"].replace("", "Sem Supervisor")
 
-    # Totais globais
     total            = len(df)
     total_dc         = int((df["tipo"] == "DC").sum())
     total_ds         = int((df["tipo"] == "DS").sum())
     total_entregues  = int((df["operacao"] == "Entregue").sum())
     pct_entregues    = round(total_entregues / total * 100, 2) if total else 0.0
 
-    # Data de referência: maior data dos registros
     data_ref = date.today().isoformat()
     if "日期" in df.columns:
         datas = pd.to_datetime(df["日期"], errors="coerce").dropna()
         if not datas.empty:
             data_ref = datas.dt.date.max().isoformat()
 
-    # ── Por estação ────────────────────────────────────────────
     grp_est = (
         df.groupby(["oc_name", "oc_code", "tipo", "regiao", "supervisor"])
         .agg(
@@ -196,14 +176,12 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
         for r in grp_est.itertuples(index=False)
     ]
 
-    # ── Por região ─────────────────────────────────────────────
     grp_reg = df.groupby(["regiao", "tipo"]).size().reset_index(name="total")
     por_regiao = [
         {"regiao": r.regiao, "tipo": r.tipo, "total": int(r.total)}
         for r in grp_reg.itertuples(index=False)
     ]
 
-    # ── Por operação ───────────────────────────────────────────
     grp_op = (
         df.groupby("operacao").size()
         .reset_index(name="total")
@@ -214,7 +192,6 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
         for r in grp_op.itertuples(index=False)
     ]
 
-    # ── Por supervisor ─────────────────────────────────────────
     grp_sup = (
         df.groupby("supervisor")
         .agg(
@@ -258,6 +235,7 @@ async def processar_not_arrived(
     request: Request,
     file: UploadFile = File(..., description="Arquivo Problem Registration (.xlsx)"),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     conteudo = await validar_arquivo(file)
 
@@ -268,66 +246,84 @@ async def processar_not_arrived(
     except Exception as e:
         raise HTTPException(400, f"Erro ao processar arquivo: {e}")
 
-    sb = get_supabase()
-
     try:
         data_ref = resultado["data_ref"]
 
-        # Remove upload anterior da mesma data
-        existing = sb.table("not_arrived_uploads").select("id").eq("data_ref", data_ref).execute()
-        if existing.data:
-            old_id = existing.data[0]["id"]
+        existing = db.execute(
+            text("SELECT id FROM not_arrived_uploads WHERE data_ref = :dr"), {"dr": data_ref}
+        ).mappings().first()
+        if existing:
+            old_id = existing["id"]
             for tbl in ("not_arrived_por_estacao", "not_arrived_por_regiao",
                         "not_arrived_por_operacao", "not_arrived_por_supervisor",
                         "not_arrived_tendencia"):
                 try:
-                    sb.table(tbl).delete().eq("upload_id", old_id).execute()
+                    db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
                 except Exception:
                     pass
-            sb.table("not_arrived_uploads").delete().eq("id", old_id).execute()
+            db.execute(text("DELETE FROM not_arrived_uploads WHERE id = :id"), {"id": old_id})
+            db.commit()
 
-        # Criar upload
-        up = sb.table("not_arrived_uploads").insert({
-            "data_ref":        data_ref,
-            "criado_por":      user["email"],
-            "total":           resultado["total"],
-            "total_dc":        resultado["total_dc"],
-            "total_ds":        resultado["total_ds"],
-            "total_entregues": resultado["total_entregues"],
-            "pct_entregues":   resultado["pct_entregues"],
-        }).execute()
-        uid = up.data[0]["id"]
+        row = db.execute(
+            text("""
+                INSERT INTO not_arrived_uploads (data_ref, criado_por, total, total_dc, total_ds, total_entregues, pct_entregues)
+                VALUES (:data_ref, :criado_por, :total, :total_dc, :total_ds, :total_entregues, :pct_entregues)
+                RETURNING id
+            """),
+            {
+                "data_ref":        data_ref,
+                "criado_por":      user["email"],
+                "total":           resultado["total"],
+                "total_dc":        resultado["total_dc"],
+                "total_ds":        resultado["total_ds"],
+                "total_entregues": resultado["total_entregues"],
+                "pct_entregues":   resultado["pct_entregues"],
+            }
+        ).mappings().first()
+        uid = row["id"]
+        db.commit()
 
-        # Por estação (lotes de 500 — pode ter centenas de estações)
         estacoes = [{"upload_id": uid, **r} for r in resultado["por_estacao"]]
         for i in range(0, len(estacoes), 500):
-            sb.table("not_arrived_por_estacao").insert(estacoes[i:i + 1000]).execute()
+            db.execute(
+                text("INSERT INTO not_arrived_por_estacao (upload_id, oc_name, oc_code, tipo, regiao, supervisor, total, entregues) VALUES (:upload_id, :oc_name, :oc_code, :tipo, :regiao, :supervisor, :total, :entregues)"),
+                estacoes[i:i+1000]
+            )
+        db.commit()
 
         if resultado["por_regiao"]:
-            sb.table("not_arrived_por_regiao").insert(
+            db.execute(
+                text("INSERT INTO not_arrived_por_regiao (upload_id, regiao, tipo, total) VALUES (:upload_id, :regiao, :tipo, :total)"),
                 [{"upload_id": uid, **r} for r in resultado["por_regiao"]]
-            ).execute()
+            )
+            db.commit()
 
         if resultado["por_operacao"]:
-            sb.table("not_arrived_por_operacao").insert(
+            db.execute(
+                text("INSERT INTO not_arrived_por_operacao (upload_id, operacao, total) VALUES (:upload_id, :operacao, :total)"),
                 [{"upload_id": uid, **r} for r in resultado["por_operacao"]]
-            ).execute()
+            )
+            db.commit()
 
         if resultado["por_supervisor"]:
-            sb.table("not_arrived_por_supervisor").insert(
+            db.execute(
+                text("INSERT INTO not_arrived_por_supervisor (upload_id, supervisor, total, total_dc, total_ds, entregues) VALUES (:upload_id, :supervisor, :total, :total_dc, :total_ds, :entregues)"),
                 [{"upload_id": uid, **r} for r in resultado["por_supervisor"]]
-            ).execute()
+            )
+            db.commit()
 
-        # Tendência por supervisor (aba 汇总)
         if tendencia:
             for i in range(0, len(tendencia), 500):
-                sb.table("not_arrived_tendencia").insert(
-                    [{"upload_id": uid, **r} for r in tendencia[i:i + 1000]]
-                ).execute()
+                db.execute(
+                    text("INSERT INTO not_arrived_tendencia (upload_id, supervisor, data, total) VALUES (:upload_id, :supervisor, :data, :total)"),
+                    [{"upload_id": uid, **r} for r in tendencia[i:i+1000]]
+                )
+            db.commit()
 
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(400, f"Erro ao salvar no banco: {e}")
 
     return {

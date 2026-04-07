@@ -3,7 +3,9 @@ api/routes/excel_reclamacoes.py — Excel de Reclamações (TOP Ofensores)
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 from api.limiter import limiter
 from api.routes.excel_base import _CTR, _BRD, _to_stream
 import pandas as pd
@@ -16,19 +18,28 @@ router = APIRouter()
 
 @router.get("/reclamacoes/{upload_id}")
 @limiter.limit("20/minute")
-def excel_reclamacoes(request: Request, upload_id: int, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
+def excel_reclamacoes(request: Request, upload_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    up_row = db.execute(
+        text("SELECT * FROM reclamacoes_uploads WHERE id = :id"), {"id": upload_id}
+    ).mappings().first()
+    if not up_row:
+        raise HTTPException(404, "Upload não encontrado")
+    u = dict(up_row)
 
-    upload = sb.table("reclamacoes_uploads").select("*").eq("id", upload_id).execute()
-    if not upload.data: raise HTTPException(404, "Upload não encontrado")
-    u = upload.data[0]
+    r_sup = pd.DataFrame([dict(r) for r in db.execute(
+        text("SELECT * FROM reclamacoes_por_supervisor WHERE upload_id = :uid"), {"uid": upload_id}
+    ).mappings().all()])
+    r_sta = pd.DataFrame([dict(r) for r in db.execute(
+        text("SELECT * FROM reclamacoes_por_station WHERE upload_id = :uid"), {"uid": upload_id}
+    ).mappings().all()])
+    top_all = pd.DataFrame([dict(r) for r in db.execute(
+        text("SELECT * FROM reclamacoes_top5 WHERE upload_id = :uid ORDER BY total DESC"), {"uid": upload_id}
+    ).mappings().all()])
 
-    r_sup   = pd.DataFrame(sb.table("reclamacoes_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or [])
-    r_sta   = pd.DataFrame(sb.table("reclamacoes_por_station").select("*").eq("upload_id", upload_id).execute().data or [])
-    top_all = pd.DataFrame(sb.table("reclamacoes_top5").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or [])
-
-    inativos_res = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
-    inativos = {r["id_motorista"] for r in (inativos_res.data or [])}
+    inativos_rows = db.execute(
+        text("SELECT id_motorista FROM motoristas_status WHERE ativo = false")
+    ).mappings().all()
+    inativos = {r["id_motorista"] for r in inativos_rows}
     top5 = top_all[~top_all["motorista"].isin(inativos)].head(5) if not top_all.empty else top_all
 
     semana_ref   = u.get("semana_ref", 0)

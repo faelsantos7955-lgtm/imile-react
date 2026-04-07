@@ -3,7 +3,9 @@ api/routes/excel_na.py — Excel Not Arrived (有发未到)
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 from api.limiter import limiter
 from api.routes.excel_base import (
     _HF, _HFNT, _BFNT, _CTR, _LFT, _BRD,
@@ -36,20 +38,39 @@ def _na_cell_fill(val, max_val):
 
 @router.get("/na/{upload_id}")
 @limiter.limit("10/minute")
-def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-
-    up = sb.table("na_uploads").select("*").eq("id", upload_id).execute().data
-    if not up:
+def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    up_row = db.execute(
+        text("SELECT * FROM na_uploads WHERE id = :id"), {"id": upload_id}
+    ).mappings().first()
+    if not up_row:
         raise HTTPException(404, "Upload não encontrado.")
-    up = up[0]
+    up = dict(up_row)
     data_ref  = up.get("data_ref", "")
     threshold = up.get("threshold_col", ">10D")
 
-    tend     = sb.table("na_tendencia").select("supervisor,ds,data,total").eq("upload_id", upload_id).order("data").execute().data or []
-    por_sup  = sb.table("na_por_supervisor").select("supervisor,total,grd10d").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
-    por_ds   = sb.table("na_por_ds").select("supervisor,ds,total,grd10d").eq("upload_id", upload_id).order("supervisor").order("total", desc=True).execute().data or []
-    por_proc = sb.table("na_por_processo").select("processo,total").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
+    tend_rows = db.execute(
+        text("SELECT supervisor, ds, data, total FROM na_tendencia WHERE upload_id = :uid ORDER BY data"),
+        {"uid": upload_id}
+    ).mappings().all()
+    tend = [dict(r) for r in tend_rows]
+
+    sup_rows = db.execute(
+        text("SELECT supervisor, total, grd10d FROM na_por_supervisor WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    por_sup = [dict(r) for r in sup_rows]
+
+    ds_rows = db.execute(
+        text("SELECT supervisor, ds, total, grd10d FROM na_por_ds WHERE upload_id = :uid ORDER BY supervisor, total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    por_ds = [dict(r) for r in ds_rows]
+
+    proc_rows = db.execute(
+        text("SELECT processo, total FROM na_por_processo WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    por_proc = [dict(r) for r in proc_rows]
 
     # Pivot: supervisor → ds → date → count
     pivot = {}

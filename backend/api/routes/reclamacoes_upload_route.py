@@ -8,8 +8,10 @@ from datetime import date, datetime
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from api.deps import get_current_user, get_supabase
+from api.deps import get_current_user, get_db
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 
@@ -106,18 +108,16 @@ def _top5_motoristas(df, inativos=None):
     return result
 
 
-def _adicionar_supervisor(df, sb):
+def _adicionar_supervisor(df, db: Session):
     """Adiciona coluna SUPERVISOR via tabela config_supervisores."""
     if 'SUPERVISOR' in df.columns:
         return df
-    # Buscar mapeamento do banco
-    res = sb.table("config_supervisores").select("sigla,region").execute()
-    if not res.data:
+    rows = db.execute(text("SELECT sigla, region FROM config_supervisores")).mappings().all()
+    if not rows:
         df['SUPERVISOR'] = 'Sem Região'
         return df
-    sup_map = {r['sigla'].strip().upper(): r['region'] for r in res.data if r.get('sigla')}
+    sup_map = {r['sigla'].strip().upper(): r['region'] for r in rows if r.get('sigla')}
 
-    # Encontrar coluna de station
     col_sta = None
     for c in ['Inventory Station', 'inventory_station', 'Station']:
         if c in df.columns:
@@ -136,12 +136,8 @@ async def processar_reclamacoes(
     request: Request,
     file: UploadFile = File(..., description="Bilhete de Reclamação (.xlsx)"),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """
-    Recebe o bilhete de reclamações, processa e salva no Supabase.
-    Versão simplificada que aceita apenas o bilhete (arquivo principal).
-    """
-    sb = get_supabase()
     conteudo = await validar_arquivo(file)
 
     try:
@@ -152,37 +148,36 @@ async def processar_reclamacoes(
     if df.empty:
         raise HTTPException(400, "Arquivo vazio")
 
-    # Adicionar supervisor
-    df = _adicionar_supervisor(df, sb)
+    df = _adicionar_supervisor(df, db)
 
-    # Data de referência
     data_ref = _extrair_data_ref(df)
 
-    # Inativos
-    res_i = sb.table("motoristas_status").select("id_motorista").eq("ativo", False).execute()
-    inativos = {r["id_motorista"] for r in (res_i.data or [])}
+    inativos_rows = db.execute(
+        text("SELECT id_motorista FROM motoristas_status WHERE ativo = false")
+    ).mappings().all()
+    inativos = {r["id_motorista"] for r in inativos_rows}
 
-    # Agregar
     por_sup = _agregar_por_supervisor(df)
     por_sta = _agregar_por_station(df)
     top5 = _top5_motoristas(df, inativos)
 
-    # Week
     semana_ref = 0
     if 'Create Time' in df.columns:
         datas = pd.to_datetime(df['Create Time'], dayfirst=True, errors='coerce')
         if not datas.dropna().empty:
             semana_ref = int(datas.dropna().dt.isocalendar().week.mode().iloc[0])
 
-    # Remove upload anterior da mesma data
-    existing = sb.table("reclamacoes_uploads").select("id").eq("data_ref", data_ref.isoformat()).execute()
-    if existing.data:
-        old_id = existing.data[0]["id"]
+    existing = db.execute(
+        text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
+        {"dr": data_ref.isoformat()}
+    ).mappings().first()
+    if existing:
+        old_id = existing["id"]
         for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
-            sb.table(tbl).delete().eq("upload_id", old_id).execute()
-        sb.table("reclamacoes_uploads").delete().eq("id", old_id).execute()
+            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
+        db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
+        db.commit()
 
-    # Criar upload
     n_mot = 0
     for c in ['Motorista', 'DA Name', 'da_name', 'Driver Name']:
         if c in df.columns:
@@ -192,30 +187,44 @@ async def processar_reclamacoes(
     col_sta = next((c for c in ['Inventory Station', 'inventory_station', 'Station'] if c in df.columns), None)
     n_sta = int(df[col_sta].nunique()) if col_sta else 0
 
-    up = sb.table("reclamacoes_uploads").insert({
-        "data_ref":    data_ref.isoformat(),
-        "n_registros": len(df),
-        "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
-        "n_sta":       n_sta,
-        "n_mot":       n_mot,
-        "semana_ref":  semana_ref,
-    }).execute()
-    uid = up.data[0]["id"]
+    row = db.execute(
+        text("""
+            INSERT INTO reclamacoes_uploads (data_ref, n_registros, n_sup, n_sta, n_mot, semana_ref)
+            VALUES (:data_ref, :n_registros, :n_sup, :n_sta, :n_mot, :semana_ref)
+            RETURNING id
+        """),
+        {
+            "data_ref":    data_ref.isoformat(),
+            "n_registros": len(df),
+            "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
+            "n_sta":       n_sta,
+            "n_mot":       n_mot,
+            "semana_ref":  semana_ref,
+        }
+    ).mappings().first()
+    uid = row["id"]
+    db.commit()
 
-    # Salvar por supervisor
     if por_sup:
-        rows = [{"upload_id": uid, **r} for r in por_sup]
-        sb.table("reclamacoes_por_supervisor").insert(rows).execute()
+        db.execute(
+            text("INSERT INTO reclamacoes_por_supervisor (upload_id, supervisor, dia_total, mes_total) VALUES (:upload_id, :supervisor, :dia_total, :mes_total)"),
+            [{"upload_id": uid, **r} for r in por_sup]
+        )
+        db.commit()
 
-    # Salvar por station
     if por_sta:
-        rows = [{"upload_id": uid, **r} for r in por_sta]
-        sb.table("reclamacoes_por_station").insert(rows).execute()
+        db.execute(
+            text("INSERT INTO reclamacoes_por_station (upload_id, station, supervisor, dia_total, mes_total) VALUES (:upload_id, :station, :supervisor, :dia_total, :mes_total)"),
+            [{"upload_id": uid, **r} for r in por_sta]
+        )
+        db.commit()
 
-    # Salvar top 5
     if top5:
-        rows = [{"upload_id": uid, **r} for r in top5]
-        sb.table("reclamacoes_top5").insert(rows).execute()
+        db.execute(
+            text("INSERT INTO reclamacoes_top5 (upload_id, motorista, id_motorista, ds, supervisor, total) VALUES (:upload_id, :motorista, :id_motorista, :ds, :supervisor, :total)"),
+            [{"upload_id": uid, **r} for r in top5]
+        )
+        db.commit()
 
     return {
         "upload_id":   uid,

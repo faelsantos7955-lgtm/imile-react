@@ -2,56 +2,52 @@
 api/routes/correlacao.py — Correlação Backlog × Reclamações por DS
 """
 from fastapi import APIRouter, Depends
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 
 router = APIRouter()
 
 
 @router.get("/dados")
-def correlacao_dados(user: dict = Depends(get_current_user)):
+def correlacao_dados(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     Junta o último upload de backlog com o último upload de reclamações,
     retorna dados por DS para scatter plot e tabela de risco.
     """
-    sb = get_supabase()
-
     # Último upload de backlog
-    bl_up = (
-        sb.table("backlog_uploads").select("id,data_ref")
-        .order("criado_em", desc=True).limit(1).execute().data
-    )
+    bl_up = db.execute(
+        text("SELECT id, data_ref FROM backlog_uploads ORDER BY criado_em DESC LIMIT 1")
+    ).mappings().first()
+
     # Último upload de reclamações
-    rec_up = (
-        sb.table("reclamacoes_uploads").select("id,data_ref")
-        .order("criado_em", desc=True).limit(1).execute().data
-    )
+    rec_up = db.execute(
+        text("SELECT id, data_ref FROM reclamacoes_uploads ORDER BY criado_em DESC LIMIT 1")
+    ).mappings().first()
 
     if not bl_up:
         return {"backlog_data_ref": None, "rec_data_ref": None, "dados": []}
 
-    bl_uid = bl_up[0]["id"]
-    bl_data = (
-        sb.table("backlog_por_ds")
-        .select("nome,backlog,total_7d,orders,prioridade,supervisor")
-        .eq("upload_id", bl_uid)
-        .execute().data or []
-    )
+    bl_uid = bl_up["id"]
+    bl_data_rows = db.execute(
+        text("SELECT nome, backlog, total_7d, orders, prioridade, supervisor FROM backlog_por_ds WHERE upload_id = :uid"),
+        {"uid": bl_uid}
+    ).mappings().all()
+    bl_data = [dict(r) for r in bl_data_rows]
 
     rec_map: dict = {}
     rec_data_ref = None
     if rec_up:
-        rec_uid = rec_up[0]["id"]
-        rec_data_ref = rec_up[0].get("data_ref")
-        rows = (
-            sb.table("reclamacoes_por_station")
-            .select("station,dia_total,supervisor")
-            .eq("upload_id", rec_uid)
-            .execute().data or []
-        )
+        rec_uid = rec_up["id"]
+        rec_data_ref = rec_up["data_ref"]
+        rows = db.execute(
+            text("SELECT station, dia_total, supervisor FROM reclamacoes_por_station WHERE upload_id = :uid"),
+            {"uid": rec_uid}
+        ).mappings().all()
         for r in rows:
-            key = (r.get("station") or "").strip().upper()
+            key = (r["station"] or "").strip().upper()
             if key:
-                rec_map[key] = r
+                rec_map[key] = dict(r)
 
     result = []
     for b in bl_data:
@@ -83,7 +79,7 @@ def correlacao_dados(user: dict = Depends(get_current_user)):
     result.sort(key=lambda x: x["risco"], reverse=True)
 
     return {
-        "backlog_data_ref": bl_up[0].get("data_ref"),
+        "backlog_data_ref": bl_up["data_ref"],
         "rec_data_ref":     rec_data_ref,
         "dados":            result,
     }

@@ -1,21 +1,56 @@
 """
-api/routes/auth.py — Login, registro e perfil
+api/routes/auth.py — Login, registro e perfil (JWT próprio + PostgreSQL)
 """
+import os
+import uuid
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, HTTPException, Depends, Response, Cookie
 from pydantic import BaseModel
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from jose import jwt, JWTError
+from passlib.context import CryptContext
+
+from api.deps import get_db, get_current_user, SECRET_KEY, ALGORITHM
 
 router = APIRouter()
+
+pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+ACCESS_TTL  = int(os.getenv("ACCESS_TOKEN_MINUTES",  "60"))    # 1 hora
+REFRESH_TTL = int(os.getenv("REFRESH_TOKEN_DAYS",    "30"))    # 30 dias
 
 _COOKIE_OPTS = dict(
     key="refresh_token",
     httponly=True,
     secure=True,
     samesite="lax",
-    max_age=60 * 60 * 24 * 30,  # 30 dias
+    max_age=60 * 60 * 24 * REFRESH_TTL,
     path="/api/auth/refresh",
 )
 
+
+# ── Helpers JWT ───────────────────────────────────────────────
+
+def _make_access_token(user_id: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TTL)
+    return jwt.encode({"sub": user_id, "exp": exp, "type": "access"}, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _make_refresh_token(user_id: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TTL)
+    return jwt.encode({"sub": user_id, "exp": exp, "type": "refresh"}, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _decode_refresh(token: str) -> str:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if payload.get("type") != "refresh":
+        raise ValueError("Token não é do tipo refresh")
+    return payload["sub"]
+
+
+# ── Schemas ───────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
     email: str
@@ -28,86 +63,77 @@ class RegisterRequest(BaseModel):
     motivo: str = ""
 
 
-def _buscar_perfil(sb, user_id: str, email: str):
-    """Busca o perfil do usuário na tabela usuarios."""
-    perfil = sb.table("usuarios").select("*").eq("id", user_id).execute()
-    if not perfil.data:
-        perfil = sb.table("usuarios").select("*").eq("email", email).execute()
-    return perfil.data[0] if perfil.data else None
-
+# ── Endpoints ─────────────────────────────────────────────────
 
 @router.post("/login")
-def login(req: LoginRequest, response: Response):
-    sb = get_supabase()
-    try:
-        res = sb.auth.sign_in_with_password({
-            "email": req.email.strip(),
-            "password": req.password,
-        })
-        if not res.user:
-            raise HTTPException(400, "Credenciais inválidas")
+def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    row = db.execute(
+        text("SELECT id, email, nome, role, bases, paginas, ativo, password_hash FROM usuarios WHERE email = :email"),
+        {"email": req.email.strip().lower()},
+    ).mappings().first()
 
-        p = _buscar_perfil(sb, str(res.user.id), res.user.email)
-        if not p:
-            raise HTTPException(403, "Usuário sem perfil no portal")
-        if not p.get("ativo", True):
-            raise HTTPException(403, "Conta desativada")
+    if not row:
+        raise HTTPException(401, "Email ou senha incorretos")
+    if not row["ativo"]:
+        raise HTTPException(403, "Conta desativada")
+    if not row["password_hash"] or not pwd_ctx.verify(req.password, row["password_hash"]):
+        raise HTTPException(401, "Email ou senha incorretos")
 
-        # Refresh token em HttpOnly cookie — não exposto ao JS
-        response.set_cookie(value=res.session.refresh_token, **_COOKIE_OPTS)
+    user_id = str(row["id"])
+    access  = _make_access_token(user_id)
+    refresh = _make_refresh_token(user_id)
 
-        return {
-            "access_token": res.session.access_token,
-            "user": {
-                "id":      str(res.user.id),
-                "email":   res.user.email,
-                "nome":    p.get("nome", ""),
-                "role":    p.get("role", "viewer"),
-                "bases":   p.get("bases") or [],
-                "paginas": p.get("paginas") or [],
-            }
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        msg = str(e).lower()
-        if "invalid" in msg or "credentials" in msg:
-            raise HTTPException(401, "Email ou senha incorretos")
-        raise HTTPException(500, "Erro interno ao realizar login")
+    response.set_cookie(value=refresh, **_COOKIE_OPTS)
+
+    return {
+        "access_token": access,
+        "user": {
+            "id":      user_id,
+            "email":   row["email"],
+            "nome":    row["nome"] or "",
+            "role":    row["role"] or "viewer",
+            "bases":   row["bases"] or [],
+            "paginas": row["paginas"] or [],
+        },
+    }
 
 
 @router.post("/refresh")
 def refresh(response: Response, refresh_token: str = Cookie(None)):
     if not refresh_token:
         raise HTTPException(401, "Sessão expirada — faça login novamente")
-    sb = get_supabase()
     try:
-        res = sb.auth.refresh_session(refresh_token)
-        if not res.session:
-            raise HTTPException(401, "Sessão inválida ou expirada")
-
-        # Renova o cookie com novo refresh_token
-        response.set_cookie(value=res.session.refresh_token, **_COOKIE_OPTS)
-
-        return {"access_token": res.session.access_token}
-    except HTTPException:
-        raise
-    except Exception:
+        user_id = _decode_refresh(refresh_token)
+    except JWTError:
         raise HTTPException(401, "Refresh token inválido ou expirado")
+    except Exception:
+        raise HTTPException(401, "Sessão inválida")
+
+    new_access  = _make_access_token(user_id)
+    new_refresh = _make_refresh_token(user_id)
+    response.set_cookie(value=new_refresh, **_COOKIE_OPTS)
+
+    return {"access_token": new_access}
 
 
 @router.post("/register")
-def register(req: RegisterRequest):
-    sb = get_supabase()
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
     try:
-        sb.table("solicitacoes_acesso").insert({
-            "nome":   req.nome.strip(),
-            "email":  req.email.strip().lower(),
-            "motivo": req.motivo.strip(),
-            "status": "pendente",
-        }).execute()
+        db.execute(
+            text("""
+                INSERT INTO solicitacoes_acesso (nome, email, motivo, status)
+                VALUES (:nome, :email, :motivo, 'pendente')
+            """),
+            {
+                "nome":   req.nome.strip(),
+                "email":  req.email.strip().lower(),
+                "motivo": req.motivo.strip(),
+            },
+        )
+        db.commit()
         return {"ok": True, "message": "Solicitação enviada"}
     except Exception:
+        db.rollback()
         raise HTTPException(500, "Erro interno ao enviar solicitação")
 
 

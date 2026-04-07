@@ -3,7 +3,9 @@ api/routes/excel_triagem.py — Excel de Triagem (DC > DS)
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 from api.limiter import limiter
 from api.routes.excel_base import (
     _CTR, _BRD, _titulo_aba, _write_header, _auto_width, _to_stream,
@@ -18,15 +20,23 @@ router = APIRouter()
 
 @router.get("/triagem/{upload_id}")
 @limiter.limit("20/minute")
-def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    upload = sb.table("triagem_uploads").select("*").eq("id", upload_id).execute()
-    if not upload.data: raise HTTPException(404, "Não encontrado")
-    u = upload.data[0]
+def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    up_row = db.execute(
+        text("SELECT * FROM triagem_uploads WHERE id = :id"), {"id": upload_id}
+    ).mappings().first()
+    if not up_row:
+        raise HTTPException(404, "Não encontrado")
+    u = dict(up_row)
 
-    por_ds  = pd.DataFrame(sb.table("triagem_por_ds").select("*").eq("upload_id", upload_id).execute().data or [])
-    top5    = pd.DataFrame(sb.table("triagem_top5").select("*").eq("upload_id", upload_id).execute().data or [])
-    por_sup = pd.DataFrame(sb.table("triagem_por_supervisor").select("*").eq("upload_id", upload_id).execute().data or [])
+    por_ds = pd.DataFrame([dict(r) for r in db.execute(
+        text("SELECT * FROM triagem_por_ds WHERE upload_id = :uid"), {"uid": upload_id}
+    ).mappings().all()])
+    top5 = pd.DataFrame([dict(r) for r in db.execute(
+        text("SELECT * FROM triagem_top5 WHERE upload_id = :uid"), {"uid": upload_id}
+    ).mappings().all()])
+    por_sup = pd.DataFrame([dict(r) for r in db.execute(
+        text("SELECT * FROM triagem_por_supervisor WHERE upload_id = :uid"), {"uid": upload_id}
+    ).mappings().all()])
 
     wb = Workbook()
 

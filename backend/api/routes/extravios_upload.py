@@ -2,7 +2,9 @@
 api/routes/extravios_upload.py — Processamento do Controle de Extravios
 """
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-from api.deps import get_supabase, get_current_user, require_admin, audit_log
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user, require_admin, audit_log
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 import pandas as pd
@@ -129,58 +131,80 @@ async def processar_extravios(
     request: Request,
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     conteudo  = await validar_arquivo(file)
     resultado = _processar(conteudo)
 
-    sb = get_supabase()
-
     # Remove upload anterior da mesma data_ref
-    existing = sb.table("extravios_uploads").select("id").eq("data_ref", resultado['data_ref']).execute()
-    if existing.data:
-        old_id = existing.data[0]["id"]
+    existing = db.execute(
+        text("SELECT id FROM extravios_uploads WHERE data_ref = :dr"),
+        {"dr": resultado['data_ref']}
+    ).mappings().first()
+    if existing:
+        old_id = existing["id"]
         for tbl in ("extravios_por_ds", "extravios_por_motivo", "extravios_por_semana"):
             try:
-                sb.table(tbl).delete().eq("upload_id", old_id).execute()
+                db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
             except Exception:
                 pass
-        sb.table("extravios_uploads").delete().eq("id", old_id).execute()
+        db.execute(text("DELETE FROM extravios_uploads WHERE id = :id"), {"id": old_id})
+        db.commit()
 
-    up = sb.table("extravios_uploads").insert({
-        "data_ref":    resultado['data_ref'],
-        "criado_por":  user["email"],
-        "total":       resultado['total'],
-        "valor_total": resultado['valor_total'],
-    }).execute()
-    uid = up.data[0]["id"]
+    row = db.execute(
+        text("""
+            INSERT INTO extravios_uploads (data_ref, criado_por, total, valor_total)
+            VALUES (:data_ref, :criado_por, :total, :valor_total)
+            RETURNING id
+        """),
+        {
+            "data_ref":    resultado['data_ref'],
+            "criado_por":  user["email"],
+            "total":       resultado['total'],
+            "valor_total": resultado['valor_total'],
+        }
+    ).mappings().first()
+    uid = row["id"]
+    db.commit()
 
     if resultado['por_ds']:
         rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
         for i in range(0, len(rows), 1000):
-            sb.table("extravios_por_ds").insert(rows[i:i+1000]).execute()
+            db.execute(
+                text("""
+                    INSERT INTO extravios_por_ds (upload_id, ds, supervisor, regional, total, valor_total, total_lost, total_damaged)
+                    VALUES (:upload_id, :ds, :supervisor, :regional, :total, :valor_total, :total_lost, :total_damaged)
+                """),
+                rows[i:i+1000]
+            )
+        db.commit()
 
     if resultado['por_motivo']:
-        sb.table("extravios_por_motivo").insert(
+        db.execute(
+            text("INSERT INTO extravios_por_motivo (upload_id, motivo, total, valor_total) VALUES (:upload_id, :motivo, :total, :valor_total)"),
             [{"upload_id": uid, **r} for r in resultado['por_motivo']]
-        ).execute()
+        )
+        db.commit()
 
     if resultado['por_semana']:
-        sb.table("extravios_por_semana").insert(
+        db.execute(
+            text("INSERT INTO extravios_por_semana (upload_id, semana, mes, total, valor_total) VALUES (:upload_id, :semana, :mes, :total, :valor_total)"),
             [{"upload_id": uid, **r} for r in resultado['por_semana']]
-        ).execute()
+        )
+        db.commit()
 
     audit_log("upload_processado", f"extravios_uploads:{uid}", {"total": resultado['total']}, user)
     return {"upload_id": uid, "total": resultado['total'], "data_ref": resultado['data_ref']}
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
-    sb = get_supabase()
+def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     for tbl in ("extravios_por_ds", "extravios_por_motivo", "extravios_por_semana"):
         try:
-            sb.table(tbl).delete().eq("upload_id", upload_id).execute()
+            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
         except Exception:
             raise HTTPException(500, f"Erro ao deletar {tbl}")
-    sb.table("extravios_uploads").delete().eq("id", upload_id).execute()
+    db.execute(text("DELETE FROM extravios_uploads WHERE id = :id"), {"id": upload_id})
+    db.commit()
     audit_log("upload_deletado", f"extravios_uploads:{upload_id}", {}, user)
     return {"ok": True}

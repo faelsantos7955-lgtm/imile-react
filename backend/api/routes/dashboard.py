@@ -2,29 +2,44 @@
 api/routes/dashboard.py — Dashboard + Heatmap + Funil
 """
 from fastapi import APIRouter, Depends
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 import pandas as pd
 
 router = APIRouter()
 
 
 @router.get("/datas")
-def datas_disponiveis(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    q = sb.table("expedicao_diaria").select("data_ref")
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    res = q.execute()
-    if not res.data: return []
-    return sorted(set(r["data_ref"] for r in res.data), reverse=True)
+def datas_disponiveis(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT data_ref FROM expedicao_diaria WHERE scan_station = ANY(:bases)"),
+            {"bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(text("SELECT data_ref FROM expedicao_diaria")).mappings().all()
+    if not rows:
+        return []
+    return sorted(set(r["data_ref"] for r in rows), reverse=True)
 
 
 @router.get("/dia/{data_ref}")
-def dados_dia(data_ref: str, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    q = sb.table("expedicao_diaria").select("*").eq("data_ref", data_ref)
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    data = q.execute().data or []
-    if not data: return {"kpis": {}, "stations": [], "alertas": [], "ds_disponiveis": []}
+def dados_dia(data_ref: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref = :dr AND scan_station = ANY(:bases)"),
+            {"dr": data_ref, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref = :dr"),
+            {"dr": data_ref}
+        ).mappings().all()
+
+    data = [dict(r) for r in rows]
+    if not data:
+        return {"kpis": {}, "stations": [], "alertas": [], "ds_disponiveis": []}
 
     df = pd.DataFrame(data)
     rec = int(df["recebido"].sum()); exp = int(df["expedido"].sum()); ent = int(df["entregas"].sum())
@@ -49,14 +64,22 @@ def dados_dia(data_ref: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/charts/{data_ref}")
-def chart_data(data_ref: str, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    q = sb.table("expedicao_diaria").select("*").eq("data_ref", data_ref)
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    res = q.execute()
-    if not res.data: return {"volume_ds": [], "taxa_ds": [], "donut": {}, "funil": {}}
+def chart_data(data_ref: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref = :dr AND scan_station = ANY(:bases)"),
+            {"dr": data_ref, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref = :dr"),
+            {"dr": data_ref}
+        ).mappings().all()
 
-    df = pd.DataFrame(res.data).sort_values("recebido", ascending=False)
+    if not rows:
+        return {"volume_ds": [], "taxa_ds": [], "donut": {}, "funil": {}}
+
+    df = pd.DataFrame([dict(r) for r in rows]).sort_values("recebido", ascending=False)
     rec = int(df["recebido"].sum()); exp = int(df["expedido"].sum()); ent = int(df["entregas"].sum())
 
     return {
@@ -88,15 +111,23 @@ def chart_data(data_ref: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/heatmap/{data_ref}")
-def heatmap_data(data_ref: str, user: dict = Depends(get_current_user)):
+def heatmap_data(data_ref: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dados para heatmap DS × Cidade."""
-    sb = get_supabase()
-    q = sb.table("expedicao_cidades").select("*").eq("data_ref", data_ref)
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    rows = q.execute().data or []
-    if not rows: return {"heatmap_exp": [], "heatmap_ent": [], "ds_list": [], "city_list": []}
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref = :dr AND scan_station = ANY(:bases)"),
+            {"dr": data_ref, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref = :dr"),
+            {"dr": data_ref}
+        ).mappings().all()
 
-    df = pd.DataFrame(rows)
+    if not rows:
+        return {"heatmap_exp": [], "heatmap_ent": [], "ds_list": [], "city_list": []}
+
+    df = pd.DataFrame([dict(r) for r in rows])
 
     # Top 15 cidades por volume
     top_cities = df.groupby("destination_city")["recebido"].sum().nlargest(15).index.tolist()
@@ -121,8 +152,15 @@ def heatmap_data(data_ref: str, user: dict = Depends(get_current_user)):
 
 
 @router.get("/cidades/{data_ref}")
-def cidades_dia(data_ref: str, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    q = sb.table("expedicao_cidades").select("*").eq("data_ref", data_ref)
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    return q.execute().data or []
+def cidades_dia(data_ref: str, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref = :dr AND scan_station = ANY(:bases)"),
+            {"dr": data_ref, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref = :dr"),
+            {"dr": data_ref}
+        ).mappings().all()
+    return [dict(r) for r in rows]

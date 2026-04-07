@@ -3,7 +3,9 @@ api/routes/excel_historico.py — Excel do Histórico (período consolidado)
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 from api.limiter import limiter
 from api.routes.excel_base import (
     _titulo_aba, _write_header, _write_data, _write_grouped, _auto_width, _to_stream,
@@ -22,18 +24,32 @@ def excel_historico(
     data_ini: str = Query(...),
     data_fim: str = Query(...),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    sb = get_supabase()
-    q = sb.table("expedicao_diaria").select("*").gte("data_ref", data_ini).lte("data_ref", data_fim)
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    data = q.execute().data or []
-    if not data: raise HTTPException(404, "Sem dados no período")
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref >= :ini AND data_ref <= :fim AND scan_station = ANY(:bases)"),
+            {"ini": data_ini, "fim": data_fim, "bases": user["bases"]}
+        ).mappings().all()
+        rows_c = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref >= :ini AND data_ref <= :fim AND scan_station = ANY(:bases)"),
+            {"ini": data_ini, "fim": data_fim, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref >= :ini AND data_ref <= :fim"),
+            {"ini": data_ini, "fim": data_fim}
+        ).mappings().all()
+        rows_c = db.execute(
+            text("SELECT * FROM expedicao_cidades WHERE data_ref >= :ini AND data_ref <= :fim"),
+            {"ini": data_ini, "fim": data_fim}
+        ).mappings().all()
 
-    df = pd.DataFrame(data)
+    if not rows:
+        raise HTTPException(404, "Sem dados no período")
 
-    qc = sb.table("expedicao_cidades").select("*").gte("data_ref", data_ini).lte("data_ref", data_fim)
-    if user["bases"]: qc = qc.in_("scan_station", user["bases"])
-    cid = pd.DataFrame(qc.execute().data or [])
+    df = pd.DataFrame([dict(r) for r in rows])
+    cid = pd.DataFrame([dict(r) for r in rows_c])
 
     agg = (df.groupby(["scan_station", "region"], as_index=False)
            .agg(recebido=("recebido", "sum"), expedido=("expedido", "sum"),

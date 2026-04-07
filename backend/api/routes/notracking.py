@@ -2,36 +2,50 @@
 api/routes/notracking.py — Listagem e detalhe de uploads de No Tracking (断更)
 """
 from fastapi import APIRouter, Depends, HTTPException
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 
 router = APIRouter()
 
 
 @router.get("/uploads")
-def listar_uploads(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    return (
-        sb.table("notracking_uploads").select("*")
-        .order("criado_em", desc=True).limit(30).execute().data or []
-    )
+def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.execute(
+        text("SELECT * FROM notracking_uploads ORDER BY criado_em DESC LIMIT 30")
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.get("/upload/{upload_id}")
-def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    up = sb.table("notracking_uploads").select("*").eq("id", upload_id).execute()
-    if not up.data:
+def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    up = db.execute(
+        text("SELECT * FROM notracking_uploads WHERE id = :id"), {"id": upload_id}
+    ).mappings().first()
+    if not up:
         raise HTTPException(404, "Upload não encontrado")
 
-    por_ds     = sb.table("notracking_por_ds").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
-    por_sup    = sb.table("notracking_por_sup").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
-    por_status = sb.table("notracking_por_status").select("*").eq("upload_id", upload_id).order("total", desc=True).execute().data or []
-    por_faixa  = sb.table("notracking_por_faixa").select("*").eq("upload_id", upload_id).execute().data or []
+    por_ds = db.execute(
+        text("SELECT * FROM notracking_por_ds WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    por_sup = db.execute(
+        text("SELECT * FROM notracking_por_sup WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    por_status = db.execute(
+        text("SELECT * FROM notracking_por_status WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    por_faixa = db.execute(
+        text("SELECT * FROM notracking_por_faixa WHERE upload_id = :uid"),
+        {"uid": upload_id}
+    ).mappings().all()
 
     return {
-        "upload":     up.data[0],
-        "por_ds":     por_ds,
-        "por_sup":    por_sup,
-        "por_status": por_status,
-        "por_faixa":  por_faixa,
+        "upload":     dict(up),
+        "por_ds":     [dict(r) for r in por_ds],
+        "por_sup":    [dict(r) for r in por_sup],
+        "por_status": [dict(r) for r in por_status],
+        "por_faixa":  [dict(r) for r in por_faixa],
     }

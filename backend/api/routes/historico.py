@@ -2,7 +2,9 @@
 api/routes/historico.py — Histórico + Evolução por DS
 """
 from fastapi import APIRouter, Depends, Query
-from api.deps import get_supabase, get_current_user
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user
 import pandas as pd
 import numpy as np
 
@@ -13,13 +15,22 @@ router = APIRouter()
 def periodo(
     data_ini: str = Query(...), data_fim: str = Query(...),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    sb = get_supabase()
-    q = (sb.table("expedicao_diaria").select("*")
-         .gte("data_ref", data_ini).lte("data_ref", data_fim))
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    data = q.execute().data or []
-    if not data: return {"resumo": {}, "por_dia": [], "por_ds": []}
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref >= :ini AND data_ref <= :fim AND scan_station = ANY(:bases)"),
+            {"ini": data_ini, "fim": data_fim, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT * FROM expedicao_diaria WHERE data_ref >= :ini AND data_ref <= :fim"),
+            {"ini": data_ini, "fim": data_fim}
+        ).mappings().all()
+
+    data = [dict(r) for r in rows]
+    if not data:
+        return {"resumo": {}, "por_dia": [], "por_ds": []}
 
     df = pd.DataFrame(data)
     rec = int(df["recebido"].sum()); exp = int(df["expedido"].sum())
@@ -48,14 +59,23 @@ def evolucao_ds(
     data_ini: str = Query(...), data_fim: str = Query(...),
     ds: str = Query(None, description="DS específica ou vazio para top 10"),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Evolução diária de uma DS específica ou top 10 por volume."""
-    sb = get_supabase()
-    q = (sb.table("expedicao_diaria").select("data_ref,scan_station,recebido,expedido,entregas,taxa_exp")
-         .gte("data_ref", data_ini).lte("data_ref", data_fim))
-    if user["bases"]: q = q.in_("scan_station", user["bases"])
-    data = q.execute().data or []
-    if not data: return {"series": [], "ds_list": []}
+    if user["bases"]:
+        rows = db.execute(
+            text("SELECT data_ref, scan_station, recebido, expedido, entregas, taxa_exp FROM expedicao_diaria WHERE data_ref >= :ini AND data_ref <= :fim AND scan_station = ANY(:bases)"),
+            {"ini": data_ini, "fim": data_fim, "bases": user["bases"]}
+        ).mappings().all()
+    else:
+        rows = db.execute(
+            text("SELECT data_ref, scan_station, recebido, expedido, entregas, taxa_exp FROM expedicao_diaria WHERE data_ref >= :ini AND data_ref <= :fim"),
+            {"ini": data_ini, "fim": data_fim}
+        ).mappings().all()
+
+    data = [dict(r) for r in rows]
+    if not data:
+        return {"series": [], "ds_list": []}
 
     df = pd.DataFrame(data)
 

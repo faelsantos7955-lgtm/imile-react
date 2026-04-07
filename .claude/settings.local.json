@@ -39,7 +39,21 @@
       "Bash(npx vite:*)",
       "Bash(find /c/Users/IMILE-TI/Desktop/imile-react-fastapi -name *.xlsx -o -name *.csv)",
       "Bash(find /c/Users/IMILE-TI/Downloads /c/Users/IMILE-TI/Desktop -name *.xlsx)",
-      "Bash(find /c/Users/IMILE-TI/Desktop/imile-react-fastapi -name *.sql -o -name schema* -o -name migration*)"
+      "Bash(find /c/Users/IMILE-TI/Desktop/imile-react-fastapi -name *.sql -o -name schema* -o -name migration*)",
+      "Bash(gh repo:*)",
+      "Bash(gh.exe repo:*)",
+      "Bash(where gh:*)",
+      "Read(//c/Users/IMILE-TI/**)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(pip install:*)",
+      "Bash(cp:*)",
+      "Bash(grep -o '\"role\":\"user\".*\"content\":\\\\[{\"type\":\"text\",\"text\":\"[^\"]*\"' \"C:\\\\Users\\\\IMILE-TI\\\\.claude\\\\projects\\\\C--Users-IMILE-TI-Desktop-imile-react-fastapi\\\\eef45524-643f-4c18-8cad-3e11d58b4277.jsonl\")",
+      "Bash(start:*)",
+      "Bash(vercel --version)",
+      "Bash(vercel --yes)",
+      "Bash(vercel --yes --scope faelsantos7955-lgtms-projects)",
+      "Bash(vercel deploy:*)"
     ]
   }
 }

@@ -2,85 +2,72 @@
 api/routes/na.py — Listagem, detalhe e exclusão de uploads Not Arrived (有发未到)
 """
 from fastapi import APIRouter, Depends, HTTPException
-
-from api.deps import get_supabase, get_current_user, require_admin, audit_log
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user, require_admin, audit_log
 
 router = APIRouter()
 
 
 @router.get("/uploads")
-def listar_uploads(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    res = (
-        sb.table("na_uploads")
-        .select("id,data_ref,criado_por,total,total_offload,total_arrive,grd10d,threshold_col,criado_em")
-        .order("criado_em", desc=True)
-        .limit(60)
-        .execute()
-    )
-    return res.data or []
+def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.execute(
+        text("""
+            SELECT id, data_ref, criado_por, total, total_offload, total_arrive,
+                   grd10d, threshold_col, criado_em
+            FROM na_uploads ORDER BY criado_em DESC LIMIT 60
+        """)
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.get("/upload/{upload_id}")
-def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-
-    supervisor = (
-        sb.table("na_por_supervisor").select("*")
-        .eq("upload_id", upload_id)
-        .order("total", desc=True)
-        .execute().data or []
-    )
-    ds = (
-        sb.table("na_por_ds").select("*")
-        .eq("upload_id", upload_id)
-        .order("total", desc=True)
-        .execute().data or []
-    )
-    processo = (
-        sb.table("na_por_processo").select("*")
-        .eq("upload_id", upload_id)
-        .order("total", desc=True)
-        .execute().data or []
-    )
+def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    supervisor = db.execute(
+        text("SELECT * FROM na_por_supervisor WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    ds = db.execute(
+        text("SELECT * FROM na_por_ds WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
+    processo = db.execute(
+        text("SELECT * FROM na_por_processo WHERE upload_id = :uid ORDER BY total DESC"),
+        {"uid": upload_id}
+    ).mappings().all()
 
     return {
-        "por_supervisor": supervisor,
-        "por_ds":         ds,
-        "por_processo":   processo,
+        "por_supervisor": [dict(r) for r in supervisor],
+        "por_ds":         [dict(r) for r in ds],
+        "por_processo":   [dict(r) for r in processo],
     }
 
 
 @router.get("/upload/{upload_id}/tendencia")
-def tendencia_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    res = (
-        sb.table("na_tendencia").select("supervisor,ds,data,total")
-        .eq("upload_id", upload_id)
-        .order("data")
-        .execute()
-    )
-    return res.data or []
+def tendencia_upload(upload_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.execute(
+        text("SELECT supervisor, ds, data, total FROM na_tendencia WHERE upload_id = :uid ORDER BY data"),
+        {"uid": upload_id}
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 @router.get("/historico/supervisores")
-def historico_supervisores(user: dict = Depends(get_current_user)):
+def historico_supervisores(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Retorna totais por supervisor em cada upload, para gráfico de tendência."""
-    sb = get_supabase()
-    uploads = (
-        sb.table("na_uploads").select("id,data_ref")
-        .order("data_ref")
-        .execute().data or []
-    )
+    uploads = db.execute(
+        text("SELECT id, data_ref FROM na_uploads ORDER BY data_ref")
+    ).mappings().all()
     if not uploads:
         return []
 
     uid_to_date = {u["id"]: u["data_ref"] for u in uploads}
-    sup_data = (
-        sb.table("na_por_supervisor").select("upload_id,supervisor,total,grd10d")
-        .in_("upload_id", list(uid_to_date.keys()))
-        .execute().data or []
-    )
+    uids = list(uid_to_date.keys())
+
+    sup_data = db.execute(
+        text("SELECT upload_id, supervisor, total, grd10d FROM na_por_supervisor WHERE upload_id = ANY(:uids)"),
+        {"uids": uids}
+    ).mappings().all()
 
     result = [
         {
@@ -96,13 +83,13 @@ def historico_supervisores(user: dict = Depends(get_current_user)):
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
-    sb = get_supabase()
+def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     for tbl in ("na_tendencia", "na_por_supervisor", "na_por_ds", "na_por_processo"):
         try:
-            sb.table(tbl).delete().eq("upload_id", upload_id).execute()
+            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
         except Exception:
             raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
-    sb.table("na_uploads").delete().eq("id", upload_id).execute()
+    db.execute(text("DELETE FROM na_uploads WHERE id = :id"), {"id": upload_id})
+    db.commit()
     audit_log("upload_deletado", f"na_uploads:{upload_id}", {}, user)
     return {"ok": True}

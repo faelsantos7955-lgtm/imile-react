@@ -2,7 +2,9 @@
 api/routes/monitoramento.py — Monitoramento Diário de Entregas
 """
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-from api.deps import get_supabase, get_current_user, require_admin, audit_log
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from api.deps import get_db, get_current_user, require_admin, audit_log
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 import pandas as pd
@@ -82,33 +84,39 @@ def _ler_relatorio(conteudo: bytes):
     return df, data_ref
 
 
-
 # ── GET /uploads ──────────────────────────────────────────────
 @router.get("/uploads")
-def listar_uploads(user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    return sb.table("monitoramento_uploads").select("*").order("criado_em", desc=True).limit(30).execute().data or []
+def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = db.execute(
+        text("SELECT * FROM monitoramento_uploads ORDER BY criado_em DESC LIMIT 30")
+    ).mappings().all()
+    return [dict(r) for r in rows]
 
 
 # ── DELETE /upload/{id} ───────────────────────────────────────
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin)):
-    sb = get_supabase()
-    sb.table("monitoramento_diario").delete().eq("upload_id", upload_id).execute()
-    sb.table("monitoramento_uploads").delete().eq("id", upload_id).execute()
+def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    db.execute(text("DELETE FROM monitoramento_diario WHERE upload_id = :id"), {"id": upload_id})
+    db.execute(text("DELETE FROM monitoramento_uploads WHERE id = :id"), {"id": upload_id})
+    db.commit()
     audit_log("upload_deletado", f"monitoramento_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 
 # ── GET /upload/{id} ──────────────────────────────────────────
 @router.get("/upload/{upload_id}")
-def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
-    sb = get_supabase()
-    up = sb.table("monitoramento_uploads").select("*").eq("id", upload_id).execute()
-    if not up.data:
+def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    up = db.execute(
+        text("SELECT * FROM monitoramento_uploads WHERE id = :id"), {"id": upload_id}
+    ).mappings().first()
+    if not up:
         raise HTTPException(404, "Não encontrado")
 
-    rows = sb.table("monitoramento_diario").select("*").eq("upload_id", upload_id).order("ds").execute().data or []
+    rows = db.execute(
+        text("SELECT * FROM monitoramento_diario WHERE upload_id = :uid ORDER BY ds"),
+        {"uid": upload_id}
+    ).mappings().all()
+    rows = [dict(r) for r in rows]
 
     totais = {
         'rdc_ds': sum(r.get('rdc_ds', 0) or 0 for r in rows),
@@ -129,7 +137,7 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
     totais['eficiencia_assinatura'] = round(totais['entregue'] / nm, 2) if nm else 0
 
     return {
-        'upload': up.data[0],
+        'upload': dict(up),
         'totais': totais,
         'dados': rows,
     }
@@ -138,7 +146,7 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user)):
 # ── POST /processar ───────────────────────────────────────────
 @router.post("/processar")
 @limiter.limit("10/minute")
-async def processar_monitoramento(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def processar_monitoramento(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     conteudo = await validar_arquivo(file)
     buf = io.BytesIO(conteudo)
     xls = pd.ExcelFile(buf)
@@ -152,13 +160,16 @@ async def processar_monitoramento(request: Request, file: UploadFile = File(...)
     if df.empty:
         raise HTTPException(400, "Nenhuma DS encontrada no arquivo")
 
-    sb = get_supabase()
-    up = sb.table("monitoramento_uploads").insert({
-        "data_ref": data_ref,
-        "criado_por": user["email"],
-        "total_ds": len(df),
-    }).execute()
-    uid = up.data[0]["id"]
+    row = db.execute(
+        text("""
+            INSERT INTO monitoramento_uploads (data_ref, criado_por, total_ds)
+            VALUES (:data_ref, :criado_por, :total_ds)
+            RETURNING id
+        """),
+        {"data_ref": data_ref, "criado_por": user["email"], "total_ds": len(df)}
+    ).mappings().first()
+    uid = row["id"]
+    db.commit()
 
     rows_db = []
     for _, r in df.iterrows():
@@ -184,6 +195,20 @@ async def processar_monitoramento(request: Request, file: UploadFile = File(...)
         })
 
     for i in range(0, len(rows_db), 500):
-        sb.table("monitoramento_diario").insert(rows_db[i:i+500]).execute()
+        db.execute(
+            text("""
+                INSERT INTO monitoramento_diario
+                    (upload_id, ds, supervisor, regiao, rdc_ds, estoque_ds, estoque_motorista,
+                     estoque_total, estoque_7d, recebimento, volume_total, pendencia_scan,
+                     volume_saida, taxa_expedicao, qtd_motoristas, eficiencia_pessoal,
+                     entregue, eficiencia_assinatura)
+                VALUES (:upload_id, :ds, :supervisor, :regiao, :rdc_ds, :estoque_ds, :estoque_motorista,
+                        :estoque_total, :estoque_7d, :recebimento, :volume_total, :pendencia_scan,
+                        :volume_saida, :taxa_expedicao, :qtd_motoristas, :eficiencia_pessoal,
+                        :entregue, :eficiencia_assinatura)
+            """),
+            rows_db[i:i+500]
+        )
+    db.commit()
 
     return {"upload_id": uid, "total_ds": len(df), "data_ref": data_ref}
