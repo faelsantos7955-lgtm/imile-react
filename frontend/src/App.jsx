@@ -16,6 +16,7 @@ import Correlacao from './pages/Correlacao'
 import Extravios from './pages/Extravios'
 import NoTracking from './pages/NoTracking'
 import Contestacoes from './pages/Contestacoes'
+import ContestacoesPublico from './pages/ContestacoesPublico'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -29,6 +30,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/contestar" element={<ContestacoesPublico />} />
 
       <Route path="/" element={
         <ProtectedRoute><Layout /></ProtectedRoute>

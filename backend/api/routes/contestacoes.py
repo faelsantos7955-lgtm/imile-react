@@ -66,9 +66,9 @@ def listar(db: Session = Depends(get_db), user: dict = Depends(get_current_user)
     return [dict(r) for r in rows]
 
 
-# ── Criação ───────────────────────────────────────────────────
+# ── Criação (pública — sem autenticação) ─────────────────────
 @router.post("")
-def criar(body: ContestacaoCreate, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+def criar(body: ContestacaoCreate, db: Session = Depends(get_db)):
     if body.motivo_desconto not in MOTIVOS:
         raise HTTPException(400, f"Motivo inválido. Opções: {', '.join(MOTIVOS)}")
     if body.faturamento_b64 and len(body.faturamento_b64) > MAX_B64_LEN:
