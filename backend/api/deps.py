@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 @lru_cache()
 def _engine():
-    url = os.getenv("DATABASE_URL", "")
+    url = os.getenv("DATABASE_URL", "").strip().lstrip("=").strip()
     if not url:
         raise RuntimeError("DATABASE_URL não configurada")
     return create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
