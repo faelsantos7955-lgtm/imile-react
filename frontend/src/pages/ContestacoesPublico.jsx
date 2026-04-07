@@ -116,19 +116,21 @@ function Formulario() {
 
   const validate = () => {
     const e = {}
-    if (!form.data_contestacao) e.data_contestacao = 'Obrigatório'
-    if (!form.ds.trim()) e.ds = 'Obrigatório'
-    if (!form.waybill.trim()) e.waybill = 'Obrigatório'
-    if (!form.motivo_desconto) e.motivo_desconto = 'Obrigatório'
-    if (!form.faturamento_b64) e.faturamento = 'Obrigatório'
-    if (!form.evidencia_b64) e.evidencia = 'Obrigatório'
+    if (!form.data_contestacao)      e.data_contestacao = 'Obrigatório'
+    if (!form.ds.trim())             e.ds = 'Obrigatório'
+    if (!form.waybill.trim())        e.waybill = 'Obrigatório'
+    if (!form.motivo_desconto)       e.motivo_desconto = 'Obrigatório'
+    if (!form.faturamento_b64)       e.faturamento = 'Obrigatório'
+    if (!form.valor_desconto)        e.valor_desconto = 'Obrigatório'
+    if (!form.observacao?.trim())    e.observacao = 'Obrigatório'
+    if (!form.evidencia_b64)         e.evidencia = 'Obrigatório'
     return e
   }
 
   const submit = () => {
     const e = validate()
     if (Object.keys(e).length) { setErrors(e); return }
-    mut.mutate({ ...form, valor_desconto: form.valor_desconto ? parseFloat(form.valor_desconto) : null, previsao: form.previsao || null })
+    mut.mutate({ ...form, valor_desconto: form.valor_desconto ? parseFloat(form.valor_desconto) : null, previsao: null })
   }
 
 
@@ -149,84 +151,84 @@ function Formulario() {
   )
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <F label="Data" required error={errors.data_contestacao}>
+    <div className="flex flex-col gap-4">
+      {/* DATA */}
+      <F label="DATA" required error={errors.data_contestacao}>
         <input type="date" value={form.data_contestacao} onChange={e => set('data_contestacao', e.target.value)} className={inputCls(errors.data_contestacao)} />
       </F>
 
+      {/* Quem Solicitou — não obrigatório */}
       <F label="Quem Solicitou" error={errors.quem_solicitou}>
-        <input value={form.quem_solicitou} onChange={e => set('quem_solicitou', e.target.value)} placeholder="Nome do solicitante" className={inputCls()} />
+        <input value={form.quem_solicitou} onChange={e => set('quem_solicitou', e.target.value)} placeholder="Área de resposta" className={inputCls()} />
       </F>
 
+      {/* DS */}
       <F label="DS" required error={errors.ds}>
-        <input value={form.ds} onChange={e => set('ds', e.target.value.toUpperCase())} placeholder="Ex: DS SLV" className={inputCls(errors.ds)} />
+        <input value={form.ds} onChange={e => set('ds', e.target.value.toUpperCase())} placeholder="Área de resposta" className={inputCls(errors.ds)} />
       </F>
 
-      <F label="Waybill" required error={errors.waybill}>
-        <input value={form.waybill} onChange={e => set('waybill', e.target.value)} placeholder="Código do pacote" className={inputCls(errors.waybill)} />
+      {/* WAIBILL */}
+      <F label="WAIBILL" required error={errors.waybill}>
+        <input value={form.waybill} onChange={e => set('waybill', e.target.value)} placeholder="Área de resposta" className={inputCls(errors.waybill)} />
       </F>
 
-      <F label="Motivo do Desconto" required error={errors.motivo_desconto}>
+      {/* MOTIVO DESCONTO */}
+      <F label="MOTIVO DESCONTO" required error={errors.motivo_desconto}>
         <select value={form.motivo_desconto} onChange={e => set('motivo_desconto', e.target.value)} className={inputCls(errors.motivo_desconto)}>
-          <option value="">Selecionar...</option>
+          <option value="">Área de resposta</option>
           {MOTIVOS.map(m => <option key={m}>{m}</option>)}
         </select>
       </F>
 
-      <F label="Valor do Desconto (R$)" error={errors.valor_desconto}>
-        <input type="number" step="0.01" min="0" value={form.valor_desconto} onChange={e => set('valor_desconto', e.target.value)} placeholder="0,00" className={inputCls()} />
+      {/* FATURAMENTO QUE HOUVE O EXTRAVIO */}
+      <F label="FATURAMENTO QUE HOUVE O EXTRAVIO" required error={errors.faturamento}>
+        <div
+          onClick={() => fatRef.current.click()}
+          className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors
+            ${errors.faturamento ? 'border-red-300 bg-red-50' : form.faturamento_nome ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
+        >
+          <FileText size={24} className={form.faturamento_nome ? 'text-emerald-500' : 'text-slate-400'} />
+          <div className="text-center">
+            <p className="text-[12px] font-medium text-slate-700">{form.faturamento_nome || 'Área de carregamento'}</p>
+            <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB</p>
+          </div>
+          {form.faturamento_nome && (
+            <button onClick={e => { e.stopPropagation(); set('faturamento_b64', null); set('faturamento_nome', null) }}
+              className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
+          )}
+        </div>
+        <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e, 'faturamento')} />
       </F>
 
-      <div className="md:col-span-2">
-        <F label="Observação" error={errors.observacao}>
-          <textarea value={form.observacao} onChange={e => set('observacao', e.target.value)} rows={3} placeholder="Descreva detalhes da contestação..." className={inputCls() + ' resize-none'} />
-        </F>
-      </div>
-
-      <F label="Previsão de Resolução" error={errors.previsao}>
-        <input type="date" value={form.previsao} onChange={e => set('previsao', e.target.value)} className={inputCls()} />
+      {/* VALOR DO DESCONTO */}
+      <F label="VALOR DO DESCONTO" required error={errors.valor_desconto}>
+        <input type="number" step="0.01" min="0" value={form.valor_desconto} onChange={e => set('valor_desconto', e.target.value)} placeholder="Área de resposta" className={inputCls(errors.valor_desconto)} />
       </F>
 
-      {/* Uploads */}
-      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <F label="Faturamento / Comprovante" required error={errors.faturamento}>
-          <div
-            onClick={() => fatRef.current.click()}
-            className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors
-              ${errors.faturamento ? 'border-red-300 bg-red-50' : form.faturamento_nome ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
-          >
-            <FileText size={24} className={form.faturamento_nome ? 'text-emerald-500' : 'text-slate-400'} />
-            <div className="text-center">
-              <p className="text-[12px] font-medium text-slate-700">{form.faturamento_nome || 'Clique para selecionar'}</p>
-              <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB</p>
-            </div>
-            {form.faturamento_nome && (
-              <button onClick={e => { e.stopPropagation(); set('faturamento_b64', null); set('faturamento_nome', null) }}
-                className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
-            )}
-          </div>
-          <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e, 'faturamento')} />
-        </F>
+      {/* OBSERVAÇÃO */}
+      <F label="OBSERVAÇÃO" required error={errors.observacao}>
+        <textarea value={form.observacao} onChange={e => set('observacao', e.target.value)} rows={3} placeholder="Área de resposta" className={inputCls(errors.observacao) + ' resize-none'} />
+      </F>
 
-        <F label="Evidência" required error={errors.evidencia}>
-          <div
-            onClick={() => evRef.current.click()}
-            className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors
-              ${errors.evidencia ? 'border-red-300 bg-red-50' : form.evidencia_nome ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
-          >
-            <Image size={24} className={form.evidencia_nome ? 'text-emerald-500' : 'text-slate-400'} />
-            <div className="text-center">
-              <p className="text-[12px] font-medium text-slate-700">{form.evidencia_nome || 'Clique para selecionar'}</p>
-              <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB</p>
-            </div>
-            {form.evidencia_nome && (
-              <button onClick={e => { e.stopPropagation(); set('evidencia_b64', null); set('evidencia_nome', null) }}
-                className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
-            )}
+      {/* EVIDENCIA */}
+      <F label="EVIDENCIA" required error={errors.evidencia}>
+        <div
+          onClick={() => evRef.current.click()}
+          className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors
+            ${errors.evidencia ? 'border-red-300 bg-red-50' : form.evidencia_nome ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
+        >
+          <Image size={24} className={form.evidencia_nome ? 'text-emerald-500' : 'text-slate-400'} />
+          <div className="text-center">
+            <p className="text-[12px] font-medium text-slate-700">{form.evidencia_nome || 'Área de carregamento'}</p>
+            <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB</p>
           </div>
-          <input ref={evRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e, 'evidencia')} />
-        </F>
-      </div>
+          {form.evidencia_nome && (
+            <button onClick={e => { e.stopPropagation(); set('evidencia_b64', null); set('evidencia_nome', null) }}
+              className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
+          )}
+        </div>
+        <input ref={evRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e, 'evidencia')} />
+      </F>
 
       {mut.isError && (
         <div className="md:col-span-2 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
