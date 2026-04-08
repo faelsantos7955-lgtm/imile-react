@@ -22,8 +22,7 @@ def _engine():
     url = os.getenv("DATABASE_URL", "").strip().lstrip("=").strip()
     if not url:
         raise RuntimeError("DATABASE_URL não configurada")
-    # NullPool: sem reutilização de conexões — ideal para Neon serverless
-    # (evita "Control plane request failed" após suspensão do banco)
+    # NullPool: conexão nova por request — sem conexões stale do Neon
     return create_engine(
         url,
         poolclass=NullPool,
@@ -33,23 +32,11 @@ def _engine():
 
 def get_db() -> Generator[Session, None, None]:
     SessionLocal = sessionmaker(bind=_engine(), autocommit=False, autoflush=False)
-    # Retry automático para cold start do Neon (até 3 tentativas)
-    for attempt in range(3):
-        db = SessionLocal()
-        try:
-            yield db
-            return
-        except Exception as e:
-            db.close()
-            if attempt < 2:
-                time.sleep(2 ** attempt)  # 1s, 2s
-            else:
-                raise e
-        finally:
-            try:
-                db.close()
-            except Exception:
-                pass
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # ── JWT ───────────────────────────────────────────────────────

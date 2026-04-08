@@ -2,6 +2,8 @@
 FastAPI Backend — iMile Dashboard
 """
 import os
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -27,7 +29,31 @@ from api.routes.not_arrived_upload import router as not_arrived_upload_router
 from api.routes.na import router as na_router
 from api.routes.na_upload import router as na_upload_router
 
-app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs")
+async def _neon_keepalive():
+    """Pinga o banco a cada 4 min para o Neon não suspender."""
+    from sqlalchemy import text as _text
+    from api.deps import _engine
+    from sqlalchemy.orm import sessionmaker
+    await asyncio.sleep(30)  # aguarda o boot
+    while True:
+        try:
+            Session = sessionmaker(bind=_engine())
+            db = Session()
+            db.execute(_text("SELECT 1"))
+            db.close()
+        except Exception as e:
+            print(f"[keepalive] Neon ping falhou: {e}")
+        await asyncio.sleep(4 * 60)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_neon_keepalive())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
