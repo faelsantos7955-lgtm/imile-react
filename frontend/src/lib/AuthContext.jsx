@@ -16,6 +16,13 @@ export function AuthProvider({ children }) {
 
   // Na inicialização tenta restaurar sessão via refresh_token (cookie HttpOnly)
   useEffect(() => {
+    // Rotas públicas não precisam de autenticação
+    const PUBLIC_PATHS = ['/contestar']
+    if (PUBLIC_PATHS.some(p => window.location.pathname.startsWith(p))) {
+      setLoading(false)
+      return
+    }
+
     const savedUser = localStorage.getItem('user')
     if (!savedUser) { setLoading(false); return }
 
