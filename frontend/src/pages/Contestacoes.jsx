@@ -79,7 +79,7 @@ function StatusSelect({ id, current, onSaved }) {
 
   const mut = useMutation({
     mutationFn: (s) => api.patch(`/api/contestacoes/${id}/status`, { status_analise: s }),
-    onSuccess: () => { qc.invalidateQueries(['contestacoes']); onSaved?.() },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['contestacoes'] }); onSaved?.() },
   })
 
   const cls = STATUS_STYLE[current] || 'bg-slate-100 text-slate-600 border-slate-200'
@@ -114,13 +114,13 @@ function BaseDados() {
 
   const mutDel = useMutation({
     mutationFn: (id) => api.delete(`/api/contestacoes/${id}`),
-    onSuccess: () => qc.invalidateQueries(['contestacoes']),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contestacoes'] }),
   })
 
   const mutObs = useMutation({
     mutationFn: ({ id, observacao, previsao, status_analise }) =>
       api.patch(`/api/contestacoes/${id}/status`, { status_analise, observacao, previsao }),
-    onSuccess: () => { qc.invalidateQueries(['contestacoes']); setEditando(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['contestacoes'] }); setEditando(null) },
   })
 
   const mutArq = useMutation({
@@ -349,7 +349,7 @@ function NovoRegistro({ onSaved }) {
   const mut = useMutation({
     mutationFn: (payload) => api.post('/api/contestacoes', payload),
     onSuccess: () => {
-      qc.invalidateQueries(['contestacoes'])
+      qc.invalidateQueries({ queryKey: ['contestacoes'] })
       setForm(EMPTY_FORM)
       onSaved?.()
     },

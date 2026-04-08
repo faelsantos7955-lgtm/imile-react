@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Upload, X, FileSpreadsheet, PackageX, ChevronUp, ChevronDown,
-  TruckIcon, PackageCheck, AlertTriangle, Download, History,
+  Truck, PackageCheck, AlertTriangle, Download, History,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -25,7 +25,7 @@ const pct = (n) => `${(n ?? 0).toFixed(1)}%`
 function UploadPanel({ onClose, onSuccess }) {
   const [file, setFile]   = useState(null)
   const [error, setError] = useState('')
-  const inputRef = useRef()
+  const inputRef = useRef(null)
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -667,7 +667,7 @@ export default function Na() {
                 value={fmt(upload.total_offload)}
                 sub={upload.total > 0 ? `${(upload.total_offload / upload.total * 100).toFixed(1)}% do total` : ''}
                 color="orange"
-                icon={TruckIcon}
+                icon={Truck}
               />
               <KpiCard
                 label="Confirmados"
