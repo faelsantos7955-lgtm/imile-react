@@ -1,6 +1,7 @@
 """
 api/routes/admin.py — Rotas administrativas
 """
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Literal
@@ -96,12 +97,12 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
     )
     db.execute(
         text("""
-            INSERT INTO usuarios (email, nome, role, bases, ativo)
-            VALUES (:email, :nome, :role, :bases, true)
+            INSERT INTO usuarios (id, email, nome, role, bases, paginas, ativo)
+            VALUES (:id, :email, :nome, :role, :bases, :paginas, true)
             ON CONFLICT (email) DO UPDATE
             SET nome = EXCLUDED.nome, role = EXCLUDED.role, ativo = EXCLUDED.ativo
         """),
-        {"email": s["email"], "nome": s["nome"], "role": role, "bases": []}
+        {"id": str(uuid.uuid4()), "email": s["email"], "nome": s["nome"], "role": role, "bases": [], "paginas": []}
     )
     db.commit()
     audit_log("solicitacao_aprovada", f"solicitacao:{sol_id}",
