@@ -380,7 +380,10 @@ function SolicitacoesPage() {
       qc.invalidateQueries({ queryKey: ['usuarios-admin'] })
       setModalSol(null)
     } catch (e) {
-      alert('Erro ao aprovar: ' + (e.response?.data?.detail || e.message))
+      const msg = e.code === 'ECONNABORTED'
+        ? 'O servidor demorou para responder. Aguarde alguns segundos e tente novamente (o servidor pode estar acordando).'
+        : 'Erro ao aprovar: ' + (e.response?.data?.detail || e.message)
+      alert(msg)
     } finally { setAprovando(false) }
   }
 

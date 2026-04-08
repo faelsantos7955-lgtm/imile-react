@@ -3,6 +3,7 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   withCredentials: true, // envia cookies HttpOnly automaticamente
+  timeout: 40000, // 40s — cobre cold start do Render (~30s)
 })
 
 // Access token em memória — não persiste no localStorage (seguro contra XSS)
