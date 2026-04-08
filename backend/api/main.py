@@ -66,6 +66,6 @@ app.include_router(extravios_upload_router,     prefix="/api/extravios",     tag
 app.include_router(notracking_router,           prefix="/api/notracking",    tags=["No Tracking"])
 app.include_router(notracking_upload_router,    prefix="/api/notracking",    tags=["No Tracking"])
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok", "version": "1.0.0"}
