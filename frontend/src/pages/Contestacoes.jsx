@@ -6,6 +6,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { useSearchParams } from 'react-router-dom'
 import {
   Search, Plus, Download, Trash2, ChevronDown, Loader2,
   FileText, Image, AlertCircle, CheckCircle2, Clock, X,
@@ -616,7 +617,9 @@ const TABS = [
 ]
 
 export default function Contestacoes() {
-  const [aba, setAba] = useState('base')
+  const [params, setParams] = useSearchParams()
+  const aba = params.get('tab') || 'base'
+  const setAba = (key) => setParams({ tab: key }, { replace: true })
 
   return (
     <div>

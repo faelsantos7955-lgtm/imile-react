@@ -3,6 +3,7 @@
  * Acessível sem login. Abas: Novo Registro | Consulta por Waybill
  */
 import { useState, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import {
@@ -334,7 +335,9 @@ const TABS = [
 ]
 
 export default function ContestacoesPublico() {
-  const [aba, setAba] = useState('form')
+  const [params, setParams] = useSearchParams()
+  const aba = params.get('tab') || 'form'
+  const setAba = (key) => setParams({ tab: key }, { replace: true })
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
