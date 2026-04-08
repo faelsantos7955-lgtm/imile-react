@@ -44,7 +44,7 @@ api.interceptors.response.use(
     // Evita loop de retry no próprio endpoint de refresh
     if (original.url?.includes('/api/auth/refresh')) {
       clearAccessToken()
-      const PUBLIC_PATHS = ['/contestar']
+      const PUBLIC_PATHS = ['/contestar', '/definir-senha']
       const isPublic = PUBLIC_PATHS.some(p => window.location.pathname.startsWith(p))
       if (!isPublic) window.location.href = '/login'
       return Promise.reject(err)
@@ -74,7 +74,7 @@ api.interceptors.response.use(
       processQueue(refreshErr, null)
       clearAccessToken()
       localStorage.removeItem('user')
-      const PUBLIC_PATHS = ['/contestar']
+      const PUBLIC_PATHS = ['/contestar', '/definir-senha']
       const isPublic = PUBLIC_PATHS.some(p => window.location.pathname.startsWith(p))
       if (!isPublic) window.location.href = '/login'
       return Promise.reject(refreshErr)

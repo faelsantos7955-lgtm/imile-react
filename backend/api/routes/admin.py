@@ -2,12 +2,15 @@
 api/routes/admin.py — Rotas administrativas
 """
 import uuid
+import secrets
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Literal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, require_admin, audit_log
+from api.email_utils import email_boas_vindas
 
 PAGINAS_VALIDAS = {'dashboard','historico','comparativos','triagem','reclamacoes','backlog','monitoramento','admin'}
 ACOES_VALIDAS   = {'excel','bloquear_motorista','aprovar_acesso'}
@@ -109,7 +112,22 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
         """),
         {"id": str(uuid.uuid4()), "email": s["email"], "nome": s["nome"], "role": role, "bases": [], "paginas": []}
     )
+
+    # Gera token para definição de senha (válido 48h)
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=48)
+    db.execute(
+        text("""
+            INSERT INTO password_tokens (token, email, expires_at, usado)
+            VALUES (:token, :email, :expires_at, false)
+            ON CONFLICT (email) DO UPDATE
+            SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, usado = false
+        """),
+        {"token": token, "email": s["email"], "expires_at": expires_at}
+    )
     db.commit()
+
+    email_boas_vindas(s["nome"], s["email"], token)
     audit_log("solicitacao_aprovada", f"solicitacao:{sol_id}",
               {"email": s["email"], "role": role}, user)
     return {"ok": True}

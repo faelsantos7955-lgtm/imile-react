@@ -2,6 +2,7 @@
 api/routes/auth.py — Login, registro e perfil (JWT próprio + PostgreSQL)
 """
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -61,6 +62,11 @@ class RegisterRequest(BaseModel):
     nome: str
     email: str
     motivo: str = ""
+
+
+class DefinirSenhaRequest(BaseModel):
+    token: str
+    senha: str
 
 
 # ── Endpoints ─────────────────────────────────────────────────
@@ -140,6 +146,29 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/logout")
 def logout(response: Response):
     response.delete_cookie("refresh_token", path="/api/auth/refresh")
+    return {"ok": True}
+
+
+@router.post("/definir-senha")
+def definir_senha(req: DefinirSenhaRequest, db: Session = Depends(get_db)):
+    row = db.execute(
+        text("SELECT * FROM password_tokens WHERE token = :token AND usado = false AND expires_at > NOW()"),
+        {"token": req.token}
+    ).mappings().first()
+    if not row:
+        raise HTTPException(400, "Link inválido ou expirado")
+    if len(req.senha) < 6:
+        raise HTTPException(422, "A senha deve ter pelo menos 6 caracteres")
+    hash_ = pwd_ctx.hash(req.senha)
+    db.execute(
+        text("UPDATE usuarios SET password_hash = :hash WHERE email = :email"),
+        {"hash": hash_, "email": row["email"]}
+    )
+    db.execute(
+        text("UPDATE password_tokens SET usado = true WHERE token = :token"),
+        {"token": req.token}
+    )
+    db.commit()
     return {"ok": True}
 
 

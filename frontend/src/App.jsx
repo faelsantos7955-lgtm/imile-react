@@ -17,6 +17,7 @@ import Extravios from './pages/Extravios'
 import NoTracking from './pages/NoTracking'
 import Contestacoes from './pages/Contestacoes'
 import ContestacoesPublico from './pages/ContestacoesPublico'
+import DefinirSenha from './pages/DefinirSenha'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -31,6 +32,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/contestar" element={<ContestacoesPublico />} />
+      <Route path="/definir-senha" element={<DefinirSenha />} />
 
       <Route path="/" element={
         <ProtectedRoute><Layout /></ProtectedRoute>

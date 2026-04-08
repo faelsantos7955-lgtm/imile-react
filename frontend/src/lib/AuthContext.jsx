@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
   // Na inicialização tenta restaurar sessão via refresh_token (cookie HttpOnly)
   useEffect(() => {
     // Rotas públicas não precisam de autenticação
-    const PUBLIC_PATHS = ['/contestar']
+    const PUBLIC_PATHS = ['/contestar', '/definir-senha']
     if (PUBLIC_PATHS.some(p => window.location.pathname.startsWith(p))) {
       setLoading(false)
       return
