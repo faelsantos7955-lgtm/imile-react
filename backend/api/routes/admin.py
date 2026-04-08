@@ -133,6 +133,31 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
     return {"ok": True}
 
 
+@router.post("/usuarios/{user_id}/reenviar-convite")
+def reenviar_convite(user_id: str, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    row = db.execute(
+        text("SELECT email, nome FROM usuarios WHERE id = :id"),
+        {"id": user_id}
+    ).mappings().first()
+    if not row:
+        raise HTTPException(404, "Usuário não encontrado")
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=48)
+    db.execute(
+        text("""
+            INSERT INTO password_tokens (token, email, expires_at, usado)
+            VALUES (:token, :email, :expires_at, false)
+            ON CONFLICT (email) DO UPDATE
+            SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, usado = false
+        """),
+        {"token": token, "email": row["email"], "expires_at": expires_at}
+    )
+    db.commit()
+    email_boas_vindas(row["nome"], row["email"], token)
+    return {"ok": True}
+
+
 @router.post("/solicitacoes/{sol_id}/rejeitar")
 def rejeitar(sol_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     db.execute(

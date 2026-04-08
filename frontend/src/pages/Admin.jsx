@@ -11,7 +11,7 @@ import {
   Upload, Users, Settings, CheckCircle, XCircle,
   ShieldOff, ShieldCheck, Loader,
   UserCheck, UserX, Edit2, Save, X, Check, History, ChevronLeft, ChevronRight,
-  Target, Plus, Trash2, PackageSearch, Search, ChevronDown,
+  Target, Plus, Trash2, PackageSearch, Search, ChevronDown, Mail,
 } from 'lucide-react'
 import BulkUpload from './BulkUpload'
 
@@ -355,6 +355,7 @@ function SolicitacoesPage() {
   const [drawerUser, setDrawerUser] = useState(null)
   const [aprovando, setAprovando]   = useState(false)
   const [rejeitando, setRejeitando] = useState({})
+  const [reenviando, setReenviando] = useState({})
 
   const { data: solicitacoes = [], isLoading: loadingSol } = useQuery({
     queryKey: ['solicitacoes'],
@@ -381,6 +382,18 @@ function SolicitacoesPage() {
     } catch (e) {
       alert('Erro ao aprovar: ' + (e.response?.data?.detail || e.message))
     } finally { setAprovando(false) }
+  }
+
+  const reenviarConvite = async (u) => {
+    setReenviando(p => ({ ...p, [u.id]: true }))
+    try {
+      await api.post(`/api/admin/usuarios/${u.id}/reenviar-convite`)
+      alert(`Convite reenviado para ${u.email}`)
+    } catch (e) {
+      alert('Erro ao reenviar: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setReenviando(p => { const n = { ...p }; delete n[u.id]; return n })
+    }
   }
 
   const rejeitar = async (id) => {
@@ -506,11 +519,19 @@ function SolicitacoesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => setDrawerUser(u)}
-                        className="p-1.5 text-slate-400 hover:text-imile-500 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="Editar permissões">
-                        <Edit2 size={14} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => reenviarConvite(u)}
+                          disabled={reenviando[u.id]}
+                          className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
+                          title="Reenviar convite por e-mail">
+                          {reenviando[u.id] ? <Loader size={14} className="animate-spin" /> : <Mail size={14} />}
+                        </button>
+                        <button onClick={() => setDrawerUser(u)}
+                          className="p-1.5 text-slate-400 hover:text-imile-500 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="Editar permissões">
+                          <Edit2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
