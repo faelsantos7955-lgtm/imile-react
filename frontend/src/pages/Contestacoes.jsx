@@ -75,7 +75,6 @@ function StatusBadge({ status }) {
 
 // ── Select de status inline ───────────────────────────────────
 function StatusSelect({ id, current, onSaved }) {
-  const [open, setOpen] = useState(false)
   const qc = useQueryClient()
 
   const mut = useMutation({
@@ -83,31 +82,17 @@ function StatusSelect({ id, current, onSaved }) {
     onSuccess: () => { qc.invalidateQueries(['contestacoes']); onSaved?.() },
   })
 
+  const cls = STATUS_STYLE[current] || 'bg-slate-100 text-slate-600 border-slate-200'
+
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 group"
-      >
-        <StatusBadge status={current} />
-        <ChevronDown size={11} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
-      </button>
-      {open && (
-        <div className="absolute z-50 top-7 left-0 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[190px]">
-          {STATUS_LIST.map(s => (
-            <button
-              key={s}
-              onClick={() => { mut.mutate(s); setOpen(false) }}
-              className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"
-            >
-              <span className={`w-2 h-2 rounded-full ${STATUS_DOT[s]}`} />
-              <span className="text-[12px] font-medium text-slate-700">{s}</span>
-              {s === current && <CheckCircle2 size={11} className="text-emerald-500 ml-auto" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      value={current}
+      onChange={e => mut.mutate(e.target.value)}
+      disabled={mut.isPending}
+      className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-300 disabled:opacity-60 ${cls}`}
+    >
+      {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
   )
 }
 
