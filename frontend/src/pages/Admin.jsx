@@ -9,27 +9,59 @@ import api from '../lib/api'
 import { PageHeader, Alert, Card, SectionHeader } from '../components/ui'
 import {
   Upload, Users, Settings, CheckCircle, XCircle,
-  ShieldOff, ShieldCheck, Loader, Terminal,
+  ShieldOff, ShieldCheck, Loader,
   UserCheck, UserX, Edit2, Save, X, Check, History, ChevronLeft, ChevronRight,
-  Target, Plus, Trash2, PackageSearch,
+  Target, Plus, Trash2, PackageSearch, Search, ChevronDown,
 } from 'lucide-react'
 import BulkUpload from './BulkUpload'
 
 // ── Definição de permissões disponíveis ──────────────────────
 export const PAGINAS = [
-  { key: 'dashboard',    label: 'Dashboard',      icon: '📊' },
-  { key: 'historico',    label: 'Histórico',      icon: '📅' },
-  { key: 'comparativos', label: 'Comparativos',   icon: '📈' },
-  { key: 'triagem',      label: 'Triagem DC×DS',  icon: '🔀' },
-  { key: 'reclamacoes',  label: 'Reclamações',    icon: '📋' },
-  { key: 'admin',        label: 'Administração',  icon: '⚙️' },
+  { key: 'dashboard',     label: 'Dashboard',      icon: '📊' },
+  { key: 'historico',     label: 'Histórico',      icon: '📅' },
+  { key: 'comparativos',  label: 'Comparativos',   icon: '📈' },
+  { key: 'triagem',       label: 'Triagem DC×DS',  icon: '🔀' },
+  { key: 'reclamacoes',   label: 'Reclamações',    icon: '📋' },
+  { key: 'backlog',       label: 'Backlog SLA',    icon: '📦' },
+  { key: 'monitoramento', label: 'Monitoramento',  icon: '🔍' },
+  { key: 'admin',         label: 'Administração',  icon: '⚙️' },
 ]
 
 export const ACOES = [
-  { key: 'excel',          label: 'Baixar Excel',          icon: '📥' },
-  { key: 'bloquear_motorista', label: 'Bloquear Motoristas', icon: '🚫' },
-  { key: 'aprovar_acesso', label: 'Aprovar Solicitações',  icon: '✅' },
+  { key: 'excel',               label: 'Baixar Excel',         icon: '📥' },
+  { key: 'bloquear_motorista',  label: 'Bloquear Motoristas',  icon: '🚫' },
+  { key: 'aprovar_acesso',      label: 'Aprovar Solicitações', icon: '✅' },
 ]
+
+const PERFIS = [
+  {
+    key: 'basico', label: 'Básico', desc: 'Somente Dashboard e Histórico',
+    cor: 'border-slate-300 bg-slate-50 text-slate-700', dot: 'bg-slate-400',
+    paginas: ['dashboard', 'historico'], acoes: [], role: 'viewer',
+  },
+  {
+    key: 'operacional', label: 'Operacional', desc: 'Operações diárias + Excel',
+    cor: 'border-blue-300 bg-blue-50 text-blue-700', dot: 'bg-blue-500',
+    paginas: ['dashboard', 'historico', 'reclamacoes', 'backlog', 'monitoramento'], acoes: ['excel'], role: 'operador',
+  },
+  {
+    key: 'supervisao', label: 'Supervisão', desc: 'Acesso completo exceto admin',
+    cor: 'border-amber-300 bg-amber-50 text-amber-700', dot: 'bg-amber-500',
+    paginas: ['dashboard', 'historico', 'comparativos', 'triagem', 'reclamacoes', 'backlog', 'monitoramento'], acoes: ['excel'], role: 'supervisor',
+  },
+  {
+    key: 'admin', label: 'Administrador', desc: 'Acesso total ao sistema',
+    cor: 'border-red-300 bg-red-50 text-red-700', dot: 'bg-red-500',
+    paginas: PAGINAS.map(p => p.key), acoes: ACOES.map(a => a.key), role: 'admin',
+  },
+]
+
+const ROLE_COR = {
+  admin:      'bg-red-100 text-red-700',
+  supervisor: 'bg-blue-100 text-blue-700',
+  operador:   'bg-amber-100 text-amber-700',
+  viewer:     'bg-slate-100 text-slate-600',
+}
 
 // ── Upload / Processar ────────────────────────────────────────
 function UploadPage() {
@@ -74,21 +106,24 @@ function UploadPage() {
 
 // ── Editor de permissões granulares ──────────────────────────
 function PermissoesEditor({ paginas, acoes, onChange }) {
-  const toggle = (list, key, setList) => {
-    const next = list.includes(key) ? list.filter(k => k !== key) : [...list, key]
-    setList(next)
-  }
-
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Páginas visíveis</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase text-slate-500">Páginas visíveis</p>
+          <div className="flex gap-2">
+            <button onClick={() => onChange('paginas', PAGINAS.map(p => p.key))}
+              className="text-[10px] text-blue-600 hover:underline">Todas</button>
+            <button onClick={() => onChange('paginas', [])}
+              className="text-[10px] text-slate-400 hover:underline">Limpar</button>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {PAGINAS.map(p => {
             const ativo = paginas.includes(p.key)
             return (
               <button key={p.key}
-                onClick={() => onChange('paginas', paginas.includes(p.key) ? paginas.filter(k => k !== p.key) : [...paginas, p.key])}
+                onClick={() => onChange('paginas', ativo ? paginas.filter(k => k !== p.key) : [...paginas, p.key])}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                   ativo ? 'bg-imile-500 text-white border-imile-500' : 'bg-white text-slate-600 border-slate-200 hover:border-imile-400'
                 }`}>
@@ -100,13 +135,21 @@ function PermissoesEditor({ paginas, acoes, onChange }) {
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Ações permitidas</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase text-slate-500">Ações permitidas</p>
+          <div className="flex gap-2">
+            <button onClick={() => onChange('acoes', ACOES.map(a => a.key))}
+              className="text-[10px] text-blue-600 hover:underline">Todas</button>
+            <button onClick={() => onChange('acoes', [])}
+              className="text-[10px] text-slate-400 hover:underline">Limpar</button>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {ACOES.map(a => {
             const ativo = acoes.includes(a.key)
             return (
               <button key={a.key}
-                onClick={() => onChange('acoes', acoes.includes(a.key) ? acoes.filter(k => k !== a.key) : [...acoes, a.key])}
+                onClick={() => onChange('acoes', ativo ? acoes.filter(k => k !== a.key) : [...acoes, a.key])}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                   ativo ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400'
                 }`}>
@@ -121,79 +164,247 @@ function PermissoesEditor({ paginas, acoes, onChange }) {
   )
 }
 
-// ── Solicitações & Usuários ───────────────────────────────────
-function SolicitacoesPage() {
-  const [solicitacoes, setSolicitacoes] = useState([])
-  const [usuarios, setUsuarios]         = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [tab, setTab]                   = useState('pendentes')
-  const [aprovando, setAprovando]       = useState({})
-  const [editando, setEditando]         = useState(null)
-  const [editForm, setEditForm]         = useState({})
-  const [saving, setSaving]             = useState(false)
+// ── Modal de aprovação ────────────────────────────────────────
+function ModalAprovar({ sol, onClose, onConfirm, loading }) {
+  const [perfilKey, setPerfilKey] = useState('operacional')
+  const [form, setForm] = useState(() => {
+    const p = PERFIS.find(p => p.key === 'operacional')
+    return { role: p.role, paginas: [...p.paginas], acoes: [...p.acoes] }
+  })
+  const [showCustom, setShowCustom] = useState(false)
 
-  const carregar = async () => {
-    setLoading(true)
-    try {
-      const [s, u] = await Promise.all([
-        api.get('/api/admin/solicitacoes?status=pendente'),
-        api.get('/api/admin/usuarios'),
-      ])
-      setSolicitacoes(s.data)
-      setUsuarios(u.data)
-    } finally { setLoading(false) }
+  const selecionarPerfil = (key) => {
+    const p = PERFIS.find(p => p.key === key)
+    setPerfilKey(key)
+    setForm({ role: p.role, paginas: [...p.paginas], acoes: [...p.acoes] })
   }
 
-  useEffect(() => { carregar() }, [])
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="bg-slate-800 px-6 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-white font-bold text-[15px]">Aprovar Acesso</p>
+            <p className="text-slate-400 text-[12px] mt-0.5">Defina as permissões antes de confirmar</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors"><X size={18} /></button>
+        </div>
 
-  const iniciarEdicao = (u) => {
-    setEditando(u.id)
-    setEditForm({
-      role:    u.role || 'viewer',
-      ativo:   u.ativo !== false,
-      paginas: u.paginas || PAGINAS.map(p => p.key), // default: todas
-      acoes:   u.acoes   || [],
-    })
+        <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+          {/* Solicitante */}
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <p className="font-semibold text-slate-800">{sol.nome}</p>
+            <p className="text-sm text-slate-500">{sol.email}</p>
+            {sol.motivo && <p className="text-sm text-slate-600 mt-1 italic">"{sol.motivo}"</p>}
+          </div>
+
+          {/* Perfis */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase mb-2">Perfil de acesso</p>
+            <div className="grid grid-cols-2 gap-2">
+              {PERFIS.map(p => (
+                <button key={p.key} onClick={() => selecionarPerfil(p.key)}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${
+                    perfilKey === p.key ? p.cor + ' border-current' : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`w-2 h-2 rounded-full ${p.dot}`} />
+                    <span className="font-semibold text-[13px]">{p.label}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 ml-4">{p.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Personalizar */}
+          <button onClick={() => setShowCustom(v => !v)}
+            className="flex items-center gap-1.5 text-[12px] text-slate-500 hover:text-slate-700">
+            <ChevronDown size={13} className={`transition-transform ${showCustom ? 'rotate-180' : ''}`} />
+            Personalizar permissões
+          </button>
+          {showCustom && (
+            <PermissoesEditor
+              paginas={form.paginas} acoes={form.acoes}
+              onChange={(field, val) => setForm(p => ({ ...p, [field]: val }))}
+            />
+          )}
+
+          {/* Botões */}
+          <div className="flex gap-3 pt-2 border-t border-slate-100">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[13px] font-medium hover:bg-slate-200">
+              Cancelar
+            </button>
+            <button onClick={() => onConfirm(form)} disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60">
+              {loading ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
+              Confirmar aprovação
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Drawer lateral de permissões ──────────────────────────────
+function DrawerPermissoes({ usuario, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    role:    usuario.role    || 'viewer',
+    ativo:   usuario.ativo  !== false,
+    paginas: usuario.paginas || PAGINAS.map(p => p.key),
+    acoes:   usuario.acoes  || [],
+  })
+  const [saving, setSaving] = useState(false)
+
+  const aplicarPerfil = (key) => {
+    const p = PERFIS.find(p => p.key === key)
+    setForm(prev => ({ ...prev, role: p.role, paginas: [...p.paginas], acoes: [...p.acoes] }))
   }
 
-  const salvar = async (userId) => {
+  const salvar = async () => {
     setSaving(true)
     try {
-      await api.put(`/api/admin/usuarios/${userId}`, {
-        role:    editForm.role,
-        ativo:   editForm.ativo,
-        paginas: editForm.paginas,
-        acoes:   editForm.acoes,
-        bases:   [],
-      })
-      setEditando(null)
-      await carregar()
+      await api.put(`/api/admin/usuarios/${usuario.id}`, { ...form, bases: [] })
+      onSaved()
+      onClose()
     } catch { alert('Erro ao salvar') }
     finally { setSaving(false) }
   }
 
-  const aprovar = async (id, role = 'viewer') => {
-    setAprovando(p => ({ ...p, [id]: 'aprovando' }))
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <div className="fixed right-0 top-0 bottom-0 z-50 w-[420px] bg-white shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="bg-slate-800 px-5 py-4 flex items-center justify-between shrink-0">
+          <div>
+            <p className="text-white font-bold text-[14px]">{usuario.nome || '—'}</p>
+            <p className="text-slate-400 text-[12px]">{usuario.email}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors"><X size={18} /></button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* Role + Status */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Role</label>
+              <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
+                className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-300">
+                {['viewer','operador','supervisor','admin'].map(r => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Status</label>
+              <button onClick={() => setForm(p => ({ ...p, ativo: !p.ativo }))}
+                className={`w-full px-3 py-2 text-[13px] font-semibold rounded-lg border transition-colors ${
+                  form.ativo ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-red-50 text-red-600 border-red-300'
+                }`}>
+                {form.ativo ? '● Ativo' : '○ Inativo'}
+              </button>
+            </div>
+          </div>
+
+          {/* Perfis rápidos */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase mb-2">Aplicar perfil</p>
+            <div className="grid grid-cols-2 gap-2">
+              {PERFIS.map(p => (
+                <button key={p.key} onClick={() => aplicarPerfil(p.key)}
+                  className={`text-left px-3 py-2 rounded-lg border text-[12px] font-medium transition-colors hover:opacity-90 ${p.cor}`}>
+                  <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${p.dot}`} />
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Editor granular */}
+          <PermissoesEditor
+            paginas={form.paginas} acoes={form.acoes}
+            onChange={(field, val) => setForm(p => ({ ...p, [field]: val }))}
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 p-4 border-t border-slate-100 flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[13px] font-medium hover:bg-slate-200">
+            Cancelar
+          </button>
+          <button onClick={salvar} disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-imile-500 text-white rounded-xl text-[13px] font-semibold hover:bg-imile-600 disabled:opacity-60">
+            {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+            Salvar
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Solicitações & Usuários ───────────────────────────────────
+function SolicitacoesPage() {
+  const qc = useQueryClient()
+  const [tab, setTab]           = useState('pendentes')
+  const [busca, setBusca]       = useState('')
+  const [modalSol, setModalSol] = useState(null)
+  const [drawerUser, setDrawerUser] = useState(null)
+  const [aprovando, setAprovando]   = useState(false)
+  const [rejeitando, setRejeitando] = useState({})
+
+  const { data: solicitacoes = [], isLoading: loadingSol } = useQuery({
+    queryKey: ['solicitacoes'],
+    queryFn: () => api.get('/api/admin/solicitacoes?status=pendente').then(r => r.data),
+  })
+
+  const { data: usuarios = [], isLoading: loadingUsers } = useQuery({
+    queryKey: ['usuarios-admin'],
+    queryFn: () => api.get('/api/admin/usuarios').then(r => r.data),
+  })
+
+  const aprovar = async ({ role, paginas, acoes }) => {
+    setAprovando(true)
     try {
-      await api.post(`/api/admin/solicitacoes/${id}/aprovar?role=${role}`)
-      await carregar()
-    } catch { alert('Erro ao aprovar') }
-    finally { setAprovando(p => { const n = { ...p }; delete n[id]; return n }) }
+      await api.post(`/api/admin/solicitacoes/${modalSol.id}/aprovar?role=${role}`)
+      const users = await api.get('/api/admin/usuarios').then(r => r.data)
+      const novo = users.find(u => u.email === modalSol.email)
+      if (novo) {
+        await api.put(`/api/admin/usuarios/${novo.id}`, { role, paginas, acoes, bases: [], ativo: true })
+      }
+      qc.invalidateQueries({ queryKey: ['solicitacoes'] })
+      qc.invalidateQueries({ queryKey: ['usuarios-admin'] })
+      setModalSol(null)
+    } catch (e) {
+      alert('Erro ao aprovar: ' + (e.response?.data?.detail || e.message))
+    } finally { setAprovando(false) }
   }
 
   const rejeitar = async (id) => {
     if (!window.confirm('Rejeitar esta solicitação?')) return
-    setAprovando(p => ({ ...p, [id]: 'rejeitando' }))
+    setRejeitando(p => ({ ...p, [id]: true }))
     try {
       await api.post(`/api/admin/solicitacoes/${id}/rejeitar`)
-      await carregar()
+      qc.invalidateQueries({ queryKey: ['solicitacoes'] })
     } catch { alert('Erro') }
-    finally { setAprovando(p => { const n = { ...p }; delete n[id]; return n }) }
+    finally { setRejeitando(p => { const n = { ...p }; delete n[id]; return n }) }
   }
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString('pt-BR') : '—'
+  const usuariosFiltrados = usuarios.filter(u => {
+    if (!busca.trim()) return true
+    const q = busca.toLowerCase()
+    return u.nome?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.role?.toLowerCase().includes(q)
+  })
 
-  if (loading) return <div className="flex items-center gap-2 text-slate-500 mt-8"><Loader size={16} className="animate-spin" /> Carregando...</div>
+  if (loadingSol || loadingUsers) return (
+    <div className="flex items-center gap-2 text-slate-500 mt-8">
+      <Loader size={16} className="animate-spin" /> Carregando...
+    </div>
+  )
 
   return (
     <div>
@@ -213,117 +424,111 @@ function SolicitacoesPage() {
         solicitacoes.length === 0
           ? <Alert type="info">Nenhuma solicitação pendente.</Alert>
           : <div className="space-y-3">
-            {solicitacoes.map(sol => (
-              <Card key={sol.id}>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-slate-800">{sol.nome}</p>
-                    <p className="text-sm text-slate-500">{sol.email}</p>
-                    {sol.motivo && <p className="text-sm text-slate-600 mt-1 italic">"{sol.motivo}"</p>}
-                    <p className="text-xs text-slate-400 mt-1">{fmtDate(sol.criado_em)}</p>
+              {solicitacoes.map(sol => (
+                <Card key={sol.id}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-slate-800">{sol.nome}</p>
+                      <p className="text-sm text-slate-500">{sol.email}</p>
+                      {sol.motivo && <p className="text-sm text-slate-600 mt-1 italic">"{sol.motivo}"</p>}
+                      <p className="text-xs text-slate-400 mt-1">{fmtDate(sol.criado_em)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => setModalSol(sol)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">
+                        <UserCheck size={13} /> Aprovar
+                      </button>
+                      <button onClick={() => rejeitar(sol.id)} disabled={rejeitando[sol.id]}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-sm rounded-lg hover:bg-red-100 disabled:opacity-50">
+                        {rejeitando[sol.id] ? <Loader size={13} className="animate-spin" /> : <UserX size={13} />} Rejeitar
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <select id={`role-${sol.id}`} defaultValue="viewer"
-                      className="text-sm px-2 py-1.5 border border-slate-200 rounded-lg bg-white">
-                      {['viewer','operador','supervisor','admin'].map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                    <button onClick={() => aprovar(sol.id, document.getElementById(`role-${sol.id}`)?.value || 'viewer')}
-                      disabled={!!aprovando[sol.id]}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-                      {aprovando[sol.id] === 'aprovando' ? <Loader size={13} className="animate-spin" /> : <UserCheck size={13} />} Aprovar
-                    </button>
-                    <button onClick={() => rejeitar(sol.id)} disabled={!!aprovando[sol.id]}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-sm rounded-lg hover:bg-red-100 disabled:opacity-50">
-                      {aprovando[sol.id] === 'rejeitando' ? <Loader size={13} className="animate-spin" /> : <UserX size={13} />} Rejeitar
-                    </button>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
       )}
 
       {/* Usuários */}
       {tab === 'usuarios' && (
-        <div className="space-y-3">
-          {usuarios.map(u => (
-            <Card key={u.id} className={editando === u.id ? 'border-imile-400 border-2' : ''}>
-              {editando === u.id ? (
-                /* Modo edição expandido */
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="font-semibold text-slate-800">{u.nome || '—'}</p>
-                      <p className="text-sm text-slate-500">{u.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <select value={editForm.role}
-                        onChange={e => setEditForm(p => ({ ...p, role: e.target.value }))}
-                        className="text-sm px-2 py-1.5 border border-slate-200 rounded-lg">
-                        {['viewer','operador','supervisor','admin'].map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <select value={editForm.ativo ? 'true' : 'false'}
-                        onChange={e => setEditForm(p => ({ ...p, ativo: e.target.value === 'true' }))}
-                        className="text-sm px-2 py-1.5 border border-slate-200 rounded-lg">
-                        <option value="true">Ativo</option>
-                        <option value="false">Inativo</option>
-                      </select>
-                    </div>
-                  </div>
+        <div>
+          <div className="mb-4 flex items-center gap-3">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={busca} onChange={e => setBusca(e.target.value)}
+                placeholder="Buscar por nome, e-mail ou role..."
+                className="pl-8 pr-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white w-72" />
+            </div>
+            <span className="text-[12px] text-slate-400">{usuariosFiltrados.length} usuário{usuariosFiltrados.length !== 1 ? 's' : ''}</span>
+          </div>
 
-                  <PermissoesEditor
-                    paginas={editForm.paginas || []}
-                    acoes={editForm.acoes || []}
-                    onChange={(field, val) => setEditForm(p => ({ ...p, [field]: val }))}
-                  />
-
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
-                    <button onClick={() => salvar(u.id)} disabled={saving}
-                      className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm hover:bg-imile-600 disabled:opacity-50">
-                      {saving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Salvar permissões
-                    </button>
-                    <button onClick={() => setEditando(null)}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm hover:bg-slate-200">
-                      <X size={13} /> Cancelar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Modo visualização */
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <p className="font-medium text-slate-800">{u.nome || '—'}</p>
-                      <p className="text-sm text-slate-500">{u.email}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === 'admin' ? 'bg-red-100 text-red-700' : u.role === 'supervisor' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                      {u.role}
-                    </span>
-                    {u.ativo
-                      ? <span className="text-emerald-600 flex items-center gap-1 text-xs"><CheckCircle size={12} /> Ativo</span>
-                      : <span className="text-red-500 flex items-center gap-1 text-xs"><XCircle size={12} /> Inativo</span>
-                    }
-                    {/* Preview de páginas */}
-                    <div className="flex gap-1 flex-wrap">
-                      {(u.paginas || PAGINAS.map(p => p.key)).map(pk => {
-                        const pg = PAGINAS.find(p => p.key === pk)
-                        return pg ? (
-                          <span key={pk} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px]">
-                            {pg.icon}
-                          </span>
-                        ) : null
-                      })}
-                    </div>
-                  </div>
-                  <button onClick={() => iniciarEdicao(u)}
-                    className="p-2 text-slate-400 hover:text-imile-500 hover:bg-slate-100 rounded-lg transition-colors">
-                    <Edit2 size={15} />
-                  </button>
-                </div>
-              )}
-            </Card>
-          ))}
+          <Card className="p-0 overflow-hidden">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase text-slate-500">
+                  <th className="px-4 py-3 text-left">Nome</th>
+                  <th className="px-4 py-3 text-left">E-mail</th>
+                  <th className="px-4 py-3 text-left">Role</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">Páginas</th>
+                  <th className="px-4 py-3 text-center">Editar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {usuariosFiltrados.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-400">Nenhum usuário encontrado</td></tr>
+                )}
+                {usuariosFiltrados.map(u => (
+                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-slate-800">{u.nome || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 text-[12px]">{u.email}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${ROLE_COR[u.role] || 'bg-slate-100 text-slate-600'}`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.ativo
+                        ? <span className="text-emerald-600 flex items-center gap-1 text-[12px]"><CheckCircle size={12} /> Ativo</span>
+                        : <span className="text-red-500 flex items-center gap-1 text-[12px]"><XCircle size={12} /> Inativo</span>
+                      }
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 flex-wrap">
+                        {(u.paginas || PAGINAS.map(p => p.key)).map(pk => {
+                          const pg = PAGINAS.find(p => p.key === pk)
+                          return pg ? (
+                            <span key={pk} title={pg.label} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px]">
+                              {pg.icon}
+                            </span>
+                          ) : null
+                        })}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => setDrawerUser(u)}
+                        className="p-1.5 text-slate-400 hover:text-imile-500 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Editar permissões">
+                        <Edit2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
         </div>
+      )}
+
+      {modalSol && (
+        <ModalAprovar sol={modalSol} onClose={() => setModalSol(null)} onConfirm={aprovar} loading={aprovando} />
+      )}
+      {drawerUser && (
+        <DrawerPermissoes
+          usuario={drawerUser}
+          onClose={() => setDrawerUser(null)}
+          onSaved={() => qc.invalidateQueries({ queryKey: ['usuarios-admin'] })}
+        />
       )}
     </div>
   )
