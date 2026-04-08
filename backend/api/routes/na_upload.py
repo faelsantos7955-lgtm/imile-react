@@ -70,55 +70,59 @@ def _processar_export(xl: pd.ExcelFile) -> dict:
         data_ref = datas_validas.dt.date.max().isoformat()
 
     df["_is_thr"] = df["_data_parsed"].isna()
+    total_grd_pre = int(df["_is_thr"].sum())
+
+    # Renomeia colunas com prefixo _ para evitar bug do itertuples
+    df = df.rename(columns={"_sup": "supervisor", "_ds": "ds",
+                             "_data_str": "data_str", "_is_thr": "is_thr",
+                             "_data_parsed": "data_parsed"})
 
     tendencia: list[dict] = []
-    df_dated = df[df["_data_str"].notna()].copy()
+    df_dated = df[df["data_str"].notna()].copy()
     if not df_dated.empty:
         grp_tend = (
-            df_dated.groupby(["_sup", "_ds", "_data_str"])
+            df_dated.groupby(["supervisor", "ds", "data_str"])
             .size()
             .reset_index(name="total")
         )
         tendencia = [
             {
-                "supervisor": r._sup,
-                "ds":         r._ds,
-                "data":       r._data_str,
-                "total":      int(r.total),
+                "supervisor": r["supervisor"],
+                "ds":         r["ds"],
+                "data":       r["data_str"],
+                "total":      int(r["total"]),
             }
-            for r in grp_tend.itertuples(index=False)
+            for r in grp_tend.to_dict("records")
         ]
 
-    por_ds: list[dict] = []
-    grp_ds = df.groupby(["_sup", "_ds"]).agg(
-        total=("_sup", "size"),
-        grd10d=("_is_thr", "sum"),
+    grp_ds = df.groupby(["supervisor", "ds"]).agg(
+        total=("supervisor", "size"),
+        grd10d=("is_thr", "sum"),
     ).reset_index()
     por_ds = [
         {
-            "supervisor": r._sup,
-            "ds":         r._ds,
-            "total":      int(r.total),
-            "grd10d":     int(r.grd10d),
+            "supervisor": r["supervisor"],
+            "ds":         r["ds"],
+            "total":      int(r["total"]),
+            "grd10d":     int(r["grd10d"]),
         }
-        for r in grp_ds.itertuples(index=False)
+        for r in grp_ds.to_dict("records")
     ]
 
-    por_supervisor: list[dict] = []
-    grp_sup = df.groupby("_sup").agg(
-        total=("_sup", "size"),
-        grd10d=("_is_thr", "sum"),
+    grp_sup = df.groupby("supervisor").agg(
+        total=("supervisor", "size"),
+        grd10d=("is_thr", "sum"),
     ).reset_index()
     por_supervisor = [
         {
-            "supervisor": r._sup,
-            "total":      int(r.total),
-            "grd10d":     int(r.grd10d),
+            "supervisor": r["supervisor"],
+            "total":      int(r["total"]),
+            "grd10d":     int(r["grd10d"]),
         }
-        for r in grp_sup.itertuples(index=False)
+        for r in grp_sup.to_dict("records")
     ]
 
-    total_grd = int(df["_is_thr"].sum())
+    total_grd = int(df["is_thr"].sum())
 
     por_processo: list[dict] = []
     if "Process" in df.columns:
