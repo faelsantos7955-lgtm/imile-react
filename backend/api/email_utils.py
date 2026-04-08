@@ -1,36 +1,45 @@
 """
-api/email_utils.py — Envio de e-mails via SMTP (Gmail)
+api/email_utils.py — Envio de e-mails via Resend (HTTP API)
 """
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import urllib.request
+import urllib.error
+import json
 
 
 def send_email(to: str, subject: str, html: str) -> bool:
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
-
-    if not smtp_user or not smtp_pass:
-        print("[email] SMTP não configurado — e-mail não enviado")
+    api_key = os.getenv("RESEND_API_KEY", "")
+    if not api_key:
+        print("[email] RESEND_API_KEY não configurado — e-mail não enviado")
         return False
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = f"iMile Dashboard <{smtp_user}>"
-    msg["To"]      = to
-    msg.attach(MIMEText(html, "html"))
+    from_addr = os.getenv("RESEND_FROM", "iMile Dashboard <onboarding@resend.dev>")
+
+    payload = json.dumps({
+        "from":    from_addr,
+        "to":      [to],
+        "subject": subject,
+        "html":    html,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type":  "application/json",
+        },
+        method="POST",
+    )
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, to, msg.as_string())
-        print(f"[email] Enviado para {to}")
-        return True
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"[email] Enviado para {to} (status {resp.status})")
+            return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")
+        print(f"[email] Erro HTTP ao enviar para {to}: {e.code} — {body}")
+        return False
     except Exception as e:
         print(f"[email] Erro ao enviar para {to}: {e}")
         return False
