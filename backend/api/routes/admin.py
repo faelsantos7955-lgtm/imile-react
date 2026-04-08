@@ -48,11 +48,13 @@ class PermissoesRequest(BaseModel):
 
 @router.put("/usuarios/{user_id}")
 def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
-    db.execute(
+    from datetime import datetime
+    result = db.execute(
         text("""
             UPDATE usuarios
             SET bases = :bases, paginas = :paginas, acoes = :acoes,
-                role = :role, ativo = :ativo, atualizado_por = :atualizado_por
+                role = :role, ativo = :ativo, atualizado_por = :atualizado_por,
+                atualizado_em = :atualizado_em
             WHERE id = :id
         """),
         {
@@ -62,9 +64,12 @@ def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends
             "role": req.role,
             "ativo": req.ativo,
             "atualizado_por": user["email"],
+            "atualizado_em": datetime.utcnow().isoformat(),
             "id": user_id,
         }
     )
+    if result.rowcount == 0:
+        raise HTTPException(404, "Usuário não encontrado")
     db.commit()
     audit_log("permissoes_atualizadas", f"usuario:{user_id}",
               {"role": req.role, "ativo": req.ativo, "paginas": req.paginas}, user)
