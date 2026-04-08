@@ -4,7 +4,7 @@ api/routes/admin.py — Rotas administrativas
 import uuid
 import secrets
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, field_validator
 from typing import Literal
 from sqlalchemy.orm import Session
@@ -90,7 +90,7 @@ def listar_solicitacoes(status: str = "pendente", user: dict = Depends(require_a
 
 
 @router.post("/solicitacoes/{sol_id}/aprovar")
-def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def aprovar(sol_id: int, background_tasks: BackgroundTasks, role: str = "viewer", user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     row = db.execute(
         text("SELECT * FROM solicitacoes_acesso WHERE id = :id"),
         {"id": sol_id}
@@ -130,9 +130,10 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
             {"token": token, "email": s["email"], "expires_at": expires_at}
         )
         db.commit()
-        email_enviado = email_boas_vindas(s["nome"], s["email"], token)
+        background_tasks.add_task(email_boas_vindas, s["nome"], s["email"], token)
+        email_enviado = True
     except Exception as e:
-        print(f"[aprovar] Erro ao gerar token/enviar email: {e}")
+        print(f"[aprovar] Erro ao gerar token: {e}")
 
     audit_log("solicitacao_aprovada", f"solicitacao:{sol_id}",
               {"email": s["email"], "role": role}, user)
@@ -140,7 +141,7 @@ def aprovar(sol_id: int, role: str = "viewer", user: dict = Depends(require_admi
 
 
 @router.post("/usuarios/{user_id}/reenviar-convite")
-def reenviar_convite(user_id: str, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def reenviar_convite(user_id: str, background_tasks: BackgroundTasks, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
     row = db.execute(
         text("SELECT email, nome FROM usuarios WHERE id = :id"),
         {"id": user_id}
@@ -160,7 +161,7 @@ def reenviar_convite(user_id: str, user: dict = Depends(require_admin), db: Sess
         {"token": token, "email": row["email"], "expires_at": expires_at}
     )
     db.commit()
-    email_boas_vindas(row["nome"], row["email"], token)
+    background_tasks.add_task(email_boas_vindas, row["nome"], row["email"], token)
     return {"ok": True}
 
 
