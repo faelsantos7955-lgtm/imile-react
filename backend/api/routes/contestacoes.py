@@ -12,7 +12,7 @@ from api.deps import get_db, get_current_user, require_admin
 
 router = APIRouter()
 
-MOTIVOS = ["Extravio", "Avaria", "Desconto Indevido", "Outros"]
+MOTIVOS = ["Extravio", "Avaria"]
 STATUS_OPTIONS = ["Pendente", "Em Andamento", "Enviado ao Financeiro", "Aprovado", "Reprovado"]
 
 MAX_B64_LEN = 8_000_000  # ~6 MB de arquivo

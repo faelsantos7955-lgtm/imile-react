@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 
 // ── Constantes ────────────────────────────────────────────────
-const MOTIVOS = ['Extravio', 'Avaria', 'Desconto Indevido', 'Outros']
+const MOTIVOS = ['Extravio', 'Avaria']
 const STATUS_LIST = ['Pendente', 'Em Andamento', 'Enviado ao Financeiro', 'Aprovado', 'Reprovado']
 
 const STATUS_STYLE = {

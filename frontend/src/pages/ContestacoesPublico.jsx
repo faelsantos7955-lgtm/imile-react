@@ -15,7 +15,7 @@ const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const pub = axios.create({ baseURL: BASE })
 
 // ── Constantes ────────────────────────────────────────────────
-const MOTIVOS = ['Extravio', 'Avaria', 'Desconto Indevido', 'Outros']
+const MOTIVOS = ['Extravio', 'Avaria']
 
 const STATUS_STYLE = {
   'Pendente':              'bg-slate-100 text-slate-600 border-slate-200',
