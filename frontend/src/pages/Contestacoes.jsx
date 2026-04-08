@@ -402,9 +402,17 @@ function NovoRegistro({ onSaved }) {
           </F>
 
           <F label="WAIBILL" required error={errors.waybill}>
-            <input value={form.waybill} onChange={e => set('waybill', e.target.value)}
-              placeholder="Área de resposta"
-              className={inputCls(errors.waybill)} />
+            <input
+              value={form.waybill}
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 13)
+                set('waybill', v)
+              }}
+              placeholder="Somente números, até 13 dígitos"
+              inputMode="numeric"
+              maxLength={13}
+              className={inputCls(errors.waybill)}
+            />
           </F>
 
           <F label="MOTIVO DESCONTO" required error={errors.motivo_desconto}>
