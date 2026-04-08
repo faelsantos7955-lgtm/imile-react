@@ -86,11 +86,6 @@ export function SectionHeader({ title, action }) {
   )
 }
 
-// ── Divider ───────────────────────────────────────────────────
-export function Divider({ className = '' }) {
-  return <div className={clsx('border-t border-slate-100', className)} />
-}
-
 // ── Card wrapper ──────────────────────────────────────────────
 export function Card({ children, className = '', title, subtitle, action, padding = true }) {
   return (
