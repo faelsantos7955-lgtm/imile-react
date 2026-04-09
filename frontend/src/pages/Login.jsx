@@ -81,15 +81,12 @@ export default function Login() {
 
         {/* Logo */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-imile-500 flex items-center justify-center shadow-imile">
-              <span className="text-white font-black text-base">iM</span>
-            </div>
-            <div>
-              <p className="text-white font-bold text-lg leading-tight">iMile Delivery</p>
-              <p className="text-white/40 text-xs">Brasil Operations</p>
-            </div>
-          </div>
+          <img
+            src="/imile-logo.png"
+            alt="iMile Delivery"
+            className="h-10 w-auto object-contain"
+            style={{ filter: 'brightness(0) invert(1)' }}
+          />
         </div>
 
         {/* Copy central */}
@@ -123,11 +120,8 @@ export default function Login() {
         <div className="w-full max-w-[360px]">
 
           {/* Logo mobile */}
-          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg bg-imile-500 flex items-center justify-center">
-              <span className="text-white font-black text-sm">iM</span>
-            </div>
-            <span className="font-bold text-slate-800">iMile Delivery</span>
+          <div className="mb-8 lg:hidden">
+            <img src="/imile-logo.png" alt="iMile Delivery" className="h-8 w-auto object-contain" />
           </div>
 
           {tab === 'login' ? (

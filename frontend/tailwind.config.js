@@ -5,25 +5,25 @@ export default {
     extend: {
       colors: {
         imile: {
-          50:  '#eff4ff',
-          100: '#dce6fe',
-          200: '#c0d0fd',
-          300: '#93b1fb',
-          400: '#5f87f7',
-          500: '#095EF7',
-          600: '#084fd4',
-          700: '#0640ab',
-          800: '#083289',
-          900: '#0a2d70',
-          950: '#071c4a',
+          50:  '#fff7ed',
+          100: '#ffedd5',
+          200: '#fdd0a0',
+          300: '#fba968',
+          400: '#f78238',
+          500: '#E97132',  // laranja iMile — cor oficial do template
+          600: '#cc5a1e',
+          700: '#a84418',
+          800: '#883516',
+          900: '#6f2d14',
+          950: '#3d1408',
         },
         navy: {
-          50:  '#f0f4ff',
-          100: '#e0e8ff',
-          700: '#1e2d4a',
-          800: '#141e32',
-          900: '#0d1525',
-          950: '#080e19',
+          50:  '#f0f4f8',
+          100: '#dbe4ef',
+          700: '#1a2d45',
+          800: '#122035',
+          900: '#0d1828',
+          950: '#0E2841',  // navy oficial do template iMile
         },
       },
       fontFamily: {
@@ -39,8 +39,8 @@ export default {
         'sm':         '0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
         'card':       '0 1px 3px 0 rgb(0 0 0 / 0.05)',
         'card-hover': '0 4px 16px 0 rgb(0 0 0 / 0.08)',
-        'imile':      '0 4px 14px 0 rgb(9 94 247 / 0.25)',
-        'imile-sm':   '0 2px 8px 0 rgb(9 94 247 / 0.20)',
+        'imile':      '0 4px 14px 0 rgb(233 113 50 / 0.30)',
+        'imile-sm':   '0 2px 8px 0 rgb(233 113 50 / 0.22)',
         'popover':    '0 8px 30px 0 rgb(0 0 0 / 0.12), 0 2px 8px 0 rgb(0 0 0 / 0.06)',
       },
       borderRadius: {

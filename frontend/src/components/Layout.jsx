@@ -106,15 +106,12 @@ function Sidebar({ onClose }) {
 
       {/* Logo */}
       <div className="px-4 h-14 flex items-center justify-between shrink-0 border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-imile-500 flex items-center justify-center shadow-imile-sm shrink-0">
-            <span className="text-white font-black text-[11px] leading-none tracking-tighter">iM</span>
-          </div>
-          <div>
-            <p className="text-white font-bold text-[13px] leading-none tracking-tight">iMile</p>
-            <p className="text-white/25 text-[10px] leading-none mt-0.5">Portal Operacional</p>
-          </div>
-        </div>
+        <img
+          src="/imile-logo.png"
+          alt="iMile Delivery"
+          className="h-7 w-auto object-contain"
+          style={{ filter: 'brightness(0) invert(1)' }}
+        />
         {onClose && (
           <button onClick={onClose} className="lg:hidden p-1 text-white/30 hover:text-white/70">
             <X size={16} />
