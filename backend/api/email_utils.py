@@ -5,12 +5,15 @@ import os
 import urllib.request
 import urllib.error
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def send_email(to: str, subject: str, html: str) -> bool:
     api_key = os.getenv("RESEND_API_KEY", "")
     if not api_key:
-        print("[email] RESEND_API_KEY não configurado — e-mail não enviado")
+        logger.error("[email] RESEND_API_KEY não configurado — e-mail não enviado")
         return False
 
     from_addr = os.getenv("RESEND_FROM", "iMile Dashboard <onboarding@resend.dev>")
@@ -34,14 +37,15 @@ def send_email(to: str, subject: str, html: str) -> bool:
 
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            print(f"[email] Enviado para {to} (status {resp.status})")
+            body = resp.read().decode("utf-8", errors="ignore")
+            logger.info(f"[email] Enviado para {to} (status {resp.status}) — {body}")
             return True
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="ignore")
-        print(f"[email] Erro HTTP ao enviar para {to}: {e.code} — {body}")
+        logger.error(f"[email] Erro HTTP ao enviar para {to}: {e.code} — {body}")
         return False
     except Exception as e:
-        print(f"[email] Erro ao enviar para {to}: {e}")
+        logger.error(f"[email] Erro ao enviar para {to}: {e}")
         return False
 
 

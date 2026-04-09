@@ -13,6 +13,9 @@ from slowapi.middleware import SlowAPIMiddleware
 
 load_dotenv()
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 from api.limiter import limiter
 from api.routes import auth, dashboard, historico, reclamacoes, triagem, admin, excel, backlog, monitoramento
 from api.routes.contestacoes import router as contestacoes_router
