@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 // ── Constantes ────────────────────────────────────────────────
-const MOTIVOS = ['Extravio', 'Avaria']
+const MOTIVOS = ['Extravio', 'Avaria', 'Fake Delivery', 'Fake POD']
 
 const DS_LIST = [
   'DS BJP','DS SJC','DS CTT','DS UBT','DS GRT','DS SCP','DS TBT','DS NOV','DS PIX','DS PIB',
@@ -30,22 +30,32 @@ const DS_LIST = [
   'DS LSV','DS VDR','DS SBC','DS SBA','DS DDM','DS STD','DS AET','DS MAU','DS JUD','DS MAI',
   'DS ING','DS SRO','DS SCB','DS TAI','DS VTT',
 ]
-const STATUS_LIST = ['Pendente', 'Em Andamento', 'Enviado ao Financeiro', 'Aprovado', 'Reprovado']
+const STATUS_LIST = ['Pendente', 'Em Análise', 'Enviado ao Financeiro', 'Atraso do Financeiro', 'Aprovado', 'Reprovado']
 
 const STATUS_STYLE = {
   'Pendente':              'bg-slate-100 text-slate-600 border-slate-200',
+  'Em Análise':            'bg-amber-50 text-amber-700 border-amber-200',
   'Em Andamento':          'bg-amber-50 text-amber-700 border-amber-200',
   'Enviado ao Financeiro': 'bg-blue-50 text-blue-700 border-blue-200',
+  'Atraso do Financeiro':  'bg-orange-50 text-orange-700 border-orange-200',
   'Aprovado':              'bg-emerald-50 text-emerald-700 border-emerald-200',
   'Reprovado':             'bg-red-50 text-red-600 border-red-200',
 }
 
 const STATUS_DOT = {
   'Pendente':              'bg-slate-400',
+  'Em Análise':            'bg-amber-400',
   'Em Andamento':          'bg-amber-400',
   'Enviado ao Financeiro': 'bg-blue-500',
+  'Atraso do Financeiro':  'bg-orange-500',
   'Aprovado':              'bg-emerald-500',
   'Reprovado':             'bg-red-500',
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 function fmt(v) {
@@ -74,6 +84,42 @@ function downloadB64(b64, nome) {
   a.href = b64
   a.download = nome || 'arquivo'
   a.click()
+}
+
+// ── DS Combobox com pesquisa ──────────────────────────────────
+function DSCombobox({ value, onChange, error }) {
+  const [search, setSearch] = useState(value || '')
+  const [open, setOpen] = useState(false)
+  const filtered = DS_LIST.filter(ds => ds.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div className="relative">
+      <input
+        value={search}
+        onChange={e => { setSearch(e.target.value); setOpen(true); if (!e.target.value) onChange('') }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Digite para pesquisar DS..."
+        autoComplete="off"
+        className={`w-full border rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white ${error ? 'border-red-300' : 'border-slate-200'}`}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto mt-1">
+          {filtered.map(ds => (
+            <button
+              key={ds}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(ds); setSearch(ds); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-[13px] hover:bg-blue-50 text-slate-700 ${ds === value ? 'bg-blue-50 font-semibold' : ''}`}
+            >
+              {ds}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Badge de status ───────────────────────────────────────────
@@ -322,15 +368,16 @@ function F({ label, children, error, required }) {
 // ══════════════════════════════════════════════════════════════
 // ABA 2 — NOVO REGISTRO
 // ══════════════════════════════════════════════════════════════
+const _today = new Date().toISOString().slice(0, 10)
 const EMPTY_FORM = {
-  data_contestacao: new Date().toISOString().slice(0, 10),
+  data_contestacao: _today,
   quem_solicitou: '',
   ds: '',
   waybill: '',
   motivo_desconto: '',
   valor_desconto: '',
   observacao: '',
-  previsao: '',
+  previsao: addDays(_today, 3),
   faturamento_b64: null,
   faturamento_nome: null,
   evidencia_b64: null,
@@ -400,8 +447,11 @@ function NovoRegistro({ onSaved }) {
 
         <div className="flex flex-col gap-4">
           <F label="DATA" required error={errors.data_contestacao}>
-            <input type="date" value={form.data_contestacao} onChange={e => set('data_contestacao', e.target.value)}
-              className={inputCls(errors.data_contestacao)} />
+            <input type="date" value={form.data_contestacao} onChange={e => {
+              const v = e.target.value
+              setForm(f => ({ ...f, data_contestacao: v, previsao: v ? addDays(v, 3) : f.previsao }))
+              setErrors(er => ({ ...er, data_contestacao: null }))
+            }} className={inputCls(errors.data_contestacao)} />
           </F>
 
           <F label="Quem Solicitou" error={errors.quem_solicitou}>
@@ -411,10 +461,7 @@ function NovoRegistro({ onSaved }) {
           </F>
 
           <F label="DS" required error={errors.ds}>
-            <select value={form.ds} onChange={e => set('ds', e.target.value)} className={inputCls(errors.ds)}>
-              <option value="">Selecione a DS</option>
-              {DS_LIST.map(ds => <option key={ds} value={ds}>{ds}</option>)}
-            </select>
+            <DSCombobox value={form.ds} onChange={v => set('ds', v)} error={errors.ds} />
           </F>
 
           <F label="WAIBILL" required error={errors.waybill}>
@@ -439,7 +486,7 @@ function NovoRegistro({ onSaved }) {
             </select>
           </F>
 
-          <F label="FATURAMENTO QUE HOUVE O EXTRAVIO" required error={errors.faturamento}>
+          <F label="FATURAMENTO QUE HOUVE O DESCONTO" required error={errors.faturamento}>
             <div
               onClick={() => fatRef.current.click()}
               className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors
@@ -454,7 +501,7 @@ function NovoRegistro({ onSaved }) {
                   className="text-[10px] text-red-500 hover:text-red-700">Remover</button>
               )}
             </div>
-            <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+            <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls" className="hidden"
               onChange={e => handleFile(e, 'faturamento')} />
           </F>
 
@@ -467,7 +514,7 @@ function NovoRegistro({ onSaved }) {
 
           <F label="OBSERVAÇÃO" required error={errors.observacao}>
             <textarea value={form.observacao} onChange={e => set('observacao', e.target.value)}
-              rows={2} placeholder="Área de resposta"
+              rows={2} placeholder="Descreva o motivo pelo qual o desconto não procede"
               className={inputCls(errors.observacao) + ' resize-none'} />
           </F>
 
