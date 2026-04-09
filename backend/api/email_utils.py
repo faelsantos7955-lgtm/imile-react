@@ -1,5 +1,5 @@
 """
-api/email_utils.py — Envio de e-mails via Resend (HTTP API)
+api/email_utils.py — Envio de e-mails via Brevo (HTTP API)
 """
 import os
 import urllib.request
@@ -11,26 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 def send_email(to: str, subject: str, html: str) -> bool:
-    api_key = os.getenv("RESEND_API_KEY", "")
+    api_key = os.getenv("BREVO_API_KEY", "")
     if not api_key:
-        logger.error("[email] RESEND_API_KEY não configurado — e-mail não enviado")
+        logger.error("[email] BREVO_API_KEY não configurado — e-mail não enviado")
         return False
 
-    from_addr = os.getenv("RESEND_FROM", "iMile Dashboard <onboarding@resend.dev>")
+    from_email = os.getenv("BREVO_FROM_EMAIL", "noreply@imile.me")
+    from_name  = os.getenv("BREVO_FROM_NAME",  "iMile Dashboard")
 
     payload = json.dumps({
-        "from":    from_addr,
-        "to":      [to],
-        "subject": subject,
-        "html":    html,
+        "sender":      {"name": from_name, "email": from_email},
+        "to":          [{"email": to}],
+        "subject":     subject,
+        "htmlContent": html,
     }).encode("utf-8")
 
     req = urllib.request.Request(
-        "https://api.resend.com/emails",
+        "https://api.brevo.com/v3/smtp/email",
         data=payload,
         headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type":  "application/json",
+            "api-key":      api_key,
+            "Content-Type": "application/json",
         },
         method="POST",
     )
