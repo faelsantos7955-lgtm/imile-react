@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import { PageHeader, Alert, Card, SectionHeader } from '../components/ui'
+import { PageHeader, Alert, Card, SectionHeader, toast } from '../components/ui'
 import {
   Upload, Users, Settings, CheckCircle, XCircle,
   ShieldOff, ShieldCheck, Loader,
@@ -14,6 +14,7 @@ import {
   Target, Plus, Trash2, PackageSearch, Search, ChevronDown, Mail,
 } from 'lucide-react'
 import BulkUpload from './BulkUpload'
+import AdminAvisos from './AdminAvisos'
 
 // ── Definição de permissões disponíveis ──────────────────────
 export const PAGINAS = [
@@ -269,7 +270,7 @@ function DrawerPermissoes({ usuario, onClose, onSaved }) {
       await api.put(`/api/admin/usuarios/${usuario.id}`, { ...form, bases: [] })
       onSaved()
       onClose()
-    } catch { alert('Erro ao salvar') }
+    } catch { toast.erro('Erro ao salvar.') }
     finally { setSaving(false) }
   }
 
@@ -383,7 +384,7 @@ function SolicitacoesPage() {
       const msg = e.code === 'ECONNABORTED'
         ? 'O servidor demorou para responder. Aguarde alguns segundos e tente novamente (o servidor pode estar acordando).'
         : 'Erro ao aprovar: ' + (e.response?.data?.detail || e.message)
-      alert(msg)
+      toast.erro(msg)
     } finally { setAprovando(false) }
   }
 
@@ -391,9 +392,9 @@ function SolicitacoesPage() {
     setReenviando(p => ({ ...p, [u.id]: true }))
     try {
       await api.post(`/api/admin/usuarios/${u.id}/reenviar-convite`)
-      alert(`Convite reenviado para ${u.email}`)
+      toast.ok(`Convite reenviado para ${u.email}`)
     } catch (e) {
-      alert('Erro ao reenviar: ' + (e.response?.data?.detail || e.message))
+      toast.erro('Erro ao reenviar: ' + (e.response?.data?.detail || e.message))
     } finally {
       setReenviando(p => { const n = { ...p }; delete n[u.id]; return n })
     }
@@ -405,7 +406,7 @@ function SolicitacoesPage() {
     try {
       await api.post(`/api/admin/solicitacoes/${id}/rejeitar`)
       qc.invalidateQueries({ queryKey: ['solicitacoes'] })
-    } catch { alert('Erro') }
+    } catch { toast.erro('Erro ao processar.') }
     finally { setRejeitando(p => { const n = { ...p }; delete n[id]; return n }) }
   }
 
@@ -581,7 +582,7 @@ function ConfigPage() {
     try {
       await api.post('/api/admin/motoristas', { id_motorista: m.id_motorista, nome_motorista: m.nome_motorista || '', ativo: !m.ativo, motivo: m.motivo || '' })
       await carregar()
-    } catch { alert('Erro') }
+    } catch { toast.erro('Erro ao processar.') }
     finally { setSaving(p => { const n = { ...p }; delete n[m.id_motorista]; return n }) }
   }
 
@@ -592,7 +593,7 @@ function ConfigPage() {
       await api.post('/api/admin/motoristas', { id_motorista: novoId.trim(), nome_motorista: novoNome.trim(), ativo: false, motivo: novoMotivo.trim() || 'Bloqueado manualmente' })
       setNovoId(''); setNovoNome(''); setNovoMotivo('')
       await carregar()
-    } catch { alert('Erro') }
+    } catch { toast.erro('Erro ao processar.') }
     finally { setAdicionando(false) }
   }
 
@@ -1026,6 +1027,7 @@ export default function Admin() {
         <Route path="auditlog" element={<AuditLogPage />} />
         <Route path="metas" element={<MetasPage />} />
         <Route path="lote" element={<BulkUpload />} />
+        <Route path="avisos" element={<AdminAvisos />} />
       </Routes>
     </div>
   )

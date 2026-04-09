@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import { PageHeader, Card, Alert, UploadGuide } from '../components/ui'
+import { PageHeader, Card, Alert, UploadGuide, toast, TableSkeleton } from '../components/ui'
 import { Upload, Download, Loader, RefreshCw, Trash2, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 import { useAuth } from '../lib/AuthContext'
@@ -119,7 +119,7 @@ export default function Backlog() {
   const [erro, setErro]               = useState('')
   const [showDetalhe, setShowDetalhe] = useState(true)
   const [clienteOffset, setClienteOffset] = useState(0)
-  const inputRef = useRef()
+  const inputRef = useRef(null)
 
   const { data: uploads = [] } = useQuery({
     queryKey: ['backlog-uploads'],
@@ -195,7 +195,7 @@ export default function Backlog() {
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([res.data]))
       a.download = `Backlog_SLA.xlsx`; a.click()
-    } catch { alert('Erro ao gerar Excel') }
+    } catch { toast.erro('Erro ao gerar Excel.') }
     finally { setDownloading(false) }
   }
 
@@ -284,8 +284,8 @@ export default function Backlog() {
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 text-slate-500 mt-8 justify-center">
-          <Loader size={18} className="animate-spin" /> Carregando...
+        <div className="mt-6">
+          <TableSkeleton rows={8} cols={7} />
         </div>
       )}
 

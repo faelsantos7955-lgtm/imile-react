@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Upload, X, FileSpreadsheet, AlertCircle, ChevronUp, ChevronDown,
-  Package, Truck, CheckCircle, ArrowRightLeft,
+  Package, Truck, CheckCircle, ArrowRightLeft, Download, Loader,
 } from 'lucide-react'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
@@ -47,7 +47,7 @@ function FileChip({ name, onRemove }) {
 function UploadPanel({ onClose, onSuccess }) {
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
-  const inputRef = useRef()
+  const inputRef = useRef(null)
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -564,6 +564,7 @@ export default function NotArrived() {
   const [showPanel, setShowPanel] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
   const [flashResult, setFlashResult] = useState(null)
+  const [baixando, setBaixando] = useState(false)
 
   // Lista de uploads
   const { data: uploads = [], isLoading: loadingUploads } = useQuery({
@@ -593,6 +594,20 @@ export default function NotArrived() {
   })
 
   const upload = uploads.find(u => u.id === selectedId)
+
+  const handleExcel = async () => {
+    setBaixando(true)
+    try {
+      const r = await api.get(`/api/excel/not-arrived-mov/${selectedId}`, { responseType: 'blob' })
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `NotArrivedMov_${upload?.data_ref || 'relatorio'}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { alert('Erro ao gerar Excel') }
+    finally { setBaixando(false) }
+  }
 
   const handleUploadSuccess = (data) => {
     setFlashResult(data)
@@ -647,9 +662,15 @@ export default function NotArrived() {
       ) : (
         <>
           {/* Seletor de data */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-slate-500 font-medium">Data de referência:</span>
             <UploadSelector uploads={uploads} selected={selectedId} onChange={setSelectedId} />
+            {selectedId && (
+              <button onClick={handleExcel} disabled={baixando}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors">
+                {baixando ? <Loader size={12} className="animate-spin" /> : <Download size={12} />} Excel
+              </button>
+            )}
           </div>
 
           {/* KPIs */}

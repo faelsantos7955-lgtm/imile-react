@@ -7,8 +7,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts'
-import { Upload, Loader, Trash2, AlertCircle, TrendingDown } from 'lucide-react'
-import { PageHeader, Card, SectionHeader } from '../components/ui'
+import { Upload, Loader, Trash2, AlertCircle, TrendingDown, Download } from 'lucide-react'
+import { PageHeader, Card, SectionHeader, toast, TableSkeleton } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
 
@@ -31,7 +31,7 @@ function KPI({ label, value, sub, cls = '' }) {
 function UploadZone({ onSuccess }) {
   const [uploading, setUploading] = useState(false)
   const [erro, setErro]           = useState('')
-  const inputRef = useRef()
+  const inputRef = useRef(null)
   const qc = useQueryClient()
 
   const handleFile = async (e) => {
@@ -77,6 +77,7 @@ export default function Extravios() {
   const qc = useQueryClient()
   const [uploadSel, setUploadSel] = useState(null)
   const [deletando, setDeletando] = useState(false)
+  const [baixando, setBaixando]   = useState(false)
 
   const { data: uploads = [], isLoading: loadingUps } = useQuery({
     queryKey: ['extravios-uploads'],
@@ -93,6 +94,20 @@ export default function Extravios() {
     enabled: !!uploadSel,
   })
 
+  const handleExcel = async () => {
+    setBaixando(true)
+    try {
+      const r = await api.get(`/api/excel/extravios/${uploadSel}`, { responseType: 'blob' })
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Extravios_${uploads.find(u => u.id === uploadSel)?.data_ref || 'relatorio'}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { toast.erro('Erro ao gerar Excel.') }
+    finally { setBaixando(false) }
+  }
+
   const deletar = async () => {
     if (!window.confirm('Excluir este upload de extravios?')) return
     setDeletando(true)
@@ -100,7 +115,7 @@ export default function Extravios() {
       await api.delete(`/api/extravios/upload/${uploadSel}`)
       qc.invalidateQueries({ queryKey: ['extravios-uploads'] })
       setUploadSel(null)
-    } catch { alert('Erro ao excluir') }
+    } catch { toast.erro('Erro ao excluir.') }
     finally { setDeletando(false) }
   }
 
@@ -131,6 +146,12 @@ export default function Extravios() {
             ))}
           </select>
         )}
+        {uploadSel && (
+          <button onClick={handleExcel} disabled={baixando}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors">
+            {baixando ? <Loader size={13} className="animate-spin" /> : <Download size={13} />} Excel
+          </button>
+        )}
         {isAdmin && uploadSel && (
           <button onClick={deletar} disabled={deletando}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50">
@@ -142,8 +163,8 @@ export default function Extravios() {
       <UploadZone onSuccess={(id) => setUploadSel(id)} />
 
       {loading && (
-        <div className="flex items-center gap-2 text-slate-500 mt-8 justify-center">
-          <Loader size={16} className="animate-spin" /> Carregando...
+        <div className="mt-6">
+          <TableSkeleton rows={8} cols={7} />
         </div>
       )}
 

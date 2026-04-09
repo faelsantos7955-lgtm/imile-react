@@ -2,7 +2,17 @@
  * components/ui.jsx — Design System iMile · Clean & Premium
  */
 import { useState as _useState } from 'react'
+import { toast as _sonner } from 'sonner'
 import clsx from 'clsx'
+
+// ── Toast helpers ─────────────────────────────────────────────
+export const toast = {
+  ok:      (msg) => _sonner.success(msg),
+  erro:    (msg) => _sonner.error(msg),
+  aviso:   (msg) => _sonner.warning(msg),
+  info:    (msg) => _sonner.info(msg),
+  promise: (p, opts) => _sonner.promise(p, opts),
+}
 
 // ── KPI Card ──────────────────────────────────────────────────
 const KPI_ACCENT = {
@@ -149,6 +159,51 @@ export function Skeleton({ className = 'h-4 w-full' }) {
       'animate-pulse rounded-lg bg-slate-100',
       className
     )} />
+  )
+}
+
+// ── Table Skeleton ────────────────────────────────────────────
+export function TableSkeleton({ rows = 6, cols = 5 }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 overflow-hidden animate-in">
+      {/* Header */}
+      <div className="grid gap-3 px-4 py-3 bg-slate-800" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+        {Array.from({ length: cols }).map((_, i) => (
+          <div key={i} className="h-3 rounded bg-white/10 animate-pulse" />
+        ))}
+      </div>
+      {/* Rows */}
+      {Array.from({ length: rows }).map((_, ri) => (
+        <div
+          key={ri}
+          className={clsx('grid gap-3 px-4 py-3 border-t border-slate-50', ri % 2 === 1 && 'bg-slate-50/40')}
+          style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+        >
+          {Array.from({ length: cols }).map((_, ci) => (
+            <div
+              key={ci}
+              className="h-3 rounded bg-slate-200 animate-pulse"
+              style={{ width: `${60 + Math.random() * 40}%`, animationDelay: `${(ri * cols + ci) * 30}ms` }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── KPI Skeleton ──────────────────────────────────────────────
+export function KpiSkeleton({ count = 4 }) {
+  return (
+    <div className={`grid gap-3 grid-cols-2 sm:grid-cols-${count}`}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="bg-white rounded-xl border border-slate-100 p-5 animate-pulse">
+          <div className="h-2.5 w-20 bg-slate-100 rounded mb-4" />
+          <div className="h-8 w-24 bg-slate-200 rounded mb-2" />
+          <div className="h-2 w-16 bg-slate-100 rounded" />
+        </div>
+      ))}
+    </div>
   )
 }
 

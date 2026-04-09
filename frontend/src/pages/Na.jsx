@@ -15,7 +15,7 @@ import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
   KpiCard, Card, SectionHeader, EmptyState, Alert, Button,
-} from '../components/ui'
+, toast } from '../components/ui'
 import clsx from 'clsx'
 
 const fmt = (n) => (n ?? 0).toLocaleString('pt-BR')
@@ -566,7 +566,7 @@ export default function Na() {
         const json = JSON.parse(text || '{}')
         msg = json.detail || msg
       } catch {}
-      alert(msg)
+      toast.erro(msg)
     }
     finally { setDownloading(false) }
   }

@@ -10,7 +10,7 @@ import api from '../lib/api'
 import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
-  GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale,
+  GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale, Megaphone,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -25,6 +25,7 @@ const NAV_ITEMS = [
   { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
   { to: '/not-arrived',   icon: AlertCircle,  label: 'Not Arrived Mov.' },
   { to: '/contestacoes', icon: Scale,        label: 'Contestações' },
+  { to: '/avisos',       icon: Megaphone,   label: 'Avisos' },
 ]
 
 const ADMIN_ITEMS = [
@@ -34,6 +35,7 @@ const ADMIN_ITEMS = [
   { to: '/admin/config',   icon: Settings,      label: 'Configurações' },
   { to: '/admin/auditlog', icon: History,       label: 'Histórico' },
   { to: '/admin/metas',    icon: Target,        label: 'Metas por DS' },
+  { to: '/admin/avisos',   icon: Megaphone,     label: 'Quadro de Avisos' },
 ]
 
 const PAGE_TITLES = [
@@ -47,16 +49,18 @@ const PAGE_TITLES = [
   { path: '/na',              label: 'Not Arrived' },
   { path: '/not-arrived',     label: 'Not Arrived com Movimentação' },
   { path: '/contestacoes',   label: 'Contestações de Descontos' },
+  { path: '/avisos',         label: 'Quadro de Avisos' },
   { path: '/admin',           label: 'Upload / Processar' },
   { path: '/admin/lote',      label: 'Carga em Lote' },
   { path: '/admin/users',     label: 'Solicitações de Acesso' },
   { path: '/admin/config',    label: 'Configurações' },
   { path: '/admin/auditlog',  label: 'Histórico de Ações' },
   { path: '/admin/metas',     label: 'Metas por DS' },
+  { path: '/admin/avisos',    label: 'Quadro de Avisos (Admin)' },
 ]
 
 // ── Nav link ──────────────────────────────────────────────────
-function SideLink({ to, icon: Icon, label, onClick }) {
+function SideLink({ to, icon: Icon, label, onClick, badge }) {
   return (
     <NavLink
       to={to}
@@ -76,6 +80,11 @@ function SideLink({ to, icon: Icon, label, onClick }) {
           )}
           <Icon size={16} strokeWidth={isActive ? 2 : 1.8} className="shrink-0" />
           <span className="flex-1 truncate">{label}</span>
+          {badge > 0 && (
+            <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -101,6 +110,12 @@ function Sidebar({ onClose }) {
   const initial = firstName[0]?.toUpperCase() || '?'
   const handleLogout = () => { onClose?.(); logout() }
 
+  const { data: naoLidos } = useQuery({
+    queryKey: ['avisos-nao-lidos'],
+    queryFn: () => api.get('/api/avisos/nao-lidos').then(r => r.data.total),
+    refetchInterval: 2 * 60 * 1000, // revalida a cada 2 min
+  })
+
   return (
     <aside className="w-[220px] bg-navy-950 flex flex-col h-full border-r border-white/5">
 
@@ -123,7 +138,10 @@ function Sidebar({ onClose }) {
       <nav className="flex-1 px-2.5 overflow-y-auto sidebar-scroll py-1">
         <NavGroup label="Menu">
           {NAV_ITEMS.map(item => (
-            <SideLink key={item.to} {...item} onClick={onClose} />
+            <SideLink
+              key={item.to} {...item} onClick={onClose}
+              badge={item.to === '/avisos' ? (naoLidos || 0) : 0}
+            />
           ))}
         </NavGroup>
         {isAdmin && (

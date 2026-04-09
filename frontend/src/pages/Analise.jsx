@@ -8,14 +8,15 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, RankingRow, Alert, Skeleton } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, RankingRow, Alert, Skeleton, toast } from '../components/ui'
 import Heatmap from '../components/Heatmap'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, Label, ComposedChart, Line, LineChart,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { Download, Upload, X, Filter, Loader, ChevronDown, Check } from 'lucide-react'
+import { Download, Upload, X, Filter, Loader, ChevronDown, Check, Megaphone, ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { validarArquivos } from '../lib/validarArquivo'
 
 const CB = { recebido: '#095EF7', expedido: '#f97316', entregas: '#10b981' }
@@ -109,7 +110,7 @@ function UploadModal({ onClose, onSuccess }) {
   }
 
   const FileInput = ({ label, multiple, onChange, files, obrigatorio }) => {
-    const ref = useRef()
+    const ref = useRef(null)
     return (
       <div>
         <label className="text-xs font-semibold text-slate-600">
@@ -178,7 +179,7 @@ function UploadModal({ onClose, onSuccess }) {
 function DsDropdown({ dsDisponiveis, dsSel, setDsSel }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const ref = useRef()
+  const ref = useRef(null)
 
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -349,6 +350,13 @@ function FilterBar({
 export default function Analise() {
   const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const { data: avisos = [] } = useQuery({
+    queryKey: ['avisos'],
+    queryFn: () => api.get('/api/avisos').then(r => r.data),
+  })
+  const naoLidos = avisos.filter(a => !a.lido)
   const [preset, setPreset]         = useState('hoje')
   const [customIni, setCustomIni]   = useState(diasAtras(30))
   const [customFim, setCustomFim]   = useState(hoje())
@@ -493,7 +501,7 @@ export default function Analise() {
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.data]))
         a.download = `Analise_${ini}_${fim}.xlsx`; a.click()
       }
-    } catch { alert('Erro ao gerar Excel') }
+    } catch { toast.erro('Erro ao gerar Excel.') }
   }
 
   return (
@@ -508,6 +516,32 @@ export default function Analise() {
             queryClient.invalidateQueries({ queryKey: ['dashboard-heatmap'] })
           }}
         />
+      )}
+
+      {/* Banner de avisos não lidos */}
+      {naoLidos.length > 0 && (
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-imile-50 border border-imile-200 rounded-xl">
+          <div className="w-8 h-8 rounded-lg bg-imile-100 flex items-center justify-center shrink-0">
+            <Megaphone size={15} className="text-imile-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-imile-800">
+              {naoLidos.length === 1
+                ? `Você tem 1 aviso não lido`
+                : `Você tem ${naoLidos.length} avisos não lidos`}
+            </p>
+            <p className="text-xs text-imile-600 truncate mt-0.5">
+              {naoLidos[0]?.titulo}
+              {naoLidos.length > 1 ? ` e mais ${naoLidos.length - 1}...` : ''}
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/avisos')}
+            className="flex items-center gap-1 text-xs font-semibold text-imile-700 hover:text-imile-900 shrink-0 transition-colors"
+          >
+            Ver avisos <ArrowRight size={12} />
+          </button>
+        </div>
       )}
 
       {/* Header */}

@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, toast } from '../components/ui'
 import {
   ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
@@ -372,7 +372,7 @@ export default function Triagem() {
       a.href = URL.createObjectURL(new Blob([r.data]))
       a.download = `Triagem_${u?.data_ref || 'relatorio'}.xlsx`
       a.click()
-    } catch { alert('Erro ao gerar Excel') }
+    } catch { toast.erro('Erro ao gerar Excel.') }
   }
 
   const u = uploads.find(x => x.id === sel)

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide, toast } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
@@ -92,7 +92,7 @@ export default function Reclamacoes() {
         motivo:         'Bloqueado via painel de reclamações',
       })
       invalidateAll()
-    } catch { alert('Erro ao bloquear motorista.') }
+    } catch { toast.erro('Erro ao bloquear motorista.') }
     finally { setBlocking(p => { const n = { ...p }; delete n[motorista]; return n }) }
   }
 
@@ -106,7 +106,7 @@ export default function Reclamacoes() {
       a.href = URL.createObjectURL(new Blob([r.data]))
       a.download = `Reclamacoes_${u?.data_ref || 'relatorio'}.xlsx`
       a.click()
-    } catch { alert('Erro ao gerar Excel') }
+    } catch { toast.erro('Erro ao gerar Excel.') }
   }
 
   const weeklyChartData = (() => {
