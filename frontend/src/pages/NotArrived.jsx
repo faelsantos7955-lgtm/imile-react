@@ -720,6 +720,12 @@ export default function NotArrived() {
             </div>
           ) : detalhe && (
             <>
+              {/* Dash — 汇总 — Tendência por Supervisor */}
+              <SectionHeader title="Dash — Tendência por Supervisor (汇总)" />
+              <Card padding={false}>
+                <TabelaTendencia rows={tendencia} />
+              </Card>
+
               {/* Região + Operações lado a lado */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <Card title="Por Região" subtitle="Distribuição por tipo de estação">
@@ -734,12 +740,6 @@ export default function NotArrived() {
                     : <EmptyState icon={Package} title="Sem dados de operação" />}
                 </Card>
               </div>
-
-              {/* Tendência — heatmap supervisor × data */}
-              <SectionHeader title="Tendência por Supervisor" />
-              <Card padding={false}>
-                <TabelaTendencia rows={tendencia} />
-              </Card>
 
               {/* Supervisores */}
               <SectionHeader title="Por Supervisor" />

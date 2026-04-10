@@ -141,6 +141,21 @@ def _processar(df, df_res):
     por_motivo.sort(key=lambda x: x['backlog'], reverse=True)
 
     total = len(df)
+
+    # Extrai data_ref do arquivo (coluna lastScanTime)
+    data_ref = datetime.now().date().isoformat()
+    if 'lastScanTime' in df.columns:
+        try:
+            col = df['lastScanTime']
+            if pd.api.types.is_float_dtype(col) or pd.api.types.is_integer_dtype(col):
+                datas = pd.to_datetime(col, unit='D', origin='1899-12-30', errors='coerce').dropna()
+            else:
+                datas = pd.to_datetime(col, errors='coerce').dropna()
+            if not datas.empty:
+                data_ref = datas.dt.date.max().isoformat()
+        except Exception:
+            pass
+
     kpis = {
         'total':       total,
         'na_ds':       int((df['estagio'] == 'Delivery').sum()),
@@ -148,7 +163,7 @@ def _processar(df, df_res):
         'total_7d':    sum(r['total_7d'] for r in por_ds),
         'pct_7d':      round(sum(r['total_7d'] for r in por_ds) / total * 100, 1) if total else 0,
         'por_faixa':   {f: int((df['range_backlog'] == f).sum()) for f in FAIXAS},
-        'data_ref':    datetime.now().date().isoformat(),
+        'data_ref':    data_ref,
     }
     return kpis, por_rdc, por_supervisor, por_ds, por_motivo
 
@@ -472,7 +487,7 @@ def excel_backlog(
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "BACKLOG"
+    ws.title = "BACKLOG 超时未完结"
     ws.sheet_view.showGridLines = False
 
     ws.merge_cells("C1:P1")

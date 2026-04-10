@@ -321,6 +321,60 @@ export default function Backlog() {
           })}
         </div>
 
+        {/* Dash — BACKLOG 超时未完结: tabelas RDC / Supervisor / DS */}
+        <div className="mb-4">
+          <button onClick={() => setShowDetalhe(!showDetalhe)}
+            className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-800">
+            {showDetalhe ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {showDetalhe ? 'Ocultar Dash' : 'Ver Dash — RDC / Supervisor / DS / Motivo'}
+          </button>
+        </div>
+
+        {showDetalhe && <>
+          <TabelaBacklog titulo="LH — Por RDC" dados={dados.por_rdc} cor="#2E75B6" showRegiao />
+          <TabelaBacklog titulo="DS — Por Supervisor" dados={dados.por_supervisor} cor="#375623" />
+          <TabelaBacklog titulo="DS — Detalhado por Base" dados={dados.por_ds} cor="#1F3864" showSupervisor />
+
+          {dados.por_motivo?.length > 0 && (
+            <div className="mb-6">
+              <div className="rounded-t-xl px-4 py-2 text-white font-bold text-sm" style={{ backgroundColor: '#7030A0' }}>
+                DS — Por Motivo (Último Status)
+              </div>
+              <div className="overflow-x-auto border border-slate-200 rounded-b-xl">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ backgroundColor: '#7030A0' }} className="text-white text-center">
+                      <th className="px-3 py-2 border border-white/20 text-left">Motivo</th>
+                      <th className="px-3 py-2 border border-white/20">Backlog</th>
+                      <th className="px-3 py-2 border border-white/20">% Backlog</th>
+                      {FAIXAS_LABELS.map((f, i) => {
+                        const hc = CORES_HEADER[FAIXAS[i]]
+                        return <th key={i} className="px-2 py-2 border border-white/20 font-bold" style={{ backgroundColor: hc?.bg, color: hc?.text }}>{f}</th>
+                      })}
+                      <th className="px-3 py-2 border border-white/20 bg-red-600 text-white">&gt;7D</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dados.por_motivo.map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}>
+                        <td className="px-3 py-2 border border-slate-200 font-semibold text-slate-800">{row.nome}</td>
+                        <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-slate-800">{(row.backlog || 0).toLocaleString('pt-BR')}</td>
+                        <td className={`px-3 py-2 text-center border border-slate-200 font-mono ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-slate-500'}`}>
+                          {row.pct_backlog?.toFixed(1)}%
+                        </td>
+                        {FAIXAS.map((f, fi) => <FaixaCell key={fi} faixa={f} value={row.faixas?.[f] || 0} />)}
+                        <td className={`px-3 py-2 text-center border border-slate-200 font-mono font-bold ${row.total_7d > 500 ? 'text-red-600 bg-red-50' : row.total_7d > 100 ? 'text-red-500' : 'text-slate-500'}`}>
+                          {(row.total_7d || 0).toLocaleString('pt-BR')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>}
+
         {/* Tabela de Clientes */}
         {clientes.length > 0 && (
           <div className="mb-6">
@@ -406,59 +460,6 @@ export default function Backlog() {
           </div>
         )}
 
-        {/* Tabelas detalhadas (colapsáveis) */}
-        <div className="mb-4">
-          <button onClick={() => setShowDetalhe(!showDetalhe)}
-            className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-800">
-            {showDetalhe ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            {showDetalhe ? 'Ocultar detalhamento' : 'Ver detalhamento por RDC / Supervisor / DS / Motivo'}
-          </button>
-        </div>
-
-        {showDetalhe && <>
-          <TabelaBacklog titulo="LH — Por RDC" dados={dados.por_rdc} cor="#2E75B6" showRegiao />
-          <TabelaBacklog titulo="DS — Por Supervisor" dados={dados.por_supervisor} cor="#375623" />
-          <TabelaBacklog titulo="DS — Detalhado por Base" dados={dados.por_ds} cor="#1F3864" showSupervisor />
-
-          {dados.por_motivo?.length > 0 && (
-            <div className="mb-6">
-              <div className="rounded-t-xl px-4 py-2 text-white font-bold text-sm" style={{ backgroundColor: '#7030A0' }}>
-                DS — Por Motivo (Último Status)
-              </div>
-              <div className="overflow-x-auto border border-slate-200 rounded-b-xl">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr style={{ backgroundColor: '#7030A0' }} className="text-white text-center">
-                      <th className="px-3 py-2 border border-white/20 text-left">Motivo</th>
-                      <th className="px-3 py-2 border border-white/20">Backlog</th>
-                      <th className="px-3 py-2 border border-white/20">% Backlog</th>
-                      {FAIXAS_LABELS.map((f, i) => {
-                        const hc = CORES_HEADER[FAIXAS[i]]
-                        return <th key={i} className="px-2 py-2 border border-white/20 font-bold" style={{ backgroundColor: hc?.bg, color: hc?.text }}>{f}</th>
-                      })}
-                      <th className="px-3 py-2 border border-white/20 bg-red-600 text-white">&gt;7D</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dados.por_motivo.map((row, i) => (
-                      <tr key={i} className={i % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'}>
-                        <td className="px-3 py-2 border border-slate-200 font-semibold text-slate-800">{row.nome}</td>
-                        <td className="px-3 py-2 text-center border border-slate-200 font-mono font-bold text-slate-800">{(row.backlog || 0).toLocaleString('pt-BR')}</td>
-                        <td className={`px-3 py-2 text-center border border-slate-200 font-mono ${row.pct_backlog > 50 ? 'text-red-600 font-bold' : row.pct_backlog > 20 ? 'text-amber-600' : 'text-slate-500'}`}>
-                          {row.pct_backlog?.toFixed(1)}%
-                        </td>
-                        {FAIXAS.map((f, fi) => <FaixaCell key={fi} faixa={f} value={row.faixas?.[f] || 0} />)}
-                        <td className={`px-3 py-2 text-center border border-slate-200 font-mono font-bold ${row.total_7d > 500 ? 'text-red-600 bg-red-50' : row.total_7d > 100 ? 'text-red-500' : 'text-slate-500'}`}>
-                          {(row.total_7d || 0).toLocaleString('pt-BR')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>}
       </>}
     </div>
   )

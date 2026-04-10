@@ -686,8 +686,8 @@ export default function Na() {
             </div>
           ) : detalhe && (
             <>
-              {/* Sheet1 heatmap — supervisor × DS × datas */}
-              <SectionHeader title="Supervisor × DS × Data" />
+              {/* Dash — Sheet1 heatmap — supervisor × DS × datas */}
+              <SectionHeader title="Dash — Supervisor × DS × Data (Sheet1)" />
               <Card padding={false}>
                 <TabelaSheet1
                   tendencia={tendencia}

@@ -92,7 +92,7 @@ def excel_na(upload_id: int, request: Request, user: dict = Depends(get_current_
 
     # ── Aba "Tendência" ───────────────────────────────────────
     ws = wb.active
-    ws.title = "Tendência"
+    ws.title = "Sheet1"
     n_date_cols = len(dates)
     total_cols  = 3 + n_date_cols + 1
 

@@ -13,8 +13,29 @@ from api.routes.excel_base import (
 )
 import pandas as pd
 from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font
+from openpyxl.utils import get_column_letter
 
 router = APIRouter()
+
+_SUP_F   = PatternFill("solid", fgColor="1F3864")
+_SUP_FN  = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+_TOT_F   = PatternFill("solid", fgColor="F2F2F2")
+_CELL_FILLS = [
+    (0.75, PatternFill("solid", fgColor="FF0000")),
+    (0.50, PatternFill("solid", fgColor="FF9999")),
+    (0.25, PatternFill("solid", fgColor="FFD966")),
+    (0.00, PatternFill("solid", fgColor="FFF2CC")),
+]
+
+def _mov_cell_fill(val, max_val):
+    if not val or max_val == 0:
+        return None
+    r = val / max_val
+    for thr, fill in _CELL_FILLS:
+        if r >= thr:
+            return fill
+    return None
 
 
 @router.get("/not-arrived-mov/{upload_id}")
@@ -31,6 +52,13 @@ def excel_not_arrived_mov(
         raise HTTPException(404, "Upload não encontrado.")
     up = dict(up_row)
     data_ref = up.get("data_ref", "")
+
+    # Tendência para aba 汇总
+    tend_rows = db.execute(
+        text("SELECT supervisor, data, total FROM not_arrived_tendencia WHERE upload_id = :uid ORDER BY data"),
+        {"uid": upload_id}
+    ).mappings().all()
+    tendencia = [dict(r) for r in tend_rows]
 
     est_rows = db.execute(
         text("SELECT oc_name, oc_code, tipo, regiao, supervisor, total, entregues FROM not_arrived_por_estacao WHERE upload_id = :uid ORDER BY total DESC"),
@@ -58,9 +86,80 @@ def excel_not_arrived_mov(
 
     wb = Workbook()
 
+    # ── Aba "汇总" — Dash: Supervisor × Data ──────────────────
+    ws_hui = wb.active
+    ws_hui.title = "汇总"
+
+    if tendencia:
+        pivot = {}
+        date_set = set()
+        for r in tendencia:
+            s, dt, v = r["supervisor"], r["data"], r["total"]
+            if s not in pivot: pivot[s] = {}
+            pivot[s][dt] = pivot[s].get(dt, 0) + v
+            date_set.add(dt)
+
+        dates     = sorted(date_set)
+        sup_order = sorted(pivot.keys(), key=lambda s: sum(pivot[s].values()), reverse=True)
+        max_val   = max((r["total"] for r in tendencia), default=1)
+        n_cols    = len(dates)
+
+        # Título
+        _titulo_aba(ws_hui, f"DS端有发未到问题件后又有操作 — {data_ref}", n_cols + 2)
+
+        # Header
+        h_row = 2
+        ws_hui.cell(row=h_row, column=1, value="区域/Supervisor").font = _HFNT
+        ws_hui.cell(row=h_row, column=1).fill = _HF
+        ws_hui.cell(row=h_row, column=1).alignment = _CTR
+        ws_hui.cell(row=h_row, column=1).border = _BRD
+        for ci, dt in enumerate(dates, 2):
+            c = ws_hui.cell(row=h_row, column=ci, value=dt[5:].replace("-", "/"))
+            c.font = _HFNT; c.fill = _HF; c.alignment = _CTR; c.border = _BRD
+        ct = ws_hui.cell(row=h_row, column=n_cols + 2, value="Total")
+        ct.font = _HFNT; ct.fill = _HF; ct.alignment = _CTR; ct.border = _BRD
+
+        cur = 3
+        for sup in sup_order:
+            sup_data = pivot[sup]
+            total_sup = sum(sup_data.values())
+            cs = ws_hui.cell(row=cur, column=1, value=sup)
+            cs.font = _SUP_FN; cs.fill = _SUP_F; cs.alignment = _CTR; cs.border = _BRD
+            for ci, dt in enumerate(dates, 2):
+                val = sup_data.get(dt, 0)
+                c = ws_hui.cell(row=cur, column=ci, value=val or None)
+                fill = _mov_cell_fill(val, max_val)
+                if fill: c.fill = fill
+                else: c.fill = _SUP_F
+                c.font = Font(name="Arial", color="FFFFFF", size=9, bold=bool(fill and val))
+                c.alignment = _CTR; c.border = _BRD
+            ct2 = ws_hui.cell(row=cur, column=n_cols + 2, value=total_sup)
+            ct2.font = _SUP_FN; ct2.fill = _SUP_F; ct2.alignment = _CTR; ct2.border = _BRD
+            cur += 1
+
+        # Linha total
+        cur += 1
+        ws_hui.cell(row=cur, column=1, value="TOTAL").font = Font(name="Arial", bold=True, size=10)
+        for ci, dt in enumerate(dates, 2):
+            tot_d = sum(pivot[s].get(dt, 0) for s in pivot)
+            c = ws_hui.cell(row=cur, column=ci, value=tot_d or None)
+            c.fill = _TOT_F; c.alignment = _CTR; c.border = _BRD
+            c.font = Font(name="Arial", bold=True, size=9)
+        grand = sum(sum(pivot[s].values()) for s in pivot)
+        ws_hui.cell(row=cur, column=n_cols + 2, value=grand).font = Font(name="Arial", bold=True, size=10)
+        for ci in range(1, n_cols + 3):
+            ws_hui.cell(row=cur, column=ci).fill = _TOT_F
+            ws_hui.cell(row=cur, column=ci).border = _BRD
+            ws_hui.cell(row=cur, column=ci).alignment = _CTR
+
+        ws_hui.freeze_panes = "B3"
+        ws_hui.column_dimensions["A"].width = 18
+        for ci in range(2, n_cols + 2):
+            ws_hui.column_dimensions[get_column_letter(ci)].width = 7
+        ws_hui.column_dimensions[get_column_letter(n_cols + 2)].width = 8
+
     # ── Aba "Por Estação" ─────────────────────────────────────
-    ws = wb.active
-    ws.title = "Por Estação"
+    ws = wb.create_sheet("Por Estação")
     _titulo_aba(ws, f"Not Arrived Mov. — Por Estação — {data_ref}", 8)
     _write_header(ws, ["#", "Estação", "Código", "Tipo", "Região", "Supervisor", "Total", "Entregues"], 2)
     rows = []
