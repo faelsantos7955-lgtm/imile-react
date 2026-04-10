@@ -9,6 +9,7 @@ from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 import pandas as pd
 import io, re
+from datetime import date as _date_cls
 
 router = APIRouter()
 
@@ -69,19 +70,64 @@ def _ler_relatorio(conteudo: bytes):
     # Remover DS duplicados, manter apenas a primeira ocorrência
     df = df.drop_duplicates(subset=['ds'], keep='first')
 
-    # Extrair data de referência da primeira coluna (que é uma data no Excel)
+    # Extrair data de referência da primeira coluna
+    # Formatos possíveis: timestamp Excel, "2026-03-06", "06-03" (DD-MM), "20-02 DS" (DD-MM texto)
     data_ref = ''
+    from datetime import date as _date
+    first_col_str = str(first_col).strip() if pd.notna(first_col) else ''
     try:
         ts = pd.Timestamp(first_col)
         if not pd.isna(ts):
             data_ref = ts.date().isoformat()
     except Exception:
-        first_col_str = str(first_col) if pd.notna(first_col) else ''
-        match = re.search(r'(\d{4}-\d{2}-\d{2})', first_col_str)
-        if match:
-            data_ref = match.group(1)
+        pass
+    if not data_ref:
+        # YYYY-MM-DD explícito
+        m = re.search(r'(\d{4}-\d{2}-\d{2})', first_col_str)
+        if m:
+            data_ref = m.group(1)
+    if not data_ref:
+        # DD-MM (ex: "20-02", "06-03", "20-02 DS")
+        m = re.search(r'(\d{1,2})-(\d{1,2})', first_col_str)
+        if m:
+            day, month = int(m.group(1)), int(m.group(2))
+            year = _date.today().year
+            try:
+                data_ref = _date(year, month, day).isoformat()
+            except ValueError:
+                pass
+    if not data_ref:
+        data_ref = _date.today().isoformat()
 
     return df, data_ref
+
+
+def _peek_data_ref_monitoramento(conteudo: bytes) -> str | None:
+    """Extrai data_ref lendo apenas o cabeçalho da aba Relatorio."""
+    try:
+        df = pd.read_excel(io.BytesIO(conteudo), sheet_name='Relatorio', header=0, nrows=0)
+        first_col = str(df.columns[0]).strip() if len(df.columns) else ''
+        if not first_col:
+            return None
+        try:
+            ts = pd.Timestamp(first_col)
+            if not pd.isna(ts):
+                return ts.date().isoformat()
+        except Exception:
+            pass
+        m = re.search(r'(\d{4}-\d{2}-\d{2})', first_col)
+        if m:
+            return m.group(1)
+        m = re.search(r'(\d{1,2})-(\d{1,2})', first_col)
+        if m:
+            day, month = int(m.group(1)), int(m.group(2))
+            try:
+                return _date_cls(_date_cls.today().year, month, day).isoformat()
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return None
 
 
 # ── GET /uploads ──────────────────────────────────────────────
@@ -146,8 +192,24 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user), db: S
 # ── POST /processar ───────────────────────────────────────────
 @router.post("/processar")
 @limiter.limit("10/minute")
-async def processar_monitoramento(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+async def processar_monitoramento(
+    request: Request,
+    file: UploadFile = File(...),
+    skip_if_exists: bool = False,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     conteudo = await validar_arquivo(file)
+
+    if skip_if_exists:
+        data_ref_peek = _peek_data_ref_monitoramento(conteudo)
+        if data_ref_peek:
+            existing = db.execute(
+                text("SELECT id FROM monitoramento_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
+            ).mappings().first()
+            if existing:
+                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
+
     buf = io.BytesIO(conteudo)
     xls = pd.ExcelFile(buf)
 

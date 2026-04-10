@@ -14,6 +14,15 @@ import clsx from 'clsx'
 // ── Configuração dos módulos ──────────────────────────────────
 const MODULES = [
   {
+    id: 'monitoramento',
+    label: 'Monitoramento Diário',
+    endpoint: '/api/monitoramento/processar',
+    uploadsUrl: '/api/monitoramento/uploads',
+    field: 'file',
+    hint: 'Monitoramento Diário de Entregas Novo.xlsx — Aba Relatorio',
+    color: 'teal',
+  },
+  {
     id: 'backlog',
     label: 'Backlog SLA',
     endpoint: '/api/backlog/processar',
@@ -70,6 +79,7 @@ const MODULES = [
 ]
 
 const COLOR = {
+  teal:   { bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-700',   badge: 'bg-teal-100 text-teal-700' },
   blue:   { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-700' },
   amber:  { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-700' },
   orange: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', badge: 'bg-orange-100 text-orange-700' },

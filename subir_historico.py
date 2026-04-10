@@ -6,8 +6,8 @@ Autentica na API, detecta quais datas já estão no banco e envia apenas
 os arquivos novos, respeitando o rate limit (5/min por endpoint).
 
 Uso:
-    python subir_historico.py --api https://seu-backend.railway.app \
-        --email usuario@imile.com --senha SUA_SENHA \
+    python subir_historico.py --api imile-react-production.up.railway.app \
+        --email rafael.santos@imile.me --senha Batatinha@26 \
         --backlog     "C:/E2E/SLA BACKLOG" \
         --na          "C:/E2E/有发未到" \
         --not-arrived "C:/E2E/Problem Registration"
@@ -97,6 +97,36 @@ def _data_ref_not_arrived(path: Path) -> str | None:
     return None
 
 
+def _data_ref_monitoramento(path: Path) -> str | None:
+    """Extrai data_ref do cabeçalho da aba Relatorio (ex: '20-02 DS' → 2026-02-20)."""
+    import re as _re
+    from datetime import date as _d
+    try:
+        df = pd.read_excel(path, sheet_name="Relatorio", header=0, nrows=0)
+        first_col = str(df.columns[0]).strip() if len(df.columns) else ""
+        if not first_col:
+            return None
+        try:
+            ts = pd.Timestamp(first_col)
+            if not pd.isna(ts):
+                return ts.date().isoformat()
+        except Exception:
+            pass
+        m = _re.search(r"(\d{4}-\d{2}-\d{2})", first_col)
+        if m:
+            return m.group(1)
+        m = _re.search(r"(\d{1,2})-(\d{1,2})", first_col)
+        if m:
+            day, month = int(m.group(1)), int(m.group(2))
+            try:
+                return _d(_d.today().year, month, day).isoformat()
+            except ValueError:
+                pass
+    except Exception as e:
+        print(f"    [aviso] não foi possível ler data de {path.name}: {e}")
+    return None
+
+
 def _data_ref_generic_日期(path: Path) -> str | None:
     """Tenta ler coluna 日期 de qualquer aba."""
     try:
@@ -119,6 +149,13 @@ def _data_ref_generic_日期(path: Path) -> str | None:
 # ── Configuração dos módulos ──────────────────────────────────────
 
 MODULES = {
+    "monitoramento": {
+        "label":         "Monitoramento Diário",
+        "endpoint":      "/api/monitoramento/processar",
+        "uploads_url":   "/api/monitoramento/uploads",
+        "date_fn":       _data_ref_monitoramento,
+        "date_field":    "data_ref",
+    },
     "backlog": {
         "label":         "Backlog SLA",
         "endpoint":      "/api/backlog/processar",
@@ -304,6 +341,7 @@ def main():
     parser.add_argument("--api",          required=True,  help="URL base da API (ex: https://xxx.railway.app)")
     parser.add_argument("--email",        required=True,  help="E-mail de login")
     parser.add_argument("--senha",        required=True,  help="Senha de login")
+    parser.add_argument("--monitoramento", help="Pasta com arquivos Monitoramento Diário")
     parser.add_argument("--backlog",      help="Pasta com arquivos Backlog SLA")
     parser.add_argument("--na",           help="Pasta com arquivos Not Arrived")
     parser.add_argument("--not-arrived",  help="Pasta com arquivos Problem Registration", dest="not_arrived")
@@ -316,6 +354,7 @@ def main():
     args = parser.parse_args()
 
     pastas = {
+        "monitoramento": args.monitoramento,
         "backlog":      args.backlog,
         "na":           args.na,
         "not-arrived":  args.not_arrived,
