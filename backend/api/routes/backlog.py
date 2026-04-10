@@ -350,15 +350,47 @@ def detalhe_upload(
     }
 
 
+def _peek_data_ref_backlog(conteudo: bytes) -> str | None:
+    """Extrai data_ref lendo apenas a coluna lastScanTime (sem processar tudo)."""
+    try:
+        import io as _io
+        xl = pd.ExcelFile(_io.BytesIO(conteudo))
+        aba = next((a for a in xl.sheet_names if a.lower().replace(' ', '_') == 'backlog_details'), None)
+        if not aba:
+            return None
+        df = pd.read_excel(_io.BytesIO(conteudo), sheet_name=aba, usecols=['lastScanTime'])
+        col = df['lastScanTime']
+        if pd.api.types.is_float_dtype(col) or pd.api.types.is_integer_dtype(col):
+            datas = pd.to_datetime(col, unit='D', origin='1899-12-30', errors='coerce').dropna()
+        else:
+            datas = pd.to_datetime(col, errors='coerce').dropna()
+        if not datas.empty:
+            return datas.dt.date.max().isoformat()
+    except Exception:
+        pass
+    return None
+
+
 @router.post("/processar")
 @limiter.limit("5/minute")
 async def processar_backlog(
     request: Request,
     file: UploadFile = File(...),
+    skip_if_exists: bool = False,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     conteudo = await validar_arquivo(file)
+
+    if skip_if_exists:
+        data_ref_peek = _peek_data_ref_backlog(conteudo)
+        if data_ref_peek:
+            existing = db.execute(
+                text("SELECT id FROM backlog_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
+            ).mappings().first()
+            if existing:
+                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
+
     try:
         df, df_res = _ler_excel(conteudo)
     except Exception as e:

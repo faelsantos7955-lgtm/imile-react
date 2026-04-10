@@ -155,15 +155,41 @@ def _processar(conteudo: bytes) -> dict:
     return _processar_export(xl)
 
 
+def _peek_data_ref_na(conteudo: bytes) -> str | None:
+    """Extrai data_ref lendo apenas a coluna 日期 da aba Export."""
+    try:
+        import io as _io
+        xl = pd.ExcelFile(_io.BytesIO(conteudo))
+        if "Export" not in xl.sheet_names:
+            return None
+        df = pd.read_excel(_io.BytesIO(conteudo), sheet_name="Export", usecols=["日期"])
+        datas = pd.to_datetime(df["日期"], errors="coerce").dropna()
+        if not datas.empty:
+            return datas.dt.date.max().isoformat()
+    except Exception:
+        pass
+    return None
+
+
 @router.post("/processar")
 @limiter.limit("5/minute")
 async def processar_na(
     request: Request,
-    file:    UploadFile = File(..., description="Arquivo 有发未到 (.xlsx)"),
-    user:    dict       = Depends(get_current_user),
-    db:      Session    = Depends(get_db),
+    file:        UploadFile = File(..., description="Arquivo 有发未到 (.xlsx)"),
+    skip_if_exists: bool    = False,
+    user:        dict       = Depends(get_current_user),
+    db:          Session    = Depends(get_db),
 ):
     conteudo = await validar_arquivo(file)
+
+    if skip_if_exists:
+        data_ref_peek = _peek_data_ref_na(conteudo)
+        if data_ref_peek:
+            existing = db.execute(
+                text("SELECT id FROM na_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
+            ).mappings().first()
+            if existing:
+                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
 
     try:
         resultado = _processar(conteudo)

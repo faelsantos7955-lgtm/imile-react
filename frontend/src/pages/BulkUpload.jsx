@@ -1,12 +1,13 @@
 /**
  * pages/BulkUpload.jsx — Carga em Lote de arquivos históricos
- * Envia arquivos para cada módulo sequencialmente, com retry automático em rate limit.
+ * Envia arquivos para cada módulo com paralelismo controlado (2 por vez),
+ * retry automático em rate limit e opção de pular datas já no banco.
  */
 import { useState, useRef, useCallback } from 'react'
 import api from '../lib/api'
 import {
   CheckCircle2, XCircle, Loader2, UploadCloud, FolderOpen,
-  PlayCircle, RotateCcw, X, ChevronDown, ChevronUp, Clock,
+  PlayCircle, RotateCcw, X, ChevronDown, ChevronUp, Clock, SkipForward,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -16,6 +17,7 @@ const MODULES = [
     id: 'backlog',
     label: 'Backlog SLA',
     endpoint: '/api/backlog/processar',
+    uploadsUrl: '/api/backlog/uploads',
     field: 'file',
     hint: 'Ex: 全部客户超SLABacklog_*.xlsx — Abas: Backlog Details + resume',
     color: 'blue',
@@ -24,6 +26,7 @@ const MODULES = [
     id: 'notracking',
     label: 'No Tracking (断更)',
     endpoint: '/api/notracking/processar',
+    uploadsUrl: '/api/notracking/uploads',
     field: 'file',
     hint: 'Ex: No tracking *.xlsx — Aba BD: Número da Etiqueta, Último status, Station…',
     color: 'amber',
@@ -32,6 +35,7 @@ const MODULES = [
     id: 'na',
     label: 'Not Arrived',
     endpoint: '/api/na/processar',
+    uploadsUrl: '/api/na/uploads',
     field: 'file',
     hint: 'Arquivo 有发未到 — Aba Export: Destination Station, Supervisor, 日期…',
     color: 'orange',
@@ -40,6 +44,7 @@ const MODULES = [
     id: 'not-arrived',
     label: 'Not Arrived com Movimentação',
     endpoint: '/api/not-arrived/processar',
+    uploadsUrl: '/api/not-arrived/uploads',
     field: 'file',
     hint: 'Problem Registration — Abas 数据源 (DC) + Planilha1 (DS)',
     color: 'red',
@@ -48,6 +53,7 @@ const MODULES = [
     id: 'reclamacoes',
     label: 'Reclamações',
     endpoint: '/api/reclamacoes/processar',
+    uploadsUrl: '/api/reclamacoes/uploads',
     field: 'file',
     hint: 'Bilhete de reclamações — colunas Create Time, Station, SUPERVISOR…',
     color: 'purple',
@@ -56,6 +62,7 @@ const MODULES = [
     id: 'extravios',
     label: 'Extravios',
     endpoint: '/api/extravios/processar',
+    uploadsUrl: '/api/extravios/uploads',
     field: 'file',
     hint: 'Controle Extravios Consolidado — Aba BD',
     color: 'rose',
@@ -71,35 +78,39 @@ const COLOR = {
   rose:   { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-700',   badge: 'bg-rose-100 text-rose-700' },
 }
 
-// Status de um arquivo individual
-// idle | uploading | success | error | waiting
+// status: idle | uploading | success | error | waiting | skipped
 const STATUS_ICON = {
   idle:      <span className="w-4 h-4 rounded-full border-2 border-slate-300 inline-block" />,
   uploading: <Loader2 size={16} className="animate-spin text-imile-500" />,
   success:   <CheckCircle2 size={16} className="text-green-500" />,
   error:     <XCircle size={16} className="text-red-500" />,
   waiting:   <Clock size={16} className="text-amber-400" />,
+  skipped:   <SkipForward size={16} className="text-slate-400" />,
 }
+
+const CONCURRENCY = 2   // uploads simultâneos máximos
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
-async function uploadFile(endpoint, field, file, onStatus) {
+async function uploadFile(endpoint, field, file, skipIfExists, onStatus) {
   const form = new FormData()
   form.append(field, file)
+  const url = skipIfExists ? `${endpoint}?skip_if_exists=true` : endpoint
 
   let attempts = 0
   while (attempts < 4) {
     try {
       onStatus('uploading')
-      const res = await api.post(endpoint, form, {
-        timeout: 300_000,
-      })
-      onStatus('success', res.data)
+      const res = await api.post(url, form, { timeout: 300_000 })
+      if (res.data?.skipped) {
+        onStatus('skipped', res.data)
+      } else {
+        onStatus('success', res.data)
+      }
       return true
     } catch (err) {
       const status = err.response?.status
       if (status === 429) {
-        // Rate limit — espera 15s e tenta novamente
         attempts++
         if (attempts >= 4) {
           onStatus('error', 'Rate limit atingido após 4 tentativas.')
@@ -117,13 +128,26 @@ async function uploadFile(endpoint, field, file, onStatus) {
   return false
 }
 
+// Executa tarefas com limite de concorrência
+async function runConcurrent(tasks, concurrency) {
+  const queue = [...tasks]
+  const workers = Array.from({ length: concurrency }, async () => {
+    while (queue.length) {
+      const task = queue.shift()
+      if (task) await task()
+    }
+  })
+  await Promise.all(workers)
+}
+
 // ── Componente de card por módulo ─────────────────────────────
 function ModuleCard({ mod, files, onAddFiles, onRemoveFile, results, running, collapsed, onToggle }) {
   const inputRef = useRef()
   const c = COLOR[mod.color]
-  const count = files.length
-  const ok  = results.filter(r => r.status === 'success').length
-  const err = results.filter(r => r.status === 'error').length
+  const count   = files.length
+  const ok      = results.filter(r => r.status === 'success').length
+  const skipped = results.filter(r => r.status === 'skipped').length
+  const err     = results.filter(r => r.status === 'error').length
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
@@ -146,6 +170,7 @@ function ModuleCard({ mod, files, onAddFiles, onRemoveFile, results, running, co
             </span>
           )}
           {ok > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{ok} ✓</span>}
+          {skipped > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{skipped} pulados</span>}
           {err > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{err} ✗</span>}
         </div>
         <div className="flex items-center gap-2">
@@ -209,6 +234,9 @@ function ModuleCard({ mod, files, onAddFiles, onRemoveFile, results, running, co
                     {r.status === 'error' && (
                       <span className="text-[10px] text-red-500 truncate max-w-[160px]" title={r.msg}>{r.msg}</span>
                     )}
+                    {r.status === 'skipped' && (
+                      <span className="text-[10px] text-slate-400">já existe</span>
+                    )}
                     {r.status === 'success' && r.data?.upload_id && (
                       <span className="text-[10px] text-green-600">id:{r.data.upload_id}</span>
                     )}
@@ -230,14 +258,13 @@ function ModuleCard({ mod, files, onAddFiles, onRemoveFile, results, running, co
 
 // ── Página principal ──────────────────────────────────────────
 export default function BulkUpload() {
-  // files: { moduleId: File[] }
-  const [files, setFiles] = useState(() => Object.fromEntries(MODULES.map(m => [m.id, []])))
-  // results: { moduleId: { status, msg, data }[] }
-  const [results, setResults] = useState(() => Object.fromEntries(MODULES.map(m => [m.id, []])))
-  const [running, setRunning]   = useState(false)
+  const [files,     setFiles]     = useState(() => Object.fromEntries(MODULES.map(m => [m.id, []])))
+  const [results,   setResults]   = useState(() => Object.fromEntries(MODULES.map(m => [m.id, []])))
+  const [running,   setRunning]   = useState(false)
   const [collapsed, setCollapsed] = useState(() => Object.fromEntries(MODULES.map(m => [m.id, false])))
-  const [progress, setProgress] = useState({ current: 0, total: 0 })
-  const [done, setDone] = useState(false)
+  const [progress,  setProgress]  = useState({ current: 0, total: 0 })
+  const [done,      setDone]      = useState(false)
+  const [skipExisting, setSkipExisting] = useState(true)
   const abortRef = useRef(false)
 
   const totalFiles = MODULES.reduce((s, m) => s + files[m.id].length, 0)
@@ -263,7 +290,11 @@ export default function BulkUpload() {
   const setFileResult = (modId, idx, status, data) => {
     setResults(prev => {
       const arr = [...prev[modId]]
-      arr[idx] = { status, msg: typeof data === 'string' ? data : undefined, data: typeof data === 'object' ? data : undefined }
+      arr[idx] = {
+        status,
+        msg:  typeof data === 'string' ? data : undefined,
+        data: typeof data === 'object' ? data : undefined,
+      }
       return { ...prev, [modId]: arr }
     })
   }
@@ -278,25 +309,29 @@ export default function BulkUpload() {
     let current = 0
     setProgress({ current: 0, total })
 
+    // Monta lista plana de tarefas
+    const tasks = []
     for (const mod of MODULES) {
-      if (abortRef.current) break
       const modFiles = files[mod.id]
       for (let i = 0; i < modFiles.length; i++) {
-        if (abortRef.current) break
-        await uploadFile(
-          mod.endpoint,
-          mod.field,
-          modFiles[i],
-          (status, data) => setFileResult(mod.id, i, status, data),
-        )
-        current++
-        setProgress({ current, total })
-        // Pequeno intervalo entre uploads do mesmo módulo
-        if (i < modFiles.length - 1) await sleep(500)
+        const idx = i
+        const m   = mod
+        tasks.push(async () => {
+          if (abortRef.current) return
+          await uploadFile(
+            m.endpoint,
+            m.field,
+            modFiles[idx],
+            skipExisting,
+            (status, data) => setFileResult(m.id, idx, status, data),
+          )
+          current++
+          setProgress({ current, total })
+        })
       }
-      // Intervalo entre módulos
-      if (mod !== MODULES[MODULES.length - 1]) await sleep(800)
     }
+
+    await runConcurrent(tasks, CONCURRENCY)
 
     setRunning(false)
     setDone(true)
@@ -304,9 +339,9 @@ export default function BulkUpload() {
 
   const handleStop = () => { abortRef.current = true }
 
-  // Estatísticas finais
-  const allResults = MODULES.flatMap(m => results[m.id])
+  const allResults   = MODULES.flatMap(m => results[m.id])
   const successCount = allResults.filter(r => r.status === 'success').length
+  const skippedCount = allResults.filter(r => r.status === 'skipped').length
   const errorCount   = allResults.filter(r => r.status === 'error').length
   const pct = progress.total > 0 ? Math.round(progress.current / progress.total * 100) : 0
 
@@ -321,7 +356,27 @@ export default function BulkUpload() {
             Selecione os arquivos históricos de cada módulo e processe todos de uma vez.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Toggle skip_if_exists */}
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => !running && setSkipExisting(v => !v)}
+              className={clsx(
+                'relative w-9 h-5 rounded-full transition-colors',
+                skipExisting ? 'bg-imile-500' : 'bg-slate-300',
+                running && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              <span
+                className={clsx(
+                  'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+                  skipExisting && 'translate-x-4'
+                )}
+              />
+            </div>
+            <span className="text-xs text-slate-600 font-medium">Pular datas já no banco</span>
+          </label>
+
           {done && (
             <button
               onClick={resetAll}
@@ -360,7 +415,9 @@ export default function BulkUpload() {
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-slate-600">
-              {running ? `Processando ${progress.current} de ${progress.total}…` : `Concluído — ${progress.current} de ${progress.total}`}
+              {running
+                ? `Processando ${progress.current} de ${progress.total}…`
+                : `Concluído — ${progress.current} de ${progress.total}`}
             </span>
             <span className="text-xs font-bold text-slate-700">{pct}%</span>
           </div>
@@ -375,6 +432,11 @@ export default function BulkUpload() {
               {successCount > 0 && (
                 <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
                   <CheckCircle2 size={13} /> {successCount} sucesso{successCount > 1 ? 's' : ''}
+                </span>
+              )}
+              {skippedCount > 0 && (
+                <span className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                  <SkipForward size={13} /> {skippedCount} pulado{skippedCount > 1 ? 's' : ''}
                 </span>
               )}
               {errorCount > 0 && (
@@ -404,9 +466,10 @@ export default function BulkUpload() {
         ))}
       </div>
 
-      {/* Dica rate limit */}
+      {/* Dica */}
       <p className="text-[10px] text-slate-400 text-center">
-        Os uploads são processados sequencialmente. Em caso de rate limit (429), o sistema aguarda 15s e tenta novamente automaticamente.
+        {CONCURRENCY} uploads simultâneos. Em rate limit (429), aguarda 15s e tenta novamente.
+        {skipExisting && ' Arquivos com data já no banco são pulados automaticamente.'}
       </p>
     </div>
   )

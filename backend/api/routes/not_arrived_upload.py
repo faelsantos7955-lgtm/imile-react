@@ -229,15 +229,49 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     return resultado, tendencia
 
 
+def _peek_data_ref_not_arrived(conteudo: bytes) -> str | None:
+    """Extrai data_ref lendo apenas a coluna 日期 das abas 数据源 + Planilha1."""
+    try:
+        import io as _io
+        xl = pd.ExcelFile(_io.BytesIO(conteudo))
+        frames = []
+        for aba in ("数据源", "Planilha1"):
+            if aba in xl.sheet_names:
+                try:
+                    df = pd.read_excel(_io.BytesIO(conteudo), sheet_name=aba, usecols=["日期"])
+                    frames.append(df)
+                except Exception:
+                    pass
+        if not frames:
+            return None
+        col = pd.concat(frames)["日期"]
+        datas = pd.to_datetime(col, errors="coerce").dropna()
+        if not datas.empty:
+            return datas.dt.date.max().isoformat()
+    except Exception:
+        pass
+    return None
+
+
 @router.post("/processar")
 @limiter.limit("5/minute")
 async def processar_not_arrived(
     request: Request,
     file: UploadFile = File(..., description="Arquivo Problem Registration (.xlsx)"),
+    skip_if_exists: bool = False,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     conteudo = await validar_arquivo(file)
+
+    if skip_if_exists:
+        data_ref_peek = _peek_data_ref_not_arrived(conteudo)
+        if data_ref_peek:
+            existing = db.execute(
+                text("SELECT id FROM not_arrived_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
+            ).mappings().first()
+            if existing:
+                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
 
     try:
         resultado, tendencia = _processar(conteudo)
