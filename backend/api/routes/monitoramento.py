@@ -278,6 +278,84 @@ def _peek_data_ref_monitoramento(conteudo: bytes) -> str | None:
     return None
 
 
+# ── POST /salvar-agregado ─────────────────────────────────────
+@router.post("/salvar-agregado")
+async def salvar_agregado(
+    request: Request,
+    user: dict  = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Recebe dados pré-agregados pelo frontend (JSON) e persiste no banco."""
+    body = await request.json()
+    data_ref        = body.get("data_ref") or _date_cls.today().isoformat()
+    dados           = body.get("dados", [])
+    skip_if_exists  = body.get("skip_if_exists", False)
+
+    if not dados:
+        raise HTTPException(400, "Nenhum dado recebido")
+
+    if skip_if_exists:
+        existing = db.execute(
+            text("SELECT id FROM monitoramento_uploads WHERE data_ref = :dr"), {"dr": data_ref}
+        ).mappings().first()
+        if existing:
+            return {"skipped": True, "data_ref": data_ref, "upload_id": existing["id"]}
+
+    total_ds = len(dados)
+    row = db.execute(
+        text("""
+            INSERT INTO monitoramento_uploads (data_ref, criado_por, total_ds)
+            VALUES (:data_ref, :criado_por, :total_ds) RETURNING id
+        """),
+        {"data_ref": data_ref, "criado_por": user["email"], "total_ds": total_ds}
+    ).mappings().first()
+    uid = row["id"]
+    db.commit()
+
+    def si(v): return int(float(v)) if v not in (None, '', 'NaN') else 0
+    def sf(v): return round(float(v), 4) if v not in (None, '', 'NaN') else 0.0
+
+    rows_db = [{
+        "upload_id": uid,
+        "ds": str(r.get("ds", "")),
+        "supervisor": str(r.get("supervisor", "") or ""),
+        "regiao": str(r.get("regiao", "") or ""),
+        "rdc_ds": si(r.get("rdc_ds", 0)),
+        "estoque_ds": si(r.get("estoque_ds", 0)),
+        "estoque_motorista": si(r.get("estoque_motorista", 0)),
+        "estoque_total": si(r.get("estoque_total", 0)),
+        "estoque_7d": si(r.get("estoque_7d", 0)),
+        "recebimento": si(r.get("recebimento", 0)),
+        "volume_total": si(r.get("volume_total", 0)),
+        "pendencia_scan": si(r.get("pendencia_scan", 0)),
+        "volume_saida": si(r.get("volume_saida", 0)),
+        "taxa_expedicao": sf(r.get("taxa_expedicao", 0)),
+        "qtd_motoristas": si(r.get("qtd_motoristas", 0)),
+        "eficiencia_pessoal": sf(r.get("eficiencia_pessoal", 0)),
+        "entregue": si(r.get("entregue", 0)),
+        "eficiencia_assinatura": sf(r.get("eficiencia_assinatura", 0)),
+    } for r in dados]
+
+    for i in range(0, len(rows_db), 500):
+        db.execute(
+            text("""
+                INSERT INTO monitoramento_diario
+                    (upload_id, ds, supervisor, regiao, rdc_ds, estoque_ds, estoque_motorista,
+                     estoque_total, estoque_7d, recebimento, volume_total, pendencia_scan,
+                     volume_saida, taxa_expedicao, qtd_motoristas, eficiencia_pessoal,
+                     entregue, eficiencia_assinatura)
+                VALUES (:upload_id, :ds, :supervisor, :regiao, :rdc_ds, :estoque_ds, :estoque_motorista,
+                        :estoque_total, :estoque_7d, :recebimento, :volume_total, :pendencia_scan,
+                        :volume_saida, :taxa_expedicao, :qtd_motoristas, :eficiencia_pessoal,
+                        :entregue, :eficiencia_assinatura)
+            """),
+            rows_db[i:i+500]
+        )
+    db.commit()
+    audit_log("salvar_agregado", f"monitoramento_uploads:{uid}", {"data_ref": data_ref, "total_ds": total_ds}, user)
+    return {"upload_id": uid, "total_ds": total_ds, "data_ref": data_ref}
+
+
 # ── GET /uploads ──────────────────────────────────────────────
 @router.get("/uploads")
 def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):

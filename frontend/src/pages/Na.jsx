@@ -15,7 +15,7 @@ import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
   KpiCard, Card, SectionHeader, EmptyState, Alert, Button,
-, toast } from '../components/ui'
+  toast } from '../components/ui'
 import clsx from 'clsx'
 
 const fmt = (n) => (n ?? 0).toLocaleString('pt-BR')
