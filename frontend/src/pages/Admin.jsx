@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import BulkUpload from './BulkUpload'
 import AdminAvisos from './AdminAvisos'
+import MonitoramentoFontes from './MonitoramentoFontes'
 
 // ── Definição de permissões disponíveis ──────────────────────
 export const PAGINAS = [
@@ -1018,6 +1019,9 @@ export default function Admin() {
         <NavLink to="/admin/lote" className={({ isActive }) => tabClass(isActive)}>
           <PackageSearch size={15} /> Carga em Lote
         </NavLink>
+        <NavLink to="/admin/monitoramento" className={({ isActive }) => tabClass(isActive)}>
+          <Upload size={15} /> Monitoramento
+        </NavLink>
       </div>
 
       <Routes>
@@ -1028,6 +1032,7 @@ export default function Admin() {
         <Route path="metas" element={<MetasPage />} />
         <Route path="lote" element={<BulkUpload />} />
         <Route path="avisos" element={<AdminAvisos />} />
+        <Route path="monitoramento" element={<MonitoramentoFontes />} />
       </Routes>
     </div>
   )
