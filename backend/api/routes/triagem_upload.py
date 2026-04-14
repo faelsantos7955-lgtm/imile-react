@@ -12,9 +12,13 @@ Lógica Arrival (opcional):
 """
 import io
 import uuid
+import time
+import logging
 import threading
 from datetime import date
 from typing import List, Optional
+
+log = logging.getLogger("triagem")
 
 import numpy as np
 import pandas as pd
@@ -289,20 +293,37 @@ def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: 
             _jobs[job_id].update(update)
 
     try:
+        t_total = time.time()
+        n_ls  = len(conteudos)
+        n_arr = len(arr_bytes)
+        sz_ls  = sum(len(b) for b in conteudos)  / 1e6
+        sz_arr = sum(len(b) for b in arr_bytes)  / 1e6
+        log.info("[job:%s] Iniciando — %d LS (%.1f MB) | %d Arrival (%.1f MB)",
+                 job_id, n_ls, sz_ls, n_arr, sz_arr)
+
         arrival_set: set[str] | None = None
         if arr_bytes:
             _set({"fase": "lendo_arrival"})
+            t0 = time.time()
             arrival_set = _ler_arrival(arr_bytes)
+            log.info("[job:%s] Arrival lido em %.1fs — %d waybills", job_id, time.time()-t0, len(arrival_set))
 
         _set({"fase": "lendo_ls"})
+        t0 = time.time()
         df = _ler_loading_scans(conteudos)
+        log.info("[job:%s] LoadingScan lido em %.1fs — %d linhas", job_id, time.time()-t0, len(df))
 
         _set({"fase": "calculando"})
+        t0 = time.time()
         resultado = _processar(df, db, arrival_set=arrival_set)
+        log.info("[job:%s] Cálculo concluído em %.1fs — total=%d ok=%d nok=%d fora=%d",
+                 job_id, time.time()-t0,
+                 resultado["total"], resultado["qtd_ok"], resultado["qtd_erro"], resultado["qtd_fora"])
 
         _ensure_schema(db)
 
         _set({"fase": "salvando"})
+        t0 = time.time()
         data_ref = resultado["data_ref"]
 
         existing = db.execute(
@@ -378,6 +399,10 @@ def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: 
                 )
             db.commit()
 
+        log.info("[job:%s] Salvo no banco em %.1fs — upload_id=%d detalhes=%d",
+                 job_id, time.time()-t0, uid, len(resultado["detalhes"]))
+        log.info("[job:%s] TOTAL: %.1fs", job_id, time.time()-t_total)
+
         _set({
             "status": "done",
             "fase": "concluido",
@@ -393,6 +418,7 @@ def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: 
         })
 
     except Exception as e:
+        log.error("[job:%s] ERRO após %.1fs: %s", job_id, time.time()-t_total, e, exc_info=True)
         db.rollback()
         _set({"status": "error", "erro": str(e)})
     finally:
