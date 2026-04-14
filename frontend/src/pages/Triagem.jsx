@@ -93,11 +93,11 @@ function UploadPanel({ onClose, onSuccess }) {
 
       // 2) Polling do job em background — sem timeout de conexão
       setFase('processando')
-      await new Promise((resolve, reject) => {
+      const job = await new Promise((resolve, reject) => {
         const poll = setInterval(async () => {
           try {
             const { data: job } = await api.get(`/api/triagem/job/${job_id}`)
-            if (job.fase) setProgresso(job.fase)   // reutiliza para texto da fase
+            if (job.fase) setProgresso(job.fase)
             if (job.status === 'done') {
               clearInterval(poll)
               resolve(job)
@@ -110,7 +110,10 @@ function UploadPanel({ onClose, onSuccess }) {
             reject(err)
           }
         }, 2500)
-      }).then((job) => onSuccess(job.upload_id))
+      })
+
+      setFase(''); setProgresso(0)
+      onSuccess(job.upload_id)
 
     } catch (e) {
       if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
@@ -118,7 +121,8 @@ function UploadPanel({ onClose, onSuccess }) {
       } else {
         setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
       }
-    } finally { setFase(''); setProgresso(0) }
+      setFase(''); setProgresso(0)
+    }
   }
 
   return (
@@ -440,9 +444,10 @@ export default function Triagem() {
   }, [sel])
 
   const handleUploadSuccess = (uploadId) => {
+    toast.ok('Triagem processada com sucesso!')
     setShowPanel(false)
     queryClient.invalidateQueries({ queryKey: ['triagem-uploads'] })
-    setSel(uploadId)
+    if (uploadId) setSel(uploadId)
     setExpanded({})
   }
 
