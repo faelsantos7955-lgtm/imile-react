@@ -58,6 +58,15 @@ function UploadPanel({ onClose, onSuccess }) {
 
   const totalMB = files.reduce((s, e) => s + e.file.size, 0) / 1024 / 1024
 
+  const FASE_LABELS = {
+    iniciando:      'Iniciando...',
+    lendo_arrival:  'Lendo Arrival...',
+    lendo_ls:       'Lendo Loading Scan...',
+    calculando:     'Calculando triagem...',
+    salvando:       'Salvando no banco...',
+    concluido:      'Concluído!',
+  }
+
   const handleSubmit = async () => {
     if (!lsFiles.length) { setErro('Nenhum arquivo LoadingScan selecionado. Desmarque "Arrival" em pelo menos um arquivo.'); return }
     setFase('enviando'); setProgresso(0); setErro('')
@@ -66,6 +75,8 @@ function UploadPanel({ onClose, onSuccess }) {
       lsFiles.forEach(f  => form.append('files', f))
       arrFiles.forEach(f => form.append('files', f))
       form.append('arrival_count', String(arrFiles.length))
+
+      // 1) Envia os arquivos — rastreia progresso real
       const res = await api.post('/api/triagem/processar', form, {
         timeout: 600_000,
         onUploadProgress: (e) => {
@@ -76,10 +87,34 @@ function UploadPanel({ onClose, onSuccess }) {
           }
         },
       })
-      onSuccess(res.data.upload_id)
+
+      const { job_id } = res.data
+      if (!job_id) { onSuccess(res.data.upload_id); return }
+
+      // 2) Polling do job em background — sem timeout de conexão
+      setFase('processando')
+      await new Promise((resolve, reject) => {
+        const poll = setInterval(async () => {
+          try {
+            const { data: job } = await api.get(`/api/triagem/job/${job_id}`)
+            if (job.fase) setProgresso(job.fase)   // reutiliza para texto da fase
+            if (job.status === 'done') {
+              clearInterval(poll)
+              resolve(job)
+            } else if (job.status === 'error') {
+              clearInterval(poll)
+              reject(new Error(job.erro || 'Erro no processamento.'))
+            }
+          } catch (err) {
+            clearInterval(poll)
+            reject(err)
+          }
+        }, 2500)
+      }).then((job) => onSuccess(job.upload_id))
+
     } catch (e) {
       if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
-        setErro('Tempo limite excedido. O arquivo é muito grande ou o servidor está lento. Tente novamente.')
+        setErro('Tempo limite excedido no envio. Tente novamente.')
       } else {
         setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
       }
@@ -183,13 +218,15 @@ function UploadPanel({ onClose, onSuccess }) {
           ) : (
             <>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-slate-600">Processando no servidor...</span>
+                <span className="text-xs font-medium text-slate-600">
+                  {FASE_LABELS[progresso] || 'Processando no servidor...'}
+                </span>
                 <Loader size={12} className="animate-spin text-imile-500" />
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Calculando triagem — pode levar alguns segundos</p>
+              <p className="text-[10px] text-slate-400 mt-1">Processamento em background — sem risco de timeout</p>
             </>
           )}
         </div>

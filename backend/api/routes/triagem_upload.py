@@ -11,18 +11,24 @@ Lógica Arrival (opcional):
   Recebidos NOK = waybills NOK do LoadingScan que aparecem no Arrival
 """
 import io
+import uuid
+import threading
 from datetime import date
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from api.deps import get_current_user, get_db
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
+
+# ── Job store (in-memory, thread-safe) ───────────────────────
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
 
 router = APIRouter()
 
@@ -276,46 +282,27 @@ def _processar(df: pd.DataFrame, db: Session, arrival_set: set[str] | None = Non
     }
 
 
-@router.post("/processar")
-@limiter.limit("5/minute")
-async def processar_triagem(
-    request:       Request,
-    files:         List[UploadFile] = File(..., description="Todos os arquivos (LoadingScan primeiro, depois Arrival)"),
-    arrival_count: int              = Form(default=0, description="Quantos dos últimos arquivos são Arrival"),
-    user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    if not files:
-        raise HTTPException(400, "Nenhum arquivo enviado.")
-
-    if arrival_count > 0 and arrival_count < len(files):
-        ls_uploads  = files[:-arrival_count]
-        arr_uploads = files[-arrival_count:]
-    elif arrival_count > 0 and arrival_count == len(files):
-        raise HTTPException(400, "Nenhum arquivo LoadingScan enviado — todos os arquivos foram marcados como Arrival.")
-    else:
-        ls_uploads  = files
-        arr_uploads = []
-
-    conteudos = [await validar_arquivo(f) for f in ls_uploads]
-
-    arrival_set: set[str] | None = None
-    if arr_uploads:
-        arr_bytes = [await validar_arquivo(f) for f in arr_uploads]
-        arrival_set = _ler_arrival(arr_bytes)
-
-    df = _ler_loading_scans(conteudos)
+def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: dict, db: Session):
+    """Executa processamento em thread separada e atualiza _jobs."""
+    def _set(update: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(update)
 
     try:
+        arrival_set: set[str] | None = None
+        if arr_bytes:
+            _set({"fase": "lendo_arrival"})
+            arrival_set = _ler_arrival(arr_bytes)
+
+        _set({"fase": "lendo_ls"})
+        df = _ler_loading_scans(conteudos)
+
+        _set({"fase": "calculando"})
         resultado = _processar(df, db, arrival_set=arrival_set)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, f"Erro ao processar: {e}")
 
-    _ensure_schema(db)
+        _ensure_schema(db)
 
-    try:
+        _set({"fase": "salvando"})
         data_ref = resultado["data_ref"]
 
         existing = db.execute(
@@ -338,20 +325,21 @@ async def processar_triagem(
                 RETURNING id
             """),
             {
-                "data_ref":       data_ref,
-                "criado_por":     user["email"],
-                "total":          resultado["total"],
-                "qtd_ok":         resultado["qtd_ok"],
-                "qtd_erro":       resultado["qtd_erro"],
-                "qtd_fora":       resultado["qtd_fora"],
-                "taxa":           resultado["taxa"],
-                "tem_arrival":    resultado["tem_arrival"],
-                "qtd_recebidos":  resultado["qtd_recebidos"],
+                "data_ref":      data_ref,
+                "criado_por":    user["email"],
+                "total":         resultado["total"],
+                "qtd_ok":        resultado["qtd_ok"],
+                "qtd_erro":      resultado["qtd_erro"],
+                "qtd_fora":      resultado["qtd_fora"],
+                "taxa":          resultado["taxa"],
+                "tem_arrival":   resultado["tem_arrival"],
+                "qtd_recebidos": resultado["qtd_recebidos"],
             }
         ).mappings().first()
         uid = row["id"]
         db.commit()
 
+        BATCH = 2000
         if resultado["por_ds"]:
             db.execute(
                 text("INSERT INTO triagem_por_ds (upload_id, ds, total, ok, nok, fora, taxa, recebidos, recebidos_nok) VALUES (:upload_id, :ds, :total, :ok, :nok, :fora, :taxa, :recebidos, :recebidos_nok)"),
@@ -374,7 +362,6 @@ async def processar_triagem(
             db.commit()
 
         cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
-        BATCH = 2000
         for i in range(0, len(cidades), BATCH):
             db.execute(
                 text("INSERT INTO triagem_por_cidade (upload_id, ds, cidade, ok, nok, total, taxa) VALUES (:upload_id, :ds, :cidade, :ok, :nok, :total, :taxa)"),
@@ -391,20 +378,67 @@ async def processar_triagem(
                 )
             db.commit()
 
-    except HTTPException:
-        raise
+        _set({
+            "status": "done",
+            "fase": "concluido",
+            "upload_id":     uid,
+            "data_ref":      data_ref,
+            "total":         resultado["total"],
+            "qtd_ok":        resultado["qtd_ok"],
+            "qtd_erro":      resultado["qtd_erro"],
+            "qtd_fora":      resultado["qtd_fora"],
+            "taxa":          resultado["taxa"],
+            "tem_arrival":   resultado["tem_arrival"],
+            "qtd_recebidos": resultado["qtd_recebidos"],
+        })
+
     except Exception as e:
         db.rollback()
-        raise HTTPException(400, f"Erro ao salvar no banco: {e}")
+        _set({"status": "error", "erro": str(e)})
+    finally:
+        db.close()
 
-    return {
-        "upload_id":      uid,
-        "data_ref":       data_ref,
-        "total":          resultado["total"],
-        "qtd_ok":         resultado["qtd_ok"],
-        "qtd_erro":       resultado["qtd_erro"],
-        "qtd_fora":       resultado["qtd_fora"],
-        "taxa":           resultado["taxa"],
-        "tem_arrival":    resultado["tem_arrival"],
-        "qtd_recebidos":  resultado["qtd_recebidos"],
-    }
+
+@router.post("/processar")
+@limiter.limit("10/minute")
+async def processar_triagem(
+    request:       Request,
+    files:         List[UploadFile] = File(...),
+    arrival_count: int              = Form(default=0),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not files:
+        raise HTTPException(400, "Nenhum arquivo enviado.")
+
+    if arrival_count > 0 and arrival_count >= len(files):
+        raise HTTPException(400, "Nenhum arquivo LoadingScan enviado — todos marcados como Arrival.")
+
+    if arrival_count > 0:
+        ls_uploads  = files[:-arrival_count]
+        arr_uploads = files[-arrival_count:]
+    else:
+        ls_uploads  = files
+        arr_uploads = []
+
+    # Lê todos os bytes antes de retornar (os UploadFile são consumidos na requisição)
+    conteudos = [await validar_arquivo(f) for f in ls_uploads]
+    arr_bytes = [await validar_arquivo(f) for f in arr_uploads]
+
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+
+    t = threading.Thread(target=_run_job, args=(job_id, conteudos, arr_bytes, user, db), daemon=True)
+    t.start()
+
+    return {"job_id": job_id, "status": "processing"}
+
+
+@router.get("/job/{job_id}")
+def status_job(job_id: str, user: dict = Depends(get_current_user)):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado. Tente novamente.")
+    return job
