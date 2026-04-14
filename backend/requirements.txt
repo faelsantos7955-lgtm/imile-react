@@ -10,5 +10,6 @@ pandas==2.2.0
 numpy==1.26.0
 openpyxl==3.1.2
 python-multipart
+python-calamine==0.6.2
 slowapi==0.1.9
 httpx==0.24.1

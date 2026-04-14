@@ -26,6 +26,37 @@ from api.upload_utils import validar_arquivo
 
 router = APIRouter()
 
+_ENGINE = "openpyxl"
+try:
+    import python_calamine  # noqa: F401
+    _ENGINE = "calamine"
+except ImportError:
+    pass
+
+_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_triagem_detalhes_upload   ON triagem_detalhes(upload_id)",
+    "CREATE INDEX IF NOT EXISTS idx_triagem_detalhes_ds       ON triagem_detalhes(upload_id, ds_destino)",
+    "CREATE INDEX IF NOT EXISTS idx_triagem_detalhes_status   ON triagem_detalhes(upload_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_triagem_por_ds_upload     ON triagem_por_ds(upload_id)",
+    "CREATE INDEX IF NOT EXISTS idx_triagem_por_cidade_upload ON triagem_por_cidade(upload_id)",
+    "CREATE INDEX IF NOT EXISTS idx_triagem_por_sup_upload    ON triagem_por_supervisor(upload_id)",
+    "CREATE INDEX IF NOT EXISTS idx_triagem_top5_upload       ON triagem_top5(upload_id)",
+]
+
+def _ensure_schema(db: Session) -> None:
+    """Cria coluna e índices se ainda não existirem (idempotente)."""
+    try:
+        db.execute(text("ALTER TABLE triagem_uploads ADD COLUMN IF NOT EXISTS qtd_fora INTEGER DEFAULT 0"))
+        db.commit()
+    except Exception:
+        db.rollback()
+    for ddl in _INDEXES:
+        try:
+            db.execute(text(ddl))
+            db.commit()
+        except Exception:
+            db.rollback()
+
 _ARRIVAL_WB_COLS = [
     "Waybill No.", "Waybill Number", "waybill_no", "WaybillNo",
     "Tracking No.", "Tracking Number", "WAYBILL NO.", "WAYBILL NUMBER",
@@ -44,11 +75,10 @@ def _ler_loading_scans(conteudos: list[bytes]) -> pd.DataFrame:
     frames = []
     for c in conteudos:
         try:
-            # Lê todas as colunas primeiro só para inspecionar o header
-            header = pd.read_excel(io.BytesIO(c), nrows=0)
+            header = pd.read_excel(io.BytesIO(c), nrows=0, engine=_ENGINE)
             header.columns = header.columns.str.strip()
             presentes = [col for col in _LS_COLS if col in header.columns]
-            df = pd.read_excel(io.BytesIO(c), usecols=presentes)
+            df = pd.read_excel(io.BytesIO(c), usecols=presentes, engine=_ENGINE)
             df.columns = df.columns.str.strip()
             frames.append(df)
         except Exception:
@@ -63,8 +93,7 @@ def _ler_arrival(conteudos: list[bytes]) -> set[str]:
     waybills: set[str] = set()
     for c in conteudos:
         try:
-            # Detecta a coluna de waybill lendo só o header
-            header = pd.read_excel(io.BytesIO(c), nrows=0)
+            header = pd.read_excel(io.BytesIO(c), nrows=0, engine=_ENGINE)
             header.columns = header.columns.str.strip()
 
             col = next((x for x in _ARRIVAL_WB_COLS if x in header.columns), None)
@@ -87,7 +116,7 @@ def _ler_arrival(conteudos: list[bytes]) -> set[str]:
                     f"Esperado um de: {_ARRIVAL_WB_COLS}"
                 )
             # Lê só a coluna de waybill — muito mais rápido para arquivos grandes
-            df = pd.read_excel(io.BytesIO(c), usecols=[col])
+            df = pd.read_excel(io.BytesIO(c), usecols=[col], engine=_ENGINE)
             waybills.update(_lc(df[col].dropna()))
         except HTTPException:
             raise
@@ -284,11 +313,7 @@ async def processar_triagem(
     except Exception as e:
         raise HTTPException(400, f"Erro ao processar: {e}")
 
-    try:
-        db.execute(text("ALTER TABLE triagem_uploads ADD COLUMN IF NOT EXISTS qtd_fora INTEGER DEFAULT 0"))
-        db.commit()
-    except Exception:
-        db.rollback()
+    _ensure_schema(db)
 
     try:
         data_ref = resultado["data_ref"]
