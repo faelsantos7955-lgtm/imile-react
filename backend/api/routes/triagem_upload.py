@@ -26,9 +26,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db
+from sqlalchemy.orm import sessionmaker
+from api.deps import get_current_user, _engine
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
+
+def _make_db() -> Session:
+    """Cria uma Session independente — seguro para uso em threads."""
+    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
 
 # ── Job store (in-memory, thread-safe) ───────────────────────
 _jobs: dict[str, dict] = {}
@@ -286,8 +291,10 @@ def _processar(df: pd.DataFrame, db: Session, arrival_set: set[str] | None = Non
     }
 
 
-def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: dict, db: Session):
+def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: dict):
     """Executa processamento em thread separada e atualiza _jobs."""
+    db = _make_db()
+
     def _set(update: dict):
         with _jobs_lock:
             _jobs[job_id].update(update)
@@ -432,7 +439,6 @@ async def processar_triagem(
     files:         List[UploadFile] = File(...),
     arrival_count: int              = Form(default=0),
     user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     if not files:
         raise HTTPException(400, "Nenhum arquivo enviado.")
@@ -455,7 +461,7 @@ async def processar_triagem(
     with _jobs_lock:
         _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
 
-    t = threading.Thread(target=_run_job, args=(job_id, conteudos, arr_bytes, user, db), daemon=True)
+    t = threading.Thread(target=_run_job, args=(job_id, conteudos, arr_bytes, user), daemon=True)
     t.start()
 
     return {"job_id": job_id, "status": "processing"}
