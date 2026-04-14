@@ -17,7 +17,7 @@ router = APIRouter()
 def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.execute(
         text("""
-            SELECT id, data_ref, criado_por, total, qtd_ok, qtd_erro, taxa, tem_arrival, qtd_recebidos
+            SELECT id, data_ref, criado_por, total, qtd_ok, qtd_erro, COALESCE(qtd_fora, 0) AS qtd_fora, taxa, tem_arrival, qtd_recebidos
             FROM triagem_uploads ORDER BY criado_em DESC LIMIT 30
         """)
     ).mappings().all()

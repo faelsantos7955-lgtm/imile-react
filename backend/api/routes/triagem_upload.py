@@ -37,11 +37,18 @@ def _lc(s: pd.Series) -> pd.Series:
     return s.fillna("").astype(str).str.strip().str.upper()
 
 
+_LS_COLS = ["Waybill No.", "Destination Statio", "Delivery Station", "Consignee City", "Scan Time"]
+
+
 def _ler_loading_scans(conteudos: list[bytes]) -> pd.DataFrame:
     frames = []
     for c in conteudos:
         try:
-            df = pd.read_excel(io.BytesIO(c))
+            # Lê todas as colunas primeiro só para inspecionar o header
+            header = pd.read_excel(io.BytesIO(c), nrows=0)
+            header.columns = header.columns.str.strip()
+            presentes = [col for col in _LS_COLS if col in header.columns]
+            df = pd.read_excel(io.BytesIO(c), usecols=presentes)
             df.columns = df.columns.str.strip()
             frames.append(df)
         except Exception:
@@ -56,28 +63,31 @@ def _ler_arrival(conteudos: list[bytes]) -> set[str]:
     waybills: set[str] = set()
     for c in conteudos:
         try:
-            df = pd.read_excel(io.BytesIO(c))
-            df.columns = df.columns.str.strip()
+            # Detecta a coluna de waybill lendo só o header
+            header = pd.read_excel(io.BytesIO(c), nrows=0)
+            header.columns = header.columns.str.strip()
 
-            col = next((x for x in _ARRIVAL_WB_COLS if x in df.columns), None)
+            col = next((x for x in _ARRIVAL_WB_COLS if x in header.columns), None)
             if col is None:
-                lower_map = {x.lower(): x for x in df.columns}
+                lower_map = {x.lower(): x for x in header.columns}
                 col = next(
                     (lower_map[x.lower()] for x in _ARRIVAL_WB_COLS if x.lower() in lower_map),
                     None,
                 )
             if col is None:
                 col = next(
-                    (c for c in df.columns if any(k in c.lower() for k in ("waybill", "tracking", "运单"))),
+                    (c for c in header.columns if any(k in c.lower() for k in ("waybill", "tracking", "运单"))),
                     None,
                 )
             if col is None:
                 raise HTTPException(
                     400,
                     f"Coluna de waybill não encontrada no Arrival. "
-                    f"Colunas disponíveis: {list(df.columns)}. "
+                    f"Colunas disponíveis: {list(header.columns)}. "
                     f"Esperado um de: {_ARRIVAL_WB_COLS}"
                 )
+            # Lê só a coluna de waybill — muito mais rápido para arquivos grandes
+            df = pd.read_excel(io.BytesIO(c), usecols=[col])
             waybills.update(_lc(df[col].dropna()))
         except HTTPException:
             raise
@@ -260,6 +270,12 @@ async def processar_triagem(
         raise HTTPException(400, f"Erro ao processar: {e}")
 
     try:
+        db.execute(text("ALTER TABLE triagem_uploads ADD COLUMN IF NOT EXISTS qtd_fora INTEGER DEFAULT 0"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    try:
         data_ref = resultado["data_ref"]
 
         existing = db.execute(
@@ -277,8 +293,8 @@ async def processar_triagem(
 
         row = db.execute(
             text("""
-                INSERT INTO triagem_uploads (data_ref, criado_por, total, qtd_ok, qtd_erro, taxa, tem_arrival, qtd_recebidos)
-                VALUES (:data_ref, :criado_por, :total, :qtd_ok, :qtd_erro, :taxa, :tem_arrival, :qtd_recebidos)
+                INSERT INTO triagem_uploads (data_ref, criado_por, total, qtd_ok, qtd_erro, qtd_fora, taxa, tem_arrival, qtd_recebidos)
+                VALUES (:data_ref, :criado_por, :total, :qtd_ok, :qtd_erro, :qtd_fora, :taxa, :tem_arrival, :qtd_recebidos)
                 RETURNING id
             """),
             {
@@ -287,6 +303,7 @@ async def processar_triagem(
                 "total":          resultado["total"],
                 "qtd_ok":         resultado["qtd_ok"],
                 "qtd_erro":       resultado["qtd_erro"],
+                "qtd_fora":       resultado["qtd_fora"],
                 "taxa":           resultado["taxa"],
                 "tem_arrival":    resultado["tem_arrival"],
                 "qtd_recebidos":  resultado["qtd_recebidos"],
@@ -345,6 +362,7 @@ async def processar_triagem(
         "total":          resultado["total"],
         "qtd_ok":         resultado["qtd_ok"],
         "qtd_erro":       resultado["qtd_erro"],
+        "qtd_fora":       resultado["qtd_fora"],
         "taxa":           resultado["taxa"],
         "tem_arrival":    resultado["tem_arrival"],
         "qtd_recebidos":  resultado["qtd_recebidos"],

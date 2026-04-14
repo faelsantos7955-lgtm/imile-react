@@ -26,10 +26,13 @@ const COLOR_TOP = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 // ── Painel de upload com LoadingScan + Arrival ────────────────
 function UploadPanel({ onClose, onSuccess }) {
   // Cada arquivo tem: { file: File, isArrival: boolean }
-  const [files, setFiles]       = useState([])
-  const [uploading, setUploading] = useState(false)
+  const [files, setFiles]         = useState([])
+  const [fase, setFase]           = useState('')   // '' | 'enviando' | 'processando'
+  const [progresso, setProgresso] = useState(0)    // 0-100, fase enviando
   const [erro, setErro]           = useState('')
   const inputRef = useRef()
+
+  const uploading = fase !== ''
 
   const addFiles = (incoming) => {
     const err = validarArquivos(Array.from(incoming))
@@ -53,17 +56,25 @@ function UploadPanel({ onClose, onSuccess }) {
   const lsFiles  = files.filter(e => !e.isArrival).map(e => e.file)
   const arrFiles = files.filter(e =>  e.isArrival).map(e => e.file)
 
+  const totalMB = files.reduce((s, e) => s + e.file.size, 0) / 1024 / 1024
+
   const handleSubmit = async () => {
     if (!lsFiles.length) { setErro('Nenhum arquivo LoadingScan selecionado. Desmarque "Arrival" em pelo menos um arquivo.'); return }
-    setUploading(true); setErro('')
+    setFase('enviando'); setProgresso(0); setErro('')
     try {
       const form = new FormData()
-      // LoadingScan primeiro, depois Arrival — todos no campo 'files'
       lsFiles.forEach(f  => form.append('files', f))
       arrFiles.forEach(f => form.append('files', f))
       form.append('arrival_count', String(arrFiles.length))
       const res = await api.post('/api/triagem/processar', form, {
-        timeout: 300_000,
+        timeout: 600_000,
+        onUploadProgress: (e) => {
+          if (e.total) {
+            const pct = Math.round(e.loaded / e.total * 100)
+            setProgresso(pct)
+            if (pct === 100) setFase('processando')
+          }
+        },
       })
       onSuccess(res.data.upload_id)
     } catch (e) {
@@ -72,22 +83,26 @@ function UploadPanel({ onClose, onSuccess }) {
       } else {
         setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
       }
-    } finally { setUploading(false) }
+    } finally { setFase(''); setProgresso(0) }
   }
 
   return (
     <div className="mb-6 bg-white border border-slate-200 rounded-xl p-5 animate-scale">
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm font-semibold text-slate-800">Novo Upload de Triagem</p>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        <button onClick={onClose} disabled={uploading} className="text-slate-400 hover:text-slate-600 disabled:opacity-30"><X size={16} /></button>
       </div>
 
       {/* Zona única de seleção */}
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => !uploading && inputRef.current?.click()}
         onDragOver={e => e.preventDefault()}
-        onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files) }}
-        className="border-2 border-dashed border-slate-200 hover:border-imile-300 hover:bg-imile-50/10 rounded-xl p-5 text-center cursor-pointer transition-all mb-4"
+        onDrop={e => { e.preventDefault(); if (!uploading) addFiles(e.dataTransfer.files) }}
+        className={`border-2 border-dashed rounded-xl p-5 text-center transition-all mb-4 ${
+          uploading
+            ? 'border-slate-100 bg-slate-50 cursor-default'
+            : 'border-slate-200 hover:border-imile-300 hover:bg-imile-50/10 cursor-pointer'
+        }`}
       >
         <Upload size={22} className="mx-auto mb-1.5 text-slate-300" />
         <p className="text-xs font-semibold text-slate-600">Clique ou arraste os arquivos aqui</p>
@@ -101,7 +116,7 @@ function UploadPanel({ onClose, onSuccess }) {
       </div>
 
       {/* Lista de arquivos com toggle Arrival */}
-      {files.length > 0 && (
+      {files.length > 0 && !uploading && (
         <div className="space-y-1.5 mb-4">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
             Arquivos selecionados — marque os que são <span className="text-emerald-600">Arrival</span>
@@ -110,7 +125,7 @@ function UploadPanel({ onClose, onSuccess }) {
             <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
               <FileUp size={13} className={entry.isArrival ? 'text-emerald-500' : 'text-imile-400'} />
               <span className="flex-1 text-xs text-slate-700 truncate min-w-0">{entry.file.name}</span>
-              {/* Toggle Arrival */}
+              <span className="text-[10px] text-slate-400 shrink-0">{(entry.file.size / 1024 / 1024).toFixed(1)} MB</span>
               <button
                 type="button"
                 onClick={() => toggleArrival(i)}
@@ -131,8 +146,8 @@ function UploadPanel({ onClose, onSuccess }) {
         </div>
       )}
 
-      {/* Resumo */}
-      {files.length > 0 && (
+      {/* Resumo tamanho */}
+      {files.length > 0 && !uploading && (
         <div className="flex gap-3 text-[11px] mb-3">
           <span className="px-2 py-0.5 bg-imile-50 text-imile-700 rounded-full font-medium">
             {lsFiles.length} LoadingScan
@@ -142,16 +157,54 @@ function UploadPanel({ onClose, onSuccess }) {
               {arrFiles.length} Arrival
             </span>
           )}
+          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">
+            {totalMB.toFixed(1)} MB total
+          </span>
+        </div>
+      )}
+
+      {/* Barra de progresso */}
+      {uploading && (
+        <div className="mb-4">
+          {fase === 'enviando' ? (
+            <>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-600">Enviando arquivos...</span>
+                <span className="text-xs font-bold text-imile-600">{progresso}%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-2 rounded-full bg-imile-500 transition-all duration-200"
+                  style={{ width: `${progresso}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">{totalMB.toFixed(1)} MB — aguarde o envio terminar</p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-600">Processando no servidor...</span>
+                <Loader size={12} className="animate-spin text-imile-500" />
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Calculando triagem — pode levar alguns segundos</p>
+            </>
+          )}
         </div>
       )}
 
       {erro && <p className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{erro}</p>}
 
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-        <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+        <button onClick={onClose} disabled={uploading} className="text-sm text-slate-500 hover:text-slate-700 disabled:opacity-40">Cancelar</button>
         <button onClick={handleSubmit} disabled={uploading || !files.length}
           className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 transition-colors">
-          {uploading ? <><Loader size={14} className="animate-spin" /> Processando...</> : <><Upload size={14} /> Processar</>}
+          {uploading
+            ? <><Loader size={14} className="animate-spin" /> {fase === 'enviando' ? `Enviando ${progresso}%` : 'Processando...'}</>
+            : <><Upload size={14} /> Processar</>
+          }
         </button>
       </div>
     </div>
@@ -480,11 +533,13 @@ export default function Triagem() {
 
           {/* KPIs */}
           {u && (
-            <div className={`grid gap-4 mb-6 ${temArrival ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-7' : 'grid-cols-2 md:grid-cols-4'}`}>
-              <KpiCard label="Total Expedido" value={F(u.total)}     color="blue"   />
-              <KpiCard label="Triagem OK"     value={F(u.qtd_ok)}   color="green"  />
-              <KpiCard label="Erros (NOK)"    value={F(u.qtd_erro)} color="red"    />
-              <KpiCard label="Taxa OK"        value={`${u.taxa}%`}  color="violet" />
+            <div className={`grid gap-4 mb-6 ${temArrival ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-8' : 'grid-cols-2 md:grid-cols-5'}`}>
+              <KpiCard label="Total Expedido" value={F(u.total)}          color="blue"   />
+              <KpiCard label="Triagem OK"     value={F(u.qtd_ok)}         color="green"  />
+              <KpiCard label="Erros (NOK)"    value={F(u.qtd_erro)}       color="red"    />
+              <KpiCard label="Fora do Mapa"   value={F(u.qtd_fora ?? 0)}  color="orange"
+                sub={u.total ? `${((u.qtd_fora ?? 0) / u.total * 100).toFixed(1)}% do total` : ''} />
+              <KpiCard label="Taxa OK"        value={`${u.taxa}%`}        color="violet" />
               {temArrival && <>
                 <KpiCard label="Recebidos"      value={F(u.qtd_recebidos)} color="blue"
                   sub={u.total ? `${(u.qtd_recebidos / u.total * 100).toFixed(1)}% do expedido` : ''} />
