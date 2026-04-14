@@ -5,6 +5,7 @@ Self-contained: não depende de modulos/
 import io
 from collections import defaultdict
 from datetime import date, datetime
+from typing import List
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -28,7 +29,7 @@ def _ler_bilhete(buf):
 def _extrair_data_ref(df):
     """Extrai data de referência do campo Create Time."""
     if 'Create Time' in df.columns:
-        datas = pd.to_datetime(df['Create Time'], dayfirst=True, errors='coerce').dropna()
+        datas = pd.to_datetime(df['Create Time'], dayfirst=False, errors='coerce').dropna()
         if not datas.empty:
             return datas.dt.date.mode().iloc[0]
     return date.today()
@@ -134,16 +135,22 @@ def _adicionar_supervisor(df, db: Session):
 @limiter.limit("5/minute")
 async def processar_reclamacoes(
     request: Request,
-    file: UploadFile = File(..., description="Bilhete de Reclamação (.xlsx)"),
+    files: List[UploadFile] = File(..., description="Bilhete e/ou Carta de Reclamação (.xlsx)"),
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    conteudo = await validar_arquivo(file)
+    if not files:
+        raise HTTPException(400, "Nenhum arquivo enviado.")
 
-    try:
-        df = _ler_bilhete(io.BytesIO(conteudo))
-    except Exception as e:
-        raise HTTPException(400, f"Erro ao ler arquivo: {e}")
+    frames = []
+    for f in files:
+        conteudo = await validar_arquivo(f)
+        try:
+            frames.append(_ler_bilhete(io.BytesIO(conteudo)))
+        except Exception as e:
+            raise HTTPException(400, f"Erro ao ler '{f.filename}': {e}")
+
+    df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
 
     if df.empty:
         raise HTTPException(400, "Arquivo vazio")
@@ -163,7 +170,7 @@ async def processar_reclamacoes(
 
     semana_ref = 0
     if 'Create Time' in df.columns:
-        datas = pd.to_datetime(df['Create Time'], dayfirst=True, errors='coerce')
+        datas = pd.to_datetime(df['Create Time'], dayfirst=False, errors='coerce')
         if not datas.dropna().empty:
             semana_ref = int(datas.dropna().dt.isocalendar().week.mode().iloc[0])
 

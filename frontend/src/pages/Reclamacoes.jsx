@@ -53,19 +53,18 @@ export default function Reclamacoes() {
   }
 
   const handleUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const erroVal = validarArquivos(file)
+    const selected = Array.from(e.target.files || [])
+    if (!selected.length) return
+    const erroVal = validarArquivos(selected)
     if (erroVal) { setErroUpload(erroVal); return }
     setUploading(true); setErroUpload('')
     try {
       const form = new FormData()
-      form.append('file', file)
-      const res = await api.post('/api/reclamacoes/processar', form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      selected.forEach(f => form.append('files', f))
+      const res = await api.post('/api/reclamacoes/processar', form)
       invalidateAll()
       setSel(res.data.upload_id)
+      toast.ok(`${selected.length > 1 ? 'Arquivos processados' : 'Arquivo processado'} com sucesso!`)
     } catch (e) {
       setErroUpload(e.response?.data?.detail || 'Erro ao processar arquivo.')
     } finally { setUploading(false) }
@@ -151,7 +150,7 @@ export default function Reclamacoes() {
             {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
             {uploading ? 'Processando...' : 'Novo Upload'}
           </button>
-          <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload} />
+          <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleUpload} />
         </div>
       </div>
 
