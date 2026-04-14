@@ -110,8 +110,8 @@ def _processar(df: pd.DataFrame, db: Session, arrival_set: set[str] | None = Non
     df = df.drop_duplicates(subset=[col_wb], keep="first").copy()
 
     df["_dest"]  = _lc(df[col_dest])
-    df["_deliv"] = _lc(df[col_deliv]) if col_deliv in df.columns else pd.Series("", index=df.index)
-    df["_city"]  = _lc(df[col_city])  if col_city  in df.columns else pd.Series("", index=df.index)
+    df["_deliv"] = _lc(df[col_deliv]) if col_deliv in df.columns else ""
+    df["_city"]  = _lc(df[col_city])  if col_city  in df.columns else ""
     df["_wb"]    = _lc(df[col_wb])
 
     dest_empty  = df["_dest"]  == ""
@@ -129,91 +129,106 @@ def _processar(df: pd.DataFrame, db: Session, arrival_set: set[str] | None = Non
         if not datas.empty:
             data_ref = datas.dt.date.mode().iloc[0].isoformat()
 
+    status_counts = df["_status"].value_counts()
     total    = len(df)
-    qtd_ok   = int((df["_status"] == "ok").sum())
-    qtd_nok  = int((df["_status"] == "nok").sum())
-    qtd_fora = int((df["_status"] == "fora").sum())
+    qtd_ok   = int(status_counts.get("ok",   0))
+    qtd_nok  = int(status_counts.get("nok",  0))
+    qtd_fora = int(status_counts.get("fora", 0))
     taxa     = round(qtd_ok / total * 100, 2) if total else 0.0
 
     tem_arrival = arrival_set is not None
     if tem_arrival:
-        qtd_recebidos = int(df["_wb"].isin(arrival_set).sum())
+        df["_recebido"] = df["_wb"].isin(arrival_set)
+        qtd_recebidos = int(df["_recebido"].sum())
     else:
+        df["_recebido"] = False
         qtd_recebidos = 0
 
+    # ── Detalhes (NOK + Fora) — to_dict é ~100x mais rápido que iterrows ──
     mask_det = df["_status"].isin(["nok", "fora"])
-    df_det   = df[mask_det][["_wb", "_dest", "_deliv", "_city", "_status"]].copy()
+    df_det = df.loc[mask_det, ["_wb", "_dest", "_deliv", "_city", "_status", "_recebido"]].copy()
+    df_det = df_det.rename(columns={
+        "_wb": "waybill", "_dest": "ds_destino", "_deliv": "ds_entrega",
+        "_city": "cidade", "_status": "status", "_recebido": "foi_recebido",
+    })
+    df_det["foi_recebido"] = df_det["foi_recebido"].astype(bool)
+    detalhes = df_det.to_dict("records")
+
+    # ── Por DS — groupby vetorizado ──
+    ds_agg = (
+        df[df["_dest"] != ""]
+        .groupby("_dest")["_status"]
+        .value_counts()
+        .unstack(fill_value=0)
+        .reindex(columns=["ok", "nok", "fora"], fill_value=0)
+    )
+    ds_agg["total"] = ds_agg.sum(axis=1)
+    ds_agg["taxa"]  = (ds_agg["ok"] / ds_agg["total"] * 100).round(2)
+
     if tem_arrival:
-        df_det["foi_recebido"] = df_det["_wb"].isin(arrival_set)
+        rec_by_ds     = df[df["_dest"] != ""].groupby("_dest")["_recebido"].sum()
+        rec_nok_by_ds = (
+            df[(df["_dest"] != "") & (df["_status"] == "nok")]
+            .groupby("_dest")["_recebido"].sum()
+        )
+        ds_agg["recebidos"]     = rec_by_ds.reindex(ds_agg.index, fill_value=0)
+        ds_agg["recebidos_nok"] = rec_nok_by_ds.reindex(ds_agg.index, fill_value=0)
     else:
-        df_det["foi_recebido"] = False
-    detalhes = [
+        ds_agg["recebidos"]     = 0
+        ds_agg["recebidos_nok"] = 0
+
+    por_ds_rows = [
         {
-            "waybill":      r["_wb"],
-            "ds_destino":   r["_dest"],
-            "ds_entrega":   r["_deliv"],
-            "cidade":       r["_city"],
-            "status":       r["_status"],
-            "foi_recebido": bool(r["foi_recebido"]),
+            "ds": ds, "total": int(r["total"]),
+            "ok": int(r["ok"]), "nok": int(r["nok"]), "fora": int(r["fora"]),
+            "taxa": float(r["taxa"]),
+            "recebidos": int(r["recebidos"]), "recebidos_nok": int(r["recebidos_nok"]),
         }
-        for _, r in df_det.iterrows()
+        for ds, r in ds_agg.iterrows()
     ]
-
-    por_ds_rows = []
-    for ds, grp in df.groupby(df["_dest"]):
-        if not ds:
-            continue
-        ok_c    = int((grp["_status"] == "ok").sum())
-        nok_c   = int((grp["_status"] == "nok").sum())
-        fora_c  = int((grp["_status"] == "fora").sum())
-        total_c = ok_c + nok_c + fora_c
-        taxa_c  = round(ok_c / total_c * 100, 2) if total_c else 0.0
-
-        if tem_arrival:
-            ds_wbs      = set(grp["_wb"])
-            nok_wbs     = set(grp[grp["_status"] == "nok"]["_wb"])
-            recebidos   = int(len(ds_wbs   & arrival_set))
-            rec_nok     = int(len(nok_wbs  & arrival_set))
-        else:
-            recebidos = 0
-            rec_nok   = 0
-
-        por_ds_rows.append({
-            "ds": ds, "total": total_c,
-            "ok": ok_c, "nok": nok_c, "fora": fora_c, "taxa": taxa_c,
-            "recebidos": recebidos, "recebidos_nok": rec_nok,
-        })
-
     top5 = sorted(por_ds_rows, key=lambda r: r["nok"], reverse=True)[:5]
 
+    # ── Por Supervisor ──
     res_sup = db.execute(text("SELECT sigla, region FROM config_supervisores")).mappings().all()
     sup_map = {r["sigla"].strip().upper(): r["region"] for r in res_sup if r.get("sigla")}
 
     df["_sup"] = df["_dest"].map(sup_map).fillna("Sem Região")
-    por_sup_rows = []
-    for sup, grp in df.groupby(df["_sup"]):
-        ok_c   = int((grp["_status"] == "ok").sum())
-        nok_c  = int((grp["_status"] == "nok").sum())
-        fora_c = int((grp["_status"] == "fora").sum())
-        total_c = ok_c + nok_c + fora_c
-        taxa_c  = round(ok_c / total_c * 100, 2) if total_c else 0.0
-        por_sup_rows.append({
-            "supervisor": sup, "total": total_c,
-            "ok": ok_c, "nok": nok_c, "fora": fora_c, "taxa": taxa_c,
-        })
+    sup_agg = (
+        df.groupby("_sup")["_status"]
+        .value_counts()
+        .unstack(fill_value=0)
+        .reindex(columns=["ok", "nok", "fora"], fill_value=0)
+    )
+    sup_agg["total"] = sup_agg.sum(axis=1)
+    sup_agg["taxa"]  = (sup_agg["ok"] / sup_agg["total"] * 100).round(2)
+    por_sup_rows = [
+        {
+            "supervisor": sup, "total": int(r["total"]),
+            "ok": int(r["ok"]), "nok": int(r["nok"]), "fora": int(r["fora"]),
+            "taxa": float(r["taxa"]),
+        }
+        for sup, r in sup_agg.iterrows()
+    ]
 
-    por_cidade_rows = []
-    for (ds, city), grp in df.groupby([df["_dest"], df["_city"]]):
-        if not ds:
-            continue
-        ok_c   = int((grp["_status"] == "ok").sum())
-        nok_c  = int((grp["_status"] == "nok").sum())
-        total_c = ok_c + nok_c
-        taxa_c  = round(ok_c / total_c * 100, 2) if total_c else 0.0
-        por_cidade_rows.append({
-            "ds": ds, "cidade": city or "Sem Cidade",
-            "ok": ok_c, "nok": nok_c, "total": total_c, "taxa": taxa_c,
-        })
+    # ── Por Cidade ──
+    cidade_agg = (
+        df[df["_dest"] != ""]
+        .assign(_city=df["_city"].replace("", "Sem Cidade"))
+        .groupby(["_dest", "_city"])["_status"]
+        .value_counts()
+        .unstack(fill_value=0)
+        .reindex(columns=["ok", "nok"], fill_value=0)
+    )
+    cidade_agg["total"] = cidade_agg.sum(axis=1)
+    cidade_agg["taxa"]  = (cidade_agg["ok"] / cidade_agg["total"] * 100).round(2)
+    por_cidade_rows = [
+        {
+            "ds": ds, "cidade": city,
+            "ok": int(r["ok"]), "nok": int(r["nok"]),
+            "total": int(r["total"]), "taxa": float(r["taxa"]),
+        }
+        for (ds, city), r in cidade_agg.iterrows()
+    ]
 
     return {
         "data_ref":      data_ref,
@@ -334,19 +349,20 @@ async def processar_triagem(
             db.commit()
 
         cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
-        for i in range(0, len(cidades), 500):
+        BATCH = 2000
+        for i in range(0, len(cidades), BATCH):
             db.execute(
                 text("INSERT INTO triagem_por_cidade (upload_id, ds, cidade, ok, nok, total, taxa) VALUES (:upload_id, :ds, :cidade, :ok, :nok, :total, :taxa)"),
-                cidades[i:i+1000]
+                cidades[i:i+BATCH]
             )
         db.commit()
 
         if resultado["detalhes"]:
             det_rows = [{"upload_id": uid, **r} for r in resultado["detalhes"]]
-            for i in range(0, len(det_rows), 500):
+            for i in range(0, len(det_rows), BATCH):
                 db.execute(
                     text("INSERT INTO triagem_detalhes (upload_id, waybill, ds_destino, ds_entrega, cidade, status, foi_recebido) VALUES (:upload_id, :waybill, :ds_destino, :ds_entrega, :cidade, :status, :foi_recebido)"),
-                    det_rows[i:i+1000]
+                    det_rows[i:i+BATCH]
                 )
             db.commit()
 
