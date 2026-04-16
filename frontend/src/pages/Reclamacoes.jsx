@@ -60,10 +60,10 @@ export default function Reclamacoes() {
     if (erroVal) { setErroUpload(erroVal); return }
     setUploading(true); setErroUpload('')
     try {
-      // Busca mapa de supervisores e processa localmente
-      const { data: supMap } = await api.get('/api/triagem/supervisores')
+      // Busca mapa de supervisores e processa localmente (timeout maior cobre cold start)
+      const { data: supMap } = await api.get('/api/triagem/supervisores', { timeout: 120_000 })
       const resultado = await processReclamacoes(selected, supMap)
-      const res = await api.post('/api/reclamacoes/salvar', resultado)
+      const res = await api.post('/api/reclamacoes/salvar', resultado, { timeout: 120_000 })
       invalidateAll()
       setSel(res.data.upload_id)
       toast.ok(`${selected.length > 1 ? 'Arquivos processados' : 'Arquivo processado'} com sucesso!`)

@@ -70,8 +70,8 @@ function UploadPanel({ onClose, onSuccess }) {
     if (!lsFiles.length) { setErro('Nenhum arquivo LoadingScan selecionado. Desmarque "Arrival" em pelo menos um arquivo.'); return }
     setFase('processando'); setProgresso('supervisores'); setErro('')
     try {
-      // 1) Busca mapa de supervisores do backend
-      const { data: supMap } = await api.get('/api/triagem/supervisores')
+      // 1) Busca mapa de supervisores do backend (timeout maior cobre cold start)
+      const { data: supMap } = await api.get('/api/triagem/supervisores', { timeout: 120_000 })
 
       // 2) Processa localmente — sem upload do arquivo bruto
       setProgresso('lendo')
@@ -79,7 +79,7 @@ function UploadPanel({ onClose, onSuccess }) {
 
       // 3) Envia apenas o JSON agregado
       setProgresso('salvando')
-      const res = await api.post('/api/triagem/salvar', resultado)
+      const res = await api.post('/api/triagem/salvar', resultado, { timeout: 120_000 })
 
       setFase(''); setProgresso(0)
       onSuccess(res.data.upload_id)
