@@ -90,12 +90,10 @@ def _ler_loading_scans(conteudos: list[bytes]) -> pd.DataFrame:
     frames = []
     for c in conteudos:
         try:
-            header = pd.read_excel(io.BytesIO(c), nrows=0, engine=_ENGINE)
-            header.columns = header.columns.str.strip()
-            presentes = [col for col in _LS_COLS if col in header.columns]
-            df = pd.read_excel(io.BytesIO(c), usecols=presentes, engine=_ENGINE)
+            df = pd.read_excel(io.BytesIO(c), engine=_ENGINE)
             df.columns = df.columns.str.strip()
-            frames.append(df)
+            presentes = [col for col in _LS_COLS if col in df.columns]
+            frames.append(df[presentes])
         except Exception:
             continue
     if not frames:

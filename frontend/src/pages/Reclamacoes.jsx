@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
+import { processReclamacoes } from '../lib/processarLocal'
 
 const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 const COLORS_WEEK = ['#095EF7', '#f97316', '#10b981', '#06b6d4']
@@ -59,14 +60,15 @@ export default function Reclamacoes() {
     if (erroVal) { setErroUpload(erroVal); return }
     setUploading(true); setErroUpload('')
     try {
-      const form = new FormData()
-      selected.forEach(f => form.append('files', f))
-      const res = await api.post('/api/reclamacoes/processar', form)
+      // Busca mapa de supervisores e processa localmente
+      const { data: supMap } = await api.get('/api/triagem/supervisores')
+      const resultado = await processReclamacoes(selected, supMap)
+      const res = await api.post('/api/reclamacoes/salvar', resultado)
       invalidateAll()
       setSel(res.data.upload_id)
       toast.ok(`${selected.length > 1 ? 'Arquivos processados' : 'Arquivo processado'} com sucesso!`)
     } catch (e) {
-      setErroUpload(e.response?.data?.detail || 'Erro ao processar arquivo.')
+      setErroUpload(e.response?.data?.detail || e.message || 'Erro ao processar arquivo.')
     } finally { setUploading(false) }
   }
 

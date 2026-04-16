@@ -2,8 +2,9 @@
 api/routes/triagem.py — Dados de triagem
 """
 import logging
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
@@ -95,6 +96,126 @@ def detalhes_upload(
         params
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+@router.get("/supervisores")
+def get_supervisores(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Retorna mapa sigla → region da tabela config_supervisores."""
+    rows = db.execute(text("SELECT sigla, region FROM config_supervisores")).mappings().all()
+    return {r["sigla"].strip().upper(): r["region"] for r in rows if r.get("sigla")}
+
+
+# ── Modelos para /salvar (processamento local no cliente) ─────
+
+class PorDsItem(BaseModel):
+    ds: str; total: int; ok: int; nok: int; fora: int; taxa: float
+    recebidos: int = 0; recebidos_nok: int = 0
+
+class Top5Item(BaseModel):
+    ds: str; nok: int
+
+class PorSupItem(BaseModel):
+    supervisor: str; total: int; ok: int; nok: int; fora: int; taxa: float
+
+class PorCidadeItem(BaseModel):
+    ds: str; cidade: str; ok: int; nok: int; total: int; taxa: float
+
+class DetalheItem(BaseModel):
+    waybill: str; ds_destino: str; ds_entrega: str
+    cidade: str; status: str; foi_recebido: bool = False
+
+class SalvarTriagemPayload(BaseModel):
+    data_ref: str
+    total: int; qtd_ok: int; qtd_erro: int; qtd_fora: int = 0
+    taxa: float; tem_arrival: bool = False; qtd_recebidos: int = 0
+    por_ds: List[PorDsItem] = []
+    top5: List[Top5Item] = []
+    por_supervisor: List[PorSupItem] = []
+    por_cidade: List[PorCidadeItem] = []
+    detalhes: List[DetalheItem] = []
+
+
+@router.post("/salvar")
+def salvar_triagem(payload: SalvarTriagemPayload, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Recebe resultado já processado localmente e salva no banco."""
+    # Remove upload anterior com a mesma data_ref
+    existing = db.execute(
+        text("SELECT id FROM triagem_uploads WHERE data_ref = :dr"), {"dr": payload.data_ref}
+    ).mappings().first()
+    if existing:
+        old_id = existing["id"]
+        for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
+            try:
+                db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
+            except Exception:
+                pass
+        db.execute(text("DELETE FROM triagem_uploads WHERE id = :id"), {"id": old_id})
+        db.commit()
+
+    row = db.execute(
+        text("""
+            INSERT INTO triagem_uploads
+              (data_ref, criado_por, total, qtd_ok, qtd_erro, qtd_fora, taxa, tem_arrival, qtd_recebidos)
+            VALUES
+              (:data_ref, :criado_por, :total, :qtd_ok, :qtd_erro, :qtd_fora, :taxa, :tem_arrival, :qtd_recebidos)
+            RETURNING id
+        """),
+        {
+            "data_ref":      payload.data_ref,
+            "criado_por":    user["email"],
+            "total":         payload.total,
+            "qtd_ok":        payload.qtd_ok,
+            "qtd_erro":      payload.qtd_erro,
+            "qtd_fora":      payload.qtd_fora,
+            "taxa":          payload.taxa,
+            "tem_arrival":   payload.tem_arrival,
+            "qtd_recebidos": payload.qtd_recebidos,
+        }
+    ).mappings().first()
+    uid = row["id"]
+    db.commit()
+
+    BATCH = 2000
+    if payload.por_ds:
+        db.execute(
+            text("INSERT INTO triagem_por_ds (upload_id, ds, total, ok, nok, fora, taxa, recebidos, recebidos_nok) VALUES (:upload_id, :ds, :total, :ok, :nok, :fora, :taxa, :recebidos, :recebidos_nok)"),
+            [{"upload_id": uid, **r.model_dump()} for r in payload.por_ds]
+        )
+        db.commit()
+
+    if payload.top5:
+        db.execute(
+            text("INSERT INTO triagem_top5 (upload_id, ds, total_erros) VALUES (:upload_id, :ds, :total_erros)"),
+            [{"upload_id": uid, "ds": r.ds, "total_erros": r.nok} for r in payload.top5]
+        )
+        db.commit()
+
+    if payload.por_supervisor:
+        db.execute(
+            text("INSERT INTO triagem_por_supervisor (upload_id, supervisor, total, ok, nok, fora, taxa) VALUES (:upload_id, :supervisor, :total, :ok, :nok, :fora, :taxa)"),
+            [{"upload_id": uid, **r.model_dump()} for r in payload.por_supervisor]
+        )
+        db.commit()
+
+    cidades = [{"upload_id": uid, **r.model_dump()} for r in payload.por_cidade]
+    for i in range(0, len(cidades), BATCH):
+        db.execute(
+            text("INSERT INTO triagem_por_cidade (upload_id, ds, cidade, ok, nok, total, taxa) VALUES (:upload_id, :ds, :cidade, :ok, :nok, :total, :taxa)"),
+            cidades[i:i+BATCH]
+        )
+    if cidades:
+        db.commit()
+
+    det_rows = [{"upload_id": uid, **r.model_dump()} for r in payload.detalhes]
+    for i in range(0, len(det_rows), BATCH):
+        db.execute(
+            text("INSERT INTO triagem_detalhes (upload_id, waybill, ds_destino, ds_entrega, cidade, status, foi_recebido) VALUES (:upload_id, :waybill, :ds_destino, :ds_entrega, :cidade, :status, :foi_recebido)"),
+            det_rows[i:i+BATCH]
+        )
+    if det_rows:
+        db.commit()
+
+    return {"upload_id": uid, "data_ref": payload.data_ref}
 
 
 @router.get("/upload/{upload_id}/cidades/{ds}")

@@ -17,6 +17,7 @@ import {
   List, Search, ChevronLeft,
 } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
+import { processTriagem } from '../lib/processarLocal'
 
 const COLOR_OK  = '#10b981'
 const COLOR_NOK = '#ef4444'
@@ -59,68 +60,32 @@ function UploadPanel({ onClose, onSuccess }) {
   const totalMB = files.reduce((s, e) => s + e.file.size, 0) / 1024 / 1024
 
   const FASE_LABELS = {
-    iniciando:      'Iniciando...',
-    lendo_arrival:  'Lendo Arrival...',
-    lendo_ls:       'Lendo Loading Scan...',
-    calculando:     'Calculando triagem...',
-    salvando:       'Salvando no banco...',
-    concluido:      'Concluído!',
+    supervisores: 'Carregando mapa de regiões...',
+    lendo:        'Lendo arquivos Excel...',
+    calculando:   'Calculando triagem...',
+    salvando:     'Salvando no banco...',
   }
 
   const handleSubmit = async () => {
     if (!lsFiles.length) { setErro('Nenhum arquivo LoadingScan selecionado. Desmarque "Arrival" em pelo menos um arquivo.'); return }
-    setFase('enviando'); setProgresso(0); setErro('')
+    setFase('processando'); setProgresso('supervisores'); setErro('')
     try {
-      const form = new FormData()
-      lsFiles.forEach(f  => form.append('files', f))
-      arrFiles.forEach(f => form.append('files', f))
-      form.append('arrival_count', String(arrFiles.length))
+      // 1) Busca mapa de supervisores do backend
+      const { data: supMap } = await api.get('/api/triagem/supervisores')
 
-      // 1) Envia os arquivos — rastreia progresso real
-      const res = await api.post('/api/triagem/processar', form, {
-        timeout: 600_000,
-        onUploadProgress: (e) => {
-          if (e.total) {
-            const pct = Math.round(e.loaded / e.total * 100)
-            setProgresso(pct)
-            if (pct === 100) setFase('processando')
-          }
-        },
-      })
+      // 2) Processa localmente — sem upload do arquivo bruto
+      setProgresso('lendo')
+      const resultado = await processTriagem(lsFiles, arrFiles, supMap)
 
-      const { job_id } = res.data
-      if (!job_id) { onSuccess(res.data.upload_id); return }
-
-      // 2) Polling do job em background — sem timeout de conexão
-      setFase('processando')
-      const job = await new Promise((resolve, reject) => {
-        const poll = setInterval(async () => {
-          try {
-            const { data: job } = await api.get(`/api/triagem/job/${job_id}`)
-            if (job.fase) setProgresso(job.fase)
-            if (job.status === 'done') {
-              clearInterval(poll)
-              resolve(job)
-            } else if (job.status === 'error') {
-              clearInterval(poll)
-              reject(new Error(job.erro || 'Erro no processamento.'))
-            }
-          } catch (err) {
-            clearInterval(poll)
-            reject(err)
-          }
-        }, 2500)
-      })
+      // 3) Envia apenas o JSON agregado
+      setProgresso('salvando')
+      const res = await api.post('/api/triagem/salvar', resultado)
 
       setFase(''); setProgresso(0)
-      onSuccess(job.upload_id)
+      onSuccess(res.data.upload_id)
 
     } catch (e) {
-      if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
-        setErro('Tempo limite excedido no envio. Tente novamente.')
-      } else {
-        setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
-      }
+      setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
       setFase(''); setProgresso(0)
     }
   }
@@ -205,34 +170,16 @@ function UploadPanel({ onClose, onSuccess }) {
       {/* Barra de progresso */}
       {uploading && (
         <div className="mb-4">
-          {fase === 'enviando' ? (
-            <>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-slate-600">Enviando arquivos...</span>
-                <span className="text-xs font-bold text-imile-600">{progresso}%</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="h-2 rounded-full bg-imile-500 transition-all duration-200"
-                  style={{ width: `${progresso}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">{totalMB.toFixed(1)} MB — aguarde o envio terminar</p>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-slate-600">
-                  {FASE_LABELS[progresso] || 'Processando no servidor...'}
-                </span>
-                <Loader size={12} className="animate-spin text-imile-500" />
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">Processamento em background — sem risco de timeout</p>
-            </>
-          )}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-slate-600">
+              {FASE_LABELS[progresso] || 'Processando...'}
+            </span>
+            <Loader size={12} className="animate-spin text-imile-500" />
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">Processamento local — sem upload de arquivo</p>
         </div>
       )}
 
@@ -243,7 +190,7 @@ function UploadPanel({ onClose, onSuccess }) {
         <button onClick={handleSubmit} disabled={uploading || !files.length}
           className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 transition-colors">
           {uploading
-            ? <><Loader size={14} className="animate-spin" /> {fase === 'enviando' ? `Enviando ${progresso}%` : 'Processando...'}</>
+            ? <><Loader size={14} className="animate-spin" /> Processando...</>
             : <><Upload size={14} /> Processar</>
           }
         </button>

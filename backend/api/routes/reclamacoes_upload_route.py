@@ -5,10 +5,11 @@ Self-contained: não depende de modulos/
 import io
 from collections import defaultdict
 from datetime import date, datetime
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -56,16 +57,24 @@ def _agregar_por_station(df):
         return []
     grp = df.groupby(col).size().reset_index(name='dia_total')
     grp = grp.sort_values('dia_total', ascending=False)
-    result = []
-    for _, r in grp.iterrows():
-        sup = ''
-        if 'SUPERVISOR' in df.columns:
-            mask = df[col] == r[col]
-            sups = df.loc[mask, 'SUPERVISOR'].dropna()
-            if not sups.empty:
-                sup = sups.mode().iloc[0]
-        result.append({'station': str(r[col]), 'supervisor': sup, 'dia_total': int(r['dia_total']), 'mes_total': int(r['dia_total'])})
-    return result
+    if 'SUPERVISOR' in df.columns:
+        sup_map = (
+            df[df['SUPERVISOR'].notna()]
+            .groupby(col)['SUPERVISOR']
+            .agg(lambda s: s.mode().iloc[0])
+            .to_dict()
+        )
+    else:
+        sup_map = {}
+    return [
+        {
+            'station': str(r[col]),
+            'supervisor': sup_map.get(r[col], ''),
+            'dia_total': int(r['dia_total']),
+            'mes_total': int(r['dia_total']),
+        }
+        for _, r in grp.iterrows()
+    ]
 
 
 def _top5_motoristas(df, inativos=None):
@@ -83,30 +92,37 @@ def _top5_motoristas(df, inativos=None):
     grp = df_filt.groupby(col_mot).size().reset_index(name='total')
     grp = grp.sort_values('total', ascending=False).head(5)
 
-    result = []
-    for _, r in grp.iterrows():
-        mot = str(r[col_mot])
-        ds = ''
-        sup = ''
-        col_ds = next((c for c in ['Inventory Station', 'Station', 'DS'] if c in df.columns), None)
-        if col_ds:
-            mask = df[col_mot] == mot
-            vals = df.loc[mask, col_ds].dropna()
-            if not vals.empty:
-                ds = vals.mode().iloc[0]
-        if 'SUPERVISOR' in df.columns:
-            mask = df[col_mot] == mot
-            vals = df.loc[mask, 'SUPERVISOR'].dropna()
-            if not vals.empty:
-                sup = vals.mode().iloc[0]
-        result.append({
-            'motorista': mot,
-            'id_motorista': mot,
-            'ds': ds,
-            'supervisor': sup,
+    col_ds = next((c for c in ['Inventory Station', 'Station', 'DS'] if c in df.columns), None)
+
+    # Monta os mapas uma vez para todos os motoristas (evita filtrar o DF inteiro por linha)
+    ds_map: dict = {}
+    if col_ds:
+        ds_map = (
+            df_filt[df_filt[col_ds].notna()]
+            .groupby(col_mot)[col_ds]
+            .agg(lambda s: s.mode().iloc[0])
+            .to_dict()
+        )
+
+    sup_map: dict = {}
+    if 'SUPERVISOR' in df.columns:
+        sup_map = (
+            df_filt[df_filt['SUPERVISOR'].notna()]
+            .groupby(col_mot)['SUPERVISOR']
+            .agg(lambda s: s.mode().iloc[0])
+            .to_dict()
+        )
+
+    return [
+        {
+            'motorista': str(r[col_mot]),
+            'id_motorista': str(r[col_mot]),
+            'ds': str(ds_map.get(r[col_mot], '')),
+            'supervisor': str(sup_map.get(r[col_mot], '')),
             'total': int(r['total']),
-        })
-    return result
+        }
+        for _, r in grp.iterrows()
+    ]
 
 
 def _adicionar_supervisor(df, db: Session):
@@ -129,6 +145,89 @@ def _adicionar_supervisor(df, db: Session):
     else:
         df['SUPERVISOR'] = 'Sem Supervisor'
     return df
+
+
+# ── Modelos para /salvar (processamento local no cliente) ────
+
+class RecSupItem(BaseModel):
+    supervisor: str; dia_total: int; mes_total: int
+
+class RecStaItem(BaseModel):
+    station: str; supervisor: str = ''; dia_total: int; mes_total: int
+
+class RecTop5Item(BaseModel):
+    motorista: str; id_motorista: str; ds: str = ''; supervisor: str = ''; total: int
+
+class SalvarReclamacoesPayload(BaseModel):
+    data_ref: str
+    n_registros: int; n_sup: int = 0; n_sta: int = 0; n_mot: int = 0; semana_ref: int = 0
+    por_supervisor: List[RecSupItem] = []
+    por_station: List[RecStaItem] = []
+    top5: List[RecTop5Item] = []
+
+
+@router.post("/salvar")
+def salvar_reclamacoes(payload: SalvarReclamacoesPayload, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Recebe resultado já processado localmente e salva no banco."""
+    existing = db.execute(
+        text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
+        {"dr": payload.data_ref}
+    ).mappings().first()
+    if existing:
+        old_id = existing["id"]
+        for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
+            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
+        db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
+        db.commit()
+
+    row = db.execute(
+        text("""
+            INSERT INTO reclamacoes_uploads (data_ref, n_registros, n_sup, n_sta, n_mot, semana_ref)
+            VALUES (:data_ref, :n_registros, :n_sup, :n_sta, :n_mot, :semana_ref)
+            RETURNING id
+        """),
+        {
+            "data_ref":    payload.data_ref,
+            "n_registros": payload.n_registros,
+            "n_sup":       payload.n_sup,
+            "n_sta":       payload.n_sta,
+            "n_mot":       payload.n_mot,
+            "semana_ref":  payload.semana_ref,
+        }
+    ).mappings().first()
+    uid = row["id"]
+    db.commit()
+
+    if payload.por_supervisor:
+        db.execute(
+            text("INSERT INTO reclamacoes_por_supervisor (upload_id, supervisor, dia_total, mes_total) VALUES (:upload_id, :supervisor, :dia_total, :mes_total)"),
+            [{"upload_id": uid, **r.model_dump()} for r in payload.por_supervisor]
+        )
+        db.commit()
+
+    if payload.por_station:
+        db.execute(
+            text("INSERT INTO reclamacoes_por_station (upload_id, station, supervisor, dia_total, mes_total) VALUES (:upload_id, :station, :supervisor, :dia_total, :mes_total)"),
+            [{"upload_id": uid, **r.model_dump()} for r in payload.por_station]
+        )
+        db.commit()
+
+    if payload.top5:
+        db.execute(
+            text("INSERT INTO reclamacoes_top5 (upload_id, motorista, id_motorista, ds, supervisor, total) VALUES (:upload_id, :motorista, :id_motorista, :ds, :supervisor, :total)"),
+            [{"upload_id": uid, **r.model_dump()} for r in payload.top5]
+        )
+        db.commit()
+
+    return {
+        "upload_id":   uid,
+        "data_ref":    payload.data_ref,
+        "n_registros": payload.n_registros,
+        "n_sup":       payload.n_sup,
+        "n_sta":       payload.n_sta,
+        "n_mot":       payload.n_mot,
+        "top5":        [r.model_dump() for r in payload.top5],
+    }
 
 
 @router.post("/processar")
