@@ -396,8 +396,25 @@ async def webhook_receber(request: Request, db: Session = Depends(get_db)):
                 val = change.get("value", {})
                 for msg in val.get("messages", []):
                     telefone = msg.get("from", "")
-                    texto = msg.get("text", {}).get("body", "").strip().upper()
-                    msg_id = msg.get("id", "")
+                    msg_type = msg.get("type", "text")
+
+                    # Texto digitado
+                    if msg_type == "text":
+                        conteudo = msg.get("text", {}).get("body", "").strip()
+                    # Botão quick reply tocado
+                    elif msg_type == "button":
+                        conteudo = msg.get("button", {}).get("payload", "").strip()
+                    # Resposta interativa (lista ou botão interativo)
+                    elif msg_type == "interactive":
+                        inter = msg.get("interactive", {})
+                        if inter.get("type") == "button_reply":
+                            conteudo = inter.get("button_reply", {}).get("id", "").strip()
+                        else:
+                            conteudo = inter.get("list_reply", {}).get("id", "").strip()
+                    else:
+                        continue
+
+                    texto = conteudo.upper()
 
                     contato = db.execute(
                         text("SELECT id FROM whatsapp_contatos WHERE telefone LIKE :tel ORDER BY id DESC LIMIT 1"),
@@ -410,12 +427,13 @@ async def webhook_receber(request: Request, db: Session = Depends(get_db)):
                     cid = contato["id"]
                     db.execute(
                         text("INSERT INTO whatsapp_mensagens (contato_id, direcao, conteudo) VALUES (:cid, 'recebido', :txt)"),
-                        {"cid": cid, "txt": texto}
+                        {"cid": cid, "txt": conteudo}
                     )
 
-                    if texto in ("SIM", "S", "RECEBI", "OK", "CONFIRMADO"):
+                    # Botões quick reply do template
+                    if texto in ("SIM_RECEBI", "SIM", "S", "RECEBI", "OK", "CONFIRMADO"):
                         novo_status = "confirmado"
-                    elif texto in ("NÃO", "NAO", "NÃO RECEBI", "NAO RECEBI", "NÃO RECEBI", "N"):
+                    elif texto in ("NAO_RECEBI", "NÃO", "NAO", "NÃO RECEBI", "NAO RECEBI", "N"):
                         novo_status = "nao_recebeu"
                     else:
                         novo_status = "em_atendimento"

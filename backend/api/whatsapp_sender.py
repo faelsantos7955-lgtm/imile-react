@@ -91,7 +91,10 @@ def enviar_mensagem(telefone: str, nome: str, rastreio: str, empresa: str) -> di
                         {"type": "text", "text": rastreio},
                         {"type": "text", "text": empresa},
                     ],
-                }
+                },
+                # Botões quick reply — devem existir no template aprovado pela Meta
+                {"type": "button", "sub_type": "quick_reply", "index": "0", "parameters": [{"type": "payload", "payload": "SIM_RECEBI"}]},
+                {"type": "button", "sub_type": "quick_reply", "index": "1", "parameters": [{"type": "payload", "payload": "NAO_RECEBI"}]},
             ],
         },
     }
