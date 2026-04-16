@@ -2,7 +2,7 @@
  * pages/ContestacoesPublico.jsx — Página pública de contestações
  * Acessível sem login. Abas: Novo Registro | Consulta por Waybill
  */
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import axios from 'axios'
@@ -74,6 +74,68 @@ function StatusBadge({ status }) {
       <span className={`w-2 h-2 rounded-full ${dot}`} />
       {status}
     </span>
+  )
+}
+
+// ── Combobox pesquisável para DS ─────────────────────────────
+function DsCombobox({ value, onChange, error }) {
+  const [query, setQuery]     = useState(value || '')
+  const [open, setOpen]       = useState(false)
+  const containerRef          = useRef(null)
+
+  // Sincroniza query quando value muda externamente (ex: reset do form)
+  useEffect(() => { setQuery(value || '') }, [value])
+
+  // Fecha ao clicar fora
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = query.trim()
+    ? DS_LIST.filter(ds => ds.toLowerCase().includes(query.trim().toLowerCase()))
+    : DS_LIST
+
+  const select = (ds) => {
+    onChange(ds)
+    setQuery(ds)
+    setOpen(false)
+  }
+
+  const cls = `w-full border rounded-lg px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white transition-shadow ${error ? 'border-red-300 bg-red-50' : 'border-slate-200'}`
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(''); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        placeholder="Digite para pesquisar a DS..."
+        className={cls}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+          {filtered.map(ds => (
+            <li
+              key={ds}
+              onMouseDown={() => select(ds)}
+              className={`px-3 py-2 text-[13px] cursor-pointer hover:bg-blue-50 hover:text-blue-700 ${value === ds ? 'bg-blue-50 font-semibold text-blue-700' : 'text-slate-700'}`}
+            >
+              {ds}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && filtered.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2.5 text-[13px] text-slate-400">
+          Nenhuma DS encontrada
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -180,10 +242,7 @@ function Formulario() {
 
       {/* DS */}
       <F label="DS" required error={errors.ds}>
-        <select value={form.ds} onChange={e => set('ds', e.target.value)} className={inputCls(errors.ds)}>
-          <option value="">Selecione a DS</option>
-          {DS_LIST.map(ds => <option key={ds} value={ds}>{ds}</option>)}
-        </select>
+        <DsCombobox value={form.ds} onChange={v => set('ds', v)} error={errors.ds} />
       </F>
 
       {/* WAIBILL */}
