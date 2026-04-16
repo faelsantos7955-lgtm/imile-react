@@ -278,14 +278,14 @@ function Formulario() {
           <FileText size={24} className={form.faturamento_nome ? 'text-emerald-500' : 'text-slate-400'} />
           <div className="text-center">
             <p className="text-[12px] font-medium text-slate-700">{form.faturamento_nome || 'Área de carregamento'}</p>
-            <p className="text-[11px] text-slate-400">PDF, PNG, JPG ou Excel • máx. 6 MB</p>
+            <p className="text-[11px] text-slate-400">PDF ou Excel • máx. 6 MB</p>
           </div>
           {form.faturamento_nome && (
             <button onClick={e => { e.stopPropagation(); set('faturamento_b64', null); set('faturamento_nome', null) }}
               className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
           )}
         </div>
-        <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls" className="hidden" onChange={e => handleFile(e, 'faturamento')} />
+        <input ref={fatRef} type="file" accept=".pdf,.xlsx,.xls" className="hidden" onChange={e => handleFile(e, 'faturamento')} />
       </F>
 
       {/* VALOR DO DESCONTO */}
