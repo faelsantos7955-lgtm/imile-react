@@ -30,6 +30,41 @@ def _formatar_telefone(telefone: str) -> str:
     return digits
 
 
+def enviar_texto(telefone: str, texto: str) -> dict:
+    """Envia mensagem de texto livre (resposta manual dentro da janela de 24h)."""
+    numero = _formatar_telefone(telefone)
+
+    if not TOKEN or not PHONE_ID:
+        log.info("WhatsApp TEXTO SIMULADO → %s | %s", numero, texto[:40])
+        return {"status": "simulado", "message_id": f"sim_{numero[-4:]}"}
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {"body": texto},
+    }
+
+    try:
+        r = httpx.post(
+            API_URL,
+            json=payload,
+            headers={"Authorization": f"Bearer {TOKEN}"},
+            timeout=15,
+        )
+        data = r.json()
+        if r.status_code == 200:
+            msg_id = data.get("messages", [{}])[0].get("id", "")
+            log.info("WhatsApp texto enviado → %s | msg_id=%s", numero, msg_id)
+            return {"status": "enviado", "message_id": msg_id}
+        else:
+            log.warning("WhatsApp texto erro %s → %s", r.status_code, data)
+            return {"status": "erro", "message_id": "", "detalhe": str(data)}
+    except Exception as e:
+        log.error("WhatsApp texto falhou → %s: %s", numero, e)
+        return {"status": "erro", "message_id": "", "detalhe": str(e)}
+
+
 def enviar_mensagem(telefone: str, nome: str, rastreio: str, empresa: str) -> dict:
     """
     Envia mensagem de confirmação de entrega via WhatsApp.

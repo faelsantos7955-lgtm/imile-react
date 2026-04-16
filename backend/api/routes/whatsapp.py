@@ -16,7 +16,7 @@ from sqlalchemy import text
 
 from api.deps import get_db, get_current_user
 from api.upload_utils import validar_arquivo
-from api.whatsapp_sender import enviar_mensagem
+from api.whatsapp_sender import enviar_mensagem, enviar_texto
 
 log = logging.getLogger("whatsapp")
 router = APIRouter()
@@ -170,6 +170,54 @@ def _disparar_campanha(campanha_id: int, intervalo: float = 1.0):
 
 # ── Endpoints ─────────────────────────────────────────────────
 
+@router.get("/contatos")
+def listar_contatos_chat(
+    campanha_id: int = 0,
+    status: str = "",
+    busca: str = "",
+    page: int = 0,
+    limit: int = 60,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista contatos com última mensagem — para a view de chat."""
+    _ensure_schema(db)
+    where = "1=1"
+    params: dict = {"limit": limit, "offset": page * limit}
+
+    if campanha_id:
+        where += " AND c.campanha_id = :cid"
+        params["cid"] = campanha_id
+    if status:
+        where += " AND c.status = :status"
+        params["status"] = status
+    if busca:
+        where += " AND (c.nome ILIKE :busca OR c.telefone LIKE :busca2 OR c.rastreio LIKE :busca3)"
+        params["busca"]  = f"%{busca}%"
+        params["busca2"] = f"%{busca}%"
+        params["busca3"] = f"%{busca}%"
+
+    rows = db.execute(text(f"""
+        SELECT c.*,
+               m.conteudo  AS ultima_mensagem,
+               m.direcao   AS ultima_direcao,
+               m.criado_em AS ultima_mensagem_em
+        FROM whatsapp_contatos c
+        LEFT JOIN LATERAL (
+            SELECT conteudo, direcao, criado_em
+            FROM   whatsapp_mensagens
+            WHERE  contato_id = c.id
+            ORDER  BY criado_em DESC
+            LIMIT  1
+        ) m ON true
+        WHERE {where}
+        ORDER BY COALESCE(m.criado_em, c.enviado_em, c.id::text::timestamp) DESC
+        LIMIT :limit OFFSET :offset
+    """), params).mappings().all()
+
+    return [dict(r) for r in rows]
+
+
 @router.get("/campanhas")
 def listar_campanhas(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     _ensure_schema(db)
@@ -268,6 +316,35 @@ def mensagens_contato(cid: int, user: dict = Depends(get_current_user), db: Sess
         {"cid": cid}
     ).mappings().all()
     return {"contato": dict(contato), "mensagens": [dict(m) for m in msgs]}
+
+
+class EnviarTextoPayload(BaseModel):
+    texto: str
+
+
+@router.post("/contatos/{cid}/enviar")
+def enviar_mensagem_manual(cid: int, payload: EnviarTextoPayload, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    contato = db.execute(text("SELECT * FROM whatsapp_contatos WHERE id = :id"), {"id": cid}).mappings().first()
+    if not contato:
+        raise HTTPException(404, "Contato não encontrado.")
+    if not payload.texto.strip():
+        raise HTTPException(400, "Mensagem vazia.")
+
+    db.execute(
+        text("INSERT INTO whatsapp_mensagens (contato_id, direcao, conteudo) VALUES (:cid, 'enviado', :txt)"),
+        {"cid": cid, "txt": payload.texto.strip()}
+    )
+
+    resultado = enviar_texto(contato["telefone"], payload.texto.strip())
+
+    if resultado["status"] in ("enviado", "simulado") and contato["status"] == "pendente":
+        db.execute(
+            text("UPDATE whatsapp_contatos SET status = 'em_atendimento' WHERE id = :id"),
+            {"id": cid}
+        )
+
+    db.commit()
+    return {"ok": True, "status": resultado["status"]}
 
 
 class AtualizarStatusPayload(BaseModel):
