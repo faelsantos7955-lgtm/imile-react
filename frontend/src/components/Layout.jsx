@@ -11,7 +11,6 @@ import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
   GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale, Megaphone,
-  MessageCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -26,8 +25,7 @@ const NAV_ITEMS = [
   { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
   { to: '/not-arrived',   icon: AlertCircle,  label: 'Not Arrived Mov.' },
   { to: '/contestacoes', icon: Scale,        label: 'Contestações' },
-  { to: '/avisos',       icon: Megaphone,       label: 'Avisos' },
-  { to: '/whatsapp',    icon: MessageCircle,   label: 'WhatsApp CRM' },
+  { to: '/avisos',       icon: Megaphone,   label: 'Avisos' },
 ]
 
 const ADMIN_ITEMS = [
@@ -52,7 +50,6 @@ const PAGE_TITLES = [
   { path: '/not-arrived',     label: 'Not Arrived com Movimentação' },
   { path: '/contestacoes',   label: 'Contestações de Descontos' },
   { path: '/avisos',         label: 'Quadro de Avisos' },
-  { path: '/whatsapp',      label: 'WhatsApp CRM' },
   { path: '/admin',           label: 'Upload / Processar' },
   { path: '/admin/lote',      label: 'Carga em Lote' },
   { path: '/admin/users',     label: 'Solicitações de Acesso' },

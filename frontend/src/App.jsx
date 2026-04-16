@@ -19,7 +19,6 @@ import Contestacoes from './pages/Contestacoes'
 import ContestacoesPublico from './pages/ContestacoesPublico'
 import DefinirSenha from './pages/DefinirSenha'
 import Avisos from './pages/Avisos'
-import WhatsApp from './pages/WhatsApp'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading, isAdmin } = useAuth()
@@ -50,7 +49,6 @@ function AppRoutes() {
         <Route path="na" element={<Na />} />
         <Route path="contestacoes" element={<Contestacoes />} />
         <Route path="avisos" element={<Avisos />} />
-        <Route path="whatsapp" element={<WhatsApp />} />
         <Route path="admin/*" element={
           <ProtectedRoute adminOnly><Admin /></ProtectedRoute>
         } />
