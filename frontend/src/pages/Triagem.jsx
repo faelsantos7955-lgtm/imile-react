@@ -59,33 +59,77 @@ function UploadPanel({ onClose, onSuccess }) {
 
   const totalMB = files.reduce((s, e) => s + e.file.size, 0) / 1024 / 1024
 
+  // Arquivos até 20 MB processam localmente; acima disso vai pro servidor
+  const LOCAL_LIMIT_MB = 20
+  const modoLocal = totalMB <= LOCAL_LIMIT_MB
+
   const FASE_LABELS = {
-    supervisores: 'Carregando mapa de regiões...',
-    lendo:        'Lendo arquivos Excel...',
-    calculando:   'Calculando triagem...',
-    salvando:     'Salvando no banco...',
+    supervisores:   'Carregando mapa de regiões...',
+    lendo:          'Lendo arquivos Excel...',
+    salvando:       'Salvando no banco...',
+    iniciando:      'Iniciando...',
+    lendo_arrival:  'Lendo Arrival...',
+    lendo_ls:       'Lendo Loading Scan...',
+    calculando:     'Calculando triagem...',
+    concluido:      'Concluído!',
   }
 
   const handleSubmit = async () => {
     if (!lsFiles.length) { setErro('Nenhum arquivo LoadingScan selecionado. Desmarque "Arrival" em pelo menos um arquivo.'); return }
-    setFase('processando'); setProgresso('supervisores'); setErro('')
+    setFase('processando'); setProgresso(modoLocal ? 'supervisores' : 0); setErro('')
     try {
-      // 1) Busca mapa de supervisores do backend (timeout maior cobre cold start)
-      const { data: supMap } = await api.get('/api/triagem/supervisores', { timeout: 120_000 })
+      if (modoLocal) {
+        // ── Processamento local (arquivos pequenos) ──────────────
+        const { data: supMap } = await api.get('/api/triagem/supervisores', { timeout: 120_000 })
+        setProgresso('lendo')
+        const resultado = await processTriagem(lsFiles, arrFiles, supMap)
+        setProgresso('salvando')
+        const res = await api.post('/api/triagem/salvar', resultado, { timeout: 120_000 })
+        setFase(''); setProgresso(0)
+        onSuccess(res.data.upload_id)
 
-      // 2) Processa localmente — sem upload do arquivo bruto
-      setProgresso('lendo')
-      const resultado = await processTriagem(lsFiles, arrFiles, supMap)
+      } else {
+        // ── Processamento no servidor (arquivos grandes) ──────────
+        const form = new FormData()
+        lsFiles.forEach(f  => form.append('files', f))
+        arrFiles.forEach(f => form.append('files', f))
+        form.append('arrival_count', String(arrFiles.length))
 
-      // 3) Envia apenas o JSON agregado
-      setProgresso('salvando')
-      const res = await api.post('/api/triagem/salvar', resultado, { timeout: 120_000 })
+        const res = await api.post('/api/triagem/processar', form, {
+          timeout: 600_000,
+          onUploadProgress: (e) => {
+            if (e.total) {
+              const pct = Math.round(e.loaded / e.total * 100)
+              setProgresso(pct)
+              if (pct === 100) setFase('processando')
+            }
+          },
+        })
 
-      setFase(''); setProgresso(0)
-      onSuccess(res.data.upload_id)
+        const { job_id } = res.data
+        if (!job_id) { onSuccess(res.data.upload_id); return }
 
+        setFase('processando')
+        const job = await new Promise((resolve, reject) => {
+          const poll = setInterval(async () => {
+            try {
+              const { data: job } = await api.get(`/api/triagem/job/${job_id}`)
+              if (job.fase) setProgresso(job.fase)
+              if (job.status === 'done')  { clearInterval(poll); resolve(job) }
+              else if (job.status === 'error') { clearInterval(poll); reject(new Error(job.erro || 'Erro no processamento.')) }
+            } catch (err) { clearInterval(poll); reject(err) }
+          }, 2500)
+        })
+
+        setFase(''); setProgresso(0)
+        onSuccess(job.upload_id)
+      }
     } catch (e) {
-      setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
+      if (e.code === 'ECONNABORTED' || e.message?.includes('timeout')) {
+        setErro('Tempo limite excedido. Tente novamente (servidor pode estar iniciando).')
+      } else {
+        setErro(e.response?.data?.detail || e.message || 'Erro ao processar.')
+      }
       setFase(''); setProgresso(0)
     }
   }
@@ -170,16 +214,33 @@ function UploadPanel({ onClose, onSuccess }) {
       {/* Barra de progresso */}
       {uploading && (
         <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-medium text-slate-600">
-              {FASE_LABELS[progresso] || 'Processando...'}
-            </span>
-            <Loader size={12} className="animate-spin text-imile-500" />
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-            <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">Processamento local — sem upload de arquivo</p>
+          {!modoLocal && fase === 'enviando' ? (
+            <>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-600">Enviando arquivos...</span>
+                <span className="text-xs font-bold text-imile-600">{progresso}%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="h-2 rounded-full bg-imile-500 transition-all duration-200" style={{ width: `${progresso}%` }} />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">{totalMB.toFixed(1)} MB — aguarde o envio terminar</p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-600">
+                  {FASE_LABELS[progresso] || 'Processando...'}
+                </span>
+                <Loader size={12} className="animate-spin text-imile-500" />
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {modoLocal ? 'Processamento local — sem upload de arquivo' : 'Processamento em background no servidor'}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -191,7 +252,7 @@ function UploadPanel({ onClose, onSuccess }) {
           className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 transition-colors">
           {uploading
             ? <><Loader size={14} className="animate-spin" /> Processando...</>
-            : <><Upload size={14} /> Processar</>
+            : <><Upload size={14} /> {modoLocal ? 'Processar (local)' : `Processar (servidor · ${totalMB.toFixed(0)} MB)`}</>
           }
         </button>
       </div>
