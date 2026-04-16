@@ -16,6 +16,7 @@ from sqlalchemy import text
 from api.deps import get_current_user, get_db
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
+from api.lark_utils import notify_reclamacoes
 
 router = APIRouter()
 
@@ -219,6 +220,7 @@ def salvar_reclamacoes(payload: SalvarReclamacoesPayload, user: dict = Depends(g
         )
         db.commit()
 
+    notify_reclamacoes(payload.model_dump(), user["email"])
     return {
         "upload_id":   uid,
         "data_ref":    payload.data_ref,
@@ -332,7 +334,7 @@ async def processar_reclamacoes(
         )
         db.commit()
 
-    return {
+    resultado = {
         "upload_id":   uid,
         "data_ref":    data_ref.isoformat(),
         "n_registros": len(df),
@@ -341,3 +343,5 @@ async def processar_reclamacoes(
         "n_mot":       n_mot,
         "top5":        top5,
     }
+    notify_reclamacoes(resultado, user["email"])
+    return resultado

@@ -30,6 +30,7 @@ from sqlalchemy.orm import sessionmaker
 from api.deps import get_current_user, _engine
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
+from api.lark_utils import notify_triagem
 
 def _make_db() -> Session:
     """Cria uma Session independente — seguro para uso em threads."""
@@ -408,6 +409,7 @@ def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: 
                  job_id, time.time()-t0, uid, len(resultado["detalhes"]))
         log.info("[job:%s] TOTAL: %.1fs", job_id, time.time()-t_total)
 
+        notify_triagem(resultado, user["email"])
         _set({
             "status": "done",
             "fase": "concluido",

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
+from api.lark_utils import notify_triagem
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,7 @@ def salvar_triagem(payload: SalvarTriagemPayload, user: dict = Depends(get_curre
     if det_rows:
         db.commit()
 
+    notify_triagem(payload.model_dump(), user["email"])
     return {"upload_id": uid, "data_ref": payload.data_ref}
 
 
