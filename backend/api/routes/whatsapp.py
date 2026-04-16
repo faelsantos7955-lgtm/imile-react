@@ -211,7 +211,7 @@ def listar_contatos_chat(
             LIMIT  1
         ) m ON true
         WHERE {where}
-        ORDER BY COALESCE(m.criado_em, c.enviado_em, c.id::text::timestamp) DESC
+        ORDER BY COALESCE(m.criado_em, c.enviado_em) DESC NULLS LAST, c.id DESC
         LIMIT :limit OFFSET :offset
     """), params).mappings().all()
 

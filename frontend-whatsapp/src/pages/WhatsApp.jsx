@@ -78,12 +78,11 @@ function CampanhaDetalhe({ campanhaId, onVoltar }) {
   const [novoStatus, setNovoStatus] = useState('')
   const [obs, setObs] = useState('')
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['wpp-detalhe', campanhaId, statusFiltro, page],
     queryFn: () => api.get(`/api/whatsapp/campanhas/${campanhaId}`, {
       params: { status: statusFiltro, page, limit: 50 }
     }).then(r => r.data),
-    refetchInterval: data?.campanha?.status === 'disparando' ? 5000 : false,
   })
 
   const { data: msgs } = useQuery({
@@ -109,7 +108,15 @@ function CampanhaDetalhe({ campanhaId, onVoltar }) {
       <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Carregando…</div>
     </div>
   )
-  if (!data) return null
+  if (isError || !data) return (
+    <div className="flex h-screen flex-col">
+      <Header title="Campanhas" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-3">
+        <p className="text-slate-500 text-sm">Erro ao carregar campanha.</p>
+        <button onClick={() => { refetch(); onVoltar() }} className="text-xs text-imile-600 hover:underline">Voltar</button>
+      </div>
+    </div>
+  )
 
   const { campanha, contatos } = data
 
