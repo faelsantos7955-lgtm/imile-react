@@ -199,19 +199,15 @@ def listar_contatos_chat(
 
     rows = db.execute(text(f"""
         SELECT c.*,
-               m.conteudo  AS ultima_mensagem,
-               m.direcao   AS ultima_direcao,
-               m.criado_em AS ultima_mensagem_em
+               (SELECT conteudo  FROM whatsapp_mensagens WHERE contato_id = c.id ORDER BY criado_em DESC LIMIT 1) AS ultima_mensagem,
+               (SELECT direcao   FROM whatsapp_mensagens WHERE contato_id = c.id ORDER BY criado_em DESC LIMIT 1) AS ultima_direcao,
+               (SELECT criado_em FROM whatsapp_mensagens WHERE contato_id = c.id ORDER BY criado_em DESC LIMIT 1) AS ultima_mensagem_em
         FROM whatsapp_contatos c
-        LEFT JOIN LATERAL (
-            SELECT conteudo, direcao, criado_em
-            FROM   whatsapp_mensagens
-            WHERE  contato_id = c.id
-            ORDER  BY criado_em DESC
-            LIMIT  1
-        ) m ON true
         WHERE {where}
-        ORDER BY COALESCE(m.criado_em, c.enviado_em) DESC NULLS LAST, c.id DESC
+        ORDER BY COALESCE(
+            (SELECT criado_em FROM whatsapp_mensagens WHERE contato_id = c.id ORDER BY criado_em DESC LIMIT 1),
+            c.enviado_em
+        ) DESC NULLS LAST, c.id DESC
         LIMIT :limit OFFSET :offset
     """), params).mappings().all()
 
