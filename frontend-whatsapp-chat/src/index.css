@@ -8,15 +8,15 @@ html, body, #root { height: 100%; margin: 0; padding: 0; }
 body {
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background: #f8fafc;
 }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 99px; }
 
-@keyframes fadeIn {
+@keyframes msgIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.msg-in  { animation: fadeIn 0.15s ease-out; }
-.msg-out { animation: fadeIn 0.15s ease-out; }
+.mb-1 > div { animation: msgIn 0.12s ease-out; }
