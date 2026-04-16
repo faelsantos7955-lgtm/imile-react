@@ -98,7 +98,7 @@ function ContactList({ campanhaId, contatoId, onSelect }) {
         <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
           {[['', 'Todas'], ['em_atendimento', 'Atend.'], ['nao_recebeu', 'Não recebeu'], ['confirmado', 'Confirmou'], ['pendente', 'Pendente'], ['enviado', 'Enviado']].map(([v, l]) => (
             <button key={v} onClick={() => { setStatus(v); setPage(0) }}
-              className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${statusFiltro === v ? 'bg-imile-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+              className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${statusFiltro === v ? 'bg-navy-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
               {l}
             </button>
           ))}
@@ -114,7 +114,7 @@ function ContactList({ campanhaId, contatoId, onSelect }) {
 
         {contatos.map(c => (
           <button key={c.id} onClick={() => onSelect(c.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors text-left ${contatoId === c.id ? 'bg-imile-50 border-l-2 border-l-imile-500' : ''}`}>
+            className={`w-full flex items-center gap-3 px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors text-left ${contatoId === c.id ? 'bg-slate-100 border-l-2 border-l-navy-800' : ''}`}>
             <Avatar nome={c.nome} telefone={c.telefone} size={42} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1">
@@ -135,7 +135,7 @@ function ContactList({ campanhaId, contatoId, onSelect }) {
 
         {contatos.length >= 60 && (
           <button onClick={() => setPage(p => p + 1)}
-            className="w-full py-3 text-xs text-imile-600 hover:bg-slate-50 font-semibold">
+            className="w-full py-3 text-xs text-navy-800 hover:bg-slate-50 font-semibold">
             Carregar mais…
           </button>
         )}
@@ -195,8 +195,8 @@ function ChatPanel({ contatoId }) {
 
   if (!contatoId) return (
     <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 gap-3">
-      <div className="w-16 h-16 rounded-2xl bg-imile-50 border border-imile-100 flex items-center justify-center">
-        <MessageCircle size={28} className="text-imile-400" />
+      <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center">
+        <MessageCircle size={28} className="text-slate-400" />
       </div>
       <p className="text-slate-600 text-sm font-semibold">Selecione uma conversa</p>
       <p className="text-slate-400 text-xs">Escolha um contato na lista ao lado</p>
@@ -230,7 +230,7 @@ function ChatPanel({ contatoId }) {
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 text-left transition-colors ${contato?.status === k ? 'bg-slate-50' : ''}`}>
                   <span className={`w-2 h-2 rounded-full ${v.dot} shrink-0`} />
                   <span className="text-[12px] text-slate-700">{v.label}</span>
-                  {contato?.status === k && <Check size={12} className="ml-auto text-imile-500" />}
+                  {contato?.status === k && <Check size={12} className="ml-auto text-navy-800" />}
                 </button>
               ))}
             </div>
@@ -259,13 +259,13 @@ function ChatPanel({ contatoId }) {
             <div key={item.id} className={`flex ${sent ? 'justify-end' : 'justify-start'} mb-1`}>
               <div className={`max-w-[65%] px-3.5 py-2 rounded-2xl shadow-sm ${
                 sent
-                  ? 'bg-imile-500 text-white rounded-tr-sm'
+                  ? 'bg-navy-800 text-white rounded-tr-sm'
                   : 'bg-white border border-slate-100 text-slate-800 rounded-tl-sm'
               }`}>
                 <p className="text-[13px] whitespace-pre-wrap break-words leading-snug">{item.conteudo}</p>
                 <div className={`flex items-center gap-1 mt-1 ${sent ? 'justify-end' : 'justify-start'}`}>
-                  <span className={`text-[10px] ${sent ? 'text-white/60' : 'text-slate-400'}`}>{hora(item.criado_em)}</span>
-                  {sent && <CheckCheck size={12} className="text-white/70" />}
+                  <span className={`text-[10px] ${sent ? 'text-white/50' : 'text-slate-400'}`}>{hora(item.criado_em)}</span>
+                  {sent && <CheckCheck size={12} className="text-white/60" />}
                 </div>
               </div>
             </div>
@@ -280,11 +280,11 @@ function ChatPanel({ contatoId }) {
           onChange={e => setMensagem(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
           rows={1} placeholder="Digite uma mensagem… (Enter para enviar)"
-          className="flex-1 bg-slate-100 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-imile-300 resize-none max-h-28 overflow-y-auto leading-snug"
+          className="flex-1 bg-slate-100 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-navy-800/20 resize-none max-h-28 overflow-y-auto leading-snug"
           style={{ minHeight: 42 }}
         />
         <button onClick={handleSend} disabled={!mensagem.trim() || mutEnviar.isPending}
-          className="w-10 h-10 rounded-xl bg-imile-500 hover:bg-imile-600 disabled:bg-slate-200 flex items-center justify-center transition-colors shrink-0 shadow-sm">
+          className="w-10 h-10 rounded-xl bg-navy-800 hover:bg-navy-900 disabled:bg-slate-200 flex items-center justify-center transition-colors shrink-0 shadow-sm">
           {mutEnviar.isPending
             ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             : <Send size={15} className="text-white" />}
