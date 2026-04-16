@@ -16,7 +16,7 @@ const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const pub = axios.create({ baseURL: BASE })
 
 // ── Constantes ────────────────────────────────────────────────
-const MOTIVOS = ['Extravio', 'Avaria']
+const MOTIVOS = ['Avaria', 'Extravio', 'Fake Delivery', 'Fake POD']
 
 const DS_LIST = [
   'DS BJP','DS SJC','DS CTT','DS UBT','DS GRT','DS SCP','DS TBT','DS NOV','DS PIX','DS PIB',
@@ -268,8 +268,8 @@ function Formulario() {
         </select>
       </F>
 
-      {/* FATURAMENTO QUE HOUVE O EXTRAVIO */}
-      <F label="FATURAMENTO QUE HOUVE O EXTRAVIO" required error={errors.faturamento}>
+      {/* FATURAMENTO QUE HOUVE O DESCONTO */}
+      <F label="FATURAMENTO QUE HOUVE O DESCONTO" required error={errors.faturamento}>
         <div
           onClick={() => fatRef.current.click()}
           className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors
@@ -278,14 +278,14 @@ function Formulario() {
           <FileText size={24} className={form.faturamento_nome ? 'text-emerald-500' : 'text-slate-400'} />
           <div className="text-center">
             <p className="text-[12px] font-medium text-slate-700">{form.faturamento_nome || 'Área de carregamento'}</p>
-            <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB</p>
+            <p className="text-[11px] text-slate-400">PDF, PNG, JPG ou Excel • máx. 6 MB</p>
           </div>
           {form.faturamento_nome && (
             <button onClick={e => { e.stopPropagation(); set('faturamento_b64', null); set('faturamento_nome', null) }}
               className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
           )}
         </div>
-        <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e, 'faturamento')} />
+        <input ref={fatRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls" className="hidden" onChange={e => handleFile(e, 'faturamento')} />
       </F>
 
       {/* VALOR DO DESCONTO */}
