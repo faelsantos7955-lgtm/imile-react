@@ -32,6 +32,7 @@ from api.routes.not_arrived_upload import router as not_arrived_upload_router
 from api.routes.na import router as na_router
 from api.routes.na_upload import router as na_upload_router
 from api.routes.avisos import router as avisos_router
+from api.routes.whatsapp import router as whatsapp_router
 
 async def _neon_keepalive():
     """Pinga o banco a cada 4 min para o Neon não suspender."""
@@ -96,6 +97,7 @@ app.include_router(extravios_upload_router,     prefix="/api/extravios",     tag
 app.include_router(notracking_router,           prefix="/api/notracking",    tags=["No Tracking"])
 app.include_router(notracking_upload_router,    prefix="/api/notracking",    tags=["No Tracking"])
 app.include_router(avisos_router,               prefix="/api/avisos",         tags=["Avisos"])
+app.include_router(whatsapp_router,             prefix="/api/whatsapp",       tags=["WhatsApp"])
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
