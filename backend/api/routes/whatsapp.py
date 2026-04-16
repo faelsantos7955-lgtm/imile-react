@@ -236,7 +236,7 @@ async def criar_campanha(
     db: Session = Depends(get_db),
 ):
     _ensure_schema(db)
-    buf = await validar_arquivo(file, max_mb=20)
+    buf = await validar_arquivo(file)
     contatos = _parse_planilha(buf)
     if not contatos:
         raise HTTPException(400, "Nenhum contato válido encontrado na planilha.")
