@@ -186,7 +186,7 @@ function BaseDados() {
 
   const mutArq = useMutation({
     mutationFn: ({ id, tipo }) => api.get(`/api/contestacoes/${id}/arquivo/${tipo}`).then(r => r.data),
-    onSuccess: ({ b64, nome }) => downloadB64(b64, nome),
+    onSuccess: ({ files }) => files.forEach(f => downloadB64(f.b64, f.nome)),
   })
 
   const linhas = data.filter(r => {
@@ -380,8 +380,7 @@ const EMPTY_FORM = {
   previsao: addDays(_today, 3),
   faturamento_b64: null,
   faturamento_nome: null,
-  evidencia_b64: null,
-  evidencia_nome: null,
+  evidencias: [],
 }
 
 function NovoRegistro({ onSaved }) {
@@ -408,6 +407,28 @@ function NovoRegistro({ onSaved }) {
     setErrors(er => ({ ...er, [campo]: null }))
   }
 
+  const handleEvidencias = async (e) => {
+    const files = Array.from(e.target.files)
+    const MAX = 6_000_000
+    const novos = []
+    for (const file of files) {
+      if (file.size > MAX) {
+        setErrors(er => ({ ...er, evidencia: `${file.name} excede 6 MB` }))
+        continue
+      }
+      const b64 = await fileToB64(file)
+      novos.push({ b64, nome: file.name })
+    }
+    if (novos.length) {
+      setForm(f => ({ ...f, evidencias: [...f.evidencias, ...novos] }))
+      setErrors(er => ({ ...er, evidencia: null }))
+    }
+    e.target.value = ''
+  }
+
+  const removerEvidencia = (idx) =>
+    setForm(f => ({ ...f, evidencias: f.evidencias.filter((_, i) => i !== idx) }))
+
   const mut = useMutation({
     mutationFn: (payload) => api.post('/api/contestacoes', payload),
     onSuccess: () => {
@@ -423,10 +444,10 @@ function NovoRegistro({ onSaved }) {
     if (!form.ds.trim())          e.ds = 'Obrigatório'
     if (!form.waybill.trim())     e.waybill = 'Obrigatório'
     if (!form.motivo_desconto)    e.motivo_desconto = 'Obrigatório'
-    if (!form.faturamento_b64)    e.faturamento = 'Obrigatório'
-    if (!form.valor_desconto)     e.valor_desconto = 'Obrigatório'
-    if (!form.observacao?.trim()) e.observacao = 'Obrigatório'
-    if (!form.evidencia_b64)      e.evidencia = 'Obrigatório'
+    if (!form.faturamento_b64)        e.faturamento = 'Obrigatório'
+    if (!form.valor_desconto)         e.valor_desconto = 'Obrigatório'
+    if (!form.observacao?.trim())     e.observacao = 'Obrigatório'
+    if (!form.evidencias.length)      e.evidencia = 'Anexe pelo menos uma evidência'
     return e
   }
 
@@ -437,6 +458,7 @@ function NovoRegistro({ onSaved }) {
       ...form,
       valor_desconto: form.valor_desconto ? parseFloat(form.valor_desconto) : null,
       previsao: form.previsao || null,
+      evidencias: form.evidencias,
     })
   }
 
@@ -522,19 +544,29 @@ function NovoRegistro({ onSaved }) {
             <div
               onClick={() => evRef.current.click()}
               className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors
-                ${errors.evidencia ? 'border-red-300 bg-red-50' : form.evidencia_nome ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
+                ${errors.evidencia ? 'border-red-300 bg-red-50' : form.evidencias.length ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
             >
-              <Image size={20} className={form.evidencia_nome ? 'text-emerald-500' : 'text-slate-400'} />
+              <Image size={20} className={form.evidencias.length ? 'text-emerald-500' : 'text-slate-400'} />
               <span className="text-[12px] text-slate-600 text-center">
-                {form.evidencia_nome || 'Área de carregamento'}
+                {form.evidencias.length ? `${form.evidencias.length} arquivo(s) anexado(s) — clique para adicionar mais` : 'Área de carregamento'}
               </span>
-              {form.evidencia_nome && (
-                <button onClick={e => { e.stopPropagation(); set('evidencia_b64', null); set('evidencia_nome', null) }}
-                  className="text-[10px] text-red-500 hover:text-red-700">Remover</button>
-              )}
+              <span className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB cada</span>
             </div>
-            <input ref={evRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
-              onChange={e => handleFile(e, 'evidencia')} />
+            {form.evidencias.length > 0 && (
+              <ul className="mt-2 flex flex-col gap-1">
+                {form.evidencias.map((ev, i) => (
+                  <li key={i} className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-lg border border-slate-200 text-[11px]">
+                    <Image size={12} className="text-slate-400 shrink-0" />
+                    <span className="flex-1 truncate text-slate-700">{ev.nome}</span>
+                    <button onClick={() => removerEvidencia(i)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <input ref={evRef} type="file" accept=".pdf,.png,.jpg,.jpeg" multiple className="hidden"
+              onChange={handleEvidencias} />
           </F>
         </div>
 

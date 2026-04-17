@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Any
 from datetime import date
+import json
 
 from api.deps import get_db, get_current_user, require_admin
 
@@ -28,6 +29,9 @@ class ContestacaoCreate(BaseModel):
     faturamento_nome: Optional[str] = None
     valor_desconto: Optional[float] = None
     observacao: Optional[str] = ""
+    # Múltiplas evidências — lista de {b64, nome}
+    evidencias: Optional[List[Any]] = None
+    # Campos legados (compatibilidade com registros antigos)
     evidencia_b64: Optional[str] = None
     evidencia_nome: Optional[str] = None
     previsao: Optional[date] = None
@@ -73,8 +77,19 @@ def criar(body: ContestacaoCreate, db: Session = Depends(get_db)):
         raise HTTPException(400, f"Motivo inválido. Opções: {', '.join(MOTIVOS)}")
     if body.faturamento_b64 and len(body.faturamento_b64) > MAX_B64_LEN:
         raise HTTPException(400, "Faturamento excede o limite de 6 MB")
-    if body.evidencia_b64 and len(body.evidencia_b64) > MAX_B64_LEN:
-        raise HTTPException(400, "Evidência excede o limite de 6 MB")
+
+    # Resolve evidências (múltiplas ou legado)
+    if body.evidencias:
+        total = sum(len(e.get("b64", "")) for e in body.evidencias)
+        if total > MAX_B64_LEN * 10:
+            raise HTTPException(400, "Evidências excedem o limite total de 60 MB")
+        ev_b64  = json.dumps([{"b64": e["b64"], "nome": e["nome"]} for e in body.evidencias])
+        ev_nome = ", ".join(e["nome"] for e in body.evidencias)
+    else:
+        if body.evidencia_b64 and len(body.evidencia_b64) > MAX_B64_LEN:
+            raise HTTPException(400, "Evidência excede o limite de 6 MB")
+        ev_b64  = body.evidencia_b64
+        ev_nome = body.evidencia_nome
 
     db.execute(text("""
         INSERT INTO contestacoes (
@@ -96,8 +111,8 @@ def criar(body: ContestacaoCreate, db: Session = Depends(get_db)):
         "faturamento_nome": body.faturamento_nome,
         "valor_desconto":   body.valor_desconto,
         "observacao":       body.observacao or "",
-        "evidencia_b64":    body.evidencia_b64,
-        "evidencia_nome":   body.evidencia_nome,
+        "evidencia_b64":    ev_b64,
+        "evidencia_nome":   ev_nome,
         "previsao":         body.previsao,
     })
     db.commit()
@@ -147,7 +162,16 @@ def baixar_arquivo(
     if not row or not row[f"{tipo}_b64"]:
         raise HTTPException(404, "Arquivo não encontrado")
 
-    return {"b64": row[f"{tipo}_b64"], "nome": row[f"{tipo}_nome"]}
+    raw = row[f"{tipo}_b64"]
+    # Detecta formato múltiplo (JSON array de {b64, nome})
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return {"files": parsed}
+    except Exception:
+        pass
+    # Formato legado — arquivo único
+    return {"files": [{"b64": raw, "nome": row[f"{tipo}_nome"]}]}
 
 
 # ── Deletar (admin only) ──────────────────────────────────────

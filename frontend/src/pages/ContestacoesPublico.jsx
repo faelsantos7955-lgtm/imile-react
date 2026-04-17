@@ -8,7 +8,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import axios from 'axios'
 import {
   Search, Plus, Loader2, FileText, Image,
-  AlertCircle, CheckCircle2, ScanSearch, ClipboardList,
+  AlertCircle, CheckCircle2, ScanSearch, ClipboardList, X,
 } from 'lucide-react'
 
 // ── API sem autenticação ──────────────────────────────────────
@@ -164,7 +164,7 @@ const EMPTY = {
   quem_solicitou: '', ds: '', waybill: '',
   motivo_desconto: '', valor_desconto: '', observacao: '', previsao: '',
   faturamento_b64: null, faturamento_nome: null,
-  evidencia_b64: null, evidencia_nome: null,
+  evidencias: [],
 }
 
 function Formulario() {
@@ -187,6 +187,25 @@ function Formulario() {
     setErrors(er => ({ ...er, [campo]: null }))
   }
 
+  const handleEvidencias = async (e) => {
+    const files = Array.from(e.target.files)
+    const MAX = 6_000_000
+    const novos = []
+    for (const file of files) {
+      if (file.size > MAX) { setErrors(er => ({ ...er, evidencia: `${file.name} excede 6 MB` })); continue }
+      const b64 = await fileToB64(file)
+      novos.push({ b64, nome: file.name })
+    }
+    if (novos.length) {
+      setForm(f => ({ ...f, evidencias: [...f.evidencias, ...novos] }))
+      setErrors(er => ({ ...er, evidencia: null }))
+    }
+    e.target.value = ''
+  }
+
+  const removerEvidencia = (idx) =>
+    setForm(f => ({ ...f, evidencias: f.evidencias.filter((_, i) => i !== idx) }))
+
   const mut = useMutation({
     mutationFn: (payload) => pub.post('/api/contestacoes', payload),
     onSuccess: () => setForm(EMPTY),
@@ -198,17 +217,17 @@ function Formulario() {
     if (!form.ds.trim())             e.ds = 'Obrigatório'
     if (!form.waybill.trim())        e.waybill = 'Obrigatório'
     if (!form.motivo_desconto)       e.motivo_desconto = 'Obrigatório'
-    if (!form.faturamento_b64)       e.faturamento = 'Obrigatório'
-    if (!form.valor_desconto)        e.valor_desconto = 'Obrigatório'
-    if (!form.observacao?.trim())    e.observacao = 'Obrigatório'
-    if (!form.evidencia_b64)         e.evidencia = 'Obrigatório'
+    if (!form.faturamento_b64)        e.faturamento = 'Obrigatório'
+    if (!form.valor_desconto)         e.valor_desconto = 'Obrigatório'
+    if (!form.observacao?.trim())     e.observacao = 'Obrigatório'
+    if (!form.evidencias.length)      e.evidencia = 'Anexe pelo menos uma evidência'
     return e
   }
 
   const submit = () => {
     const e = validate()
     if (Object.keys(e).length) { setErrors(e); return }
-    mut.mutate({ ...form, valor_desconto: form.valor_desconto ? parseFloat(form.valor_desconto) : null, previsao: null })
+    mut.mutate({ ...form, valor_desconto: form.valor_desconto ? parseFloat(form.valor_desconto) : null, previsao: null, evidencias: form.evidencias })
   }
 
 
@@ -303,19 +322,30 @@ function Formulario() {
         <div
           onClick={() => evRef.current.click()}
           className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors
-            ${errors.evidencia ? 'border-red-300 bg-red-50' : form.evidencia_nome ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
+            ${errors.evidencia ? 'border-red-300 bg-red-50' : form.evidencias.length ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50'}`}
         >
-          <Image size={24} className={form.evidencia_nome ? 'text-emerald-500' : 'text-slate-400'} />
+          <Image size={24} className={form.evidencias.length ? 'text-emerald-500' : 'text-slate-400'} />
           <div className="text-center">
-            <p className="text-[12px] font-medium text-slate-700">{form.evidencia_nome || 'Área de carregamento'}</p>
-            <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB</p>
+            <p className="text-[12px] font-medium text-slate-700">
+              {form.evidencias.length ? `${form.evidencias.length} arquivo(s) — clique para adicionar mais` : 'Área de carregamento'}
+            </p>
+            <p className="text-[11px] text-slate-400">PDF, PNG ou JPG • máx. 6 MB cada</p>
           </div>
-          {form.evidencia_nome && (
-            <button onClick={e => { e.stopPropagation(); set('evidencia_b64', null); set('evidencia_nome', null) }}
-              className="text-[11px] text-red-500 hover:text-red-700 font-medium">Remover</button>
-          )}
         </div>
-        <input ref={evRef} type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden" onChange={e => handleFile(e, 'evidencia')} />
+        {form.evidencias.length > 0 && (
+          <ul className="mt-2 flex flex-col gap-1">
+            {form.evidencias.map((ev, i) => (
+              <li key={i} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-[12px]">
+                <Image size={13} className="text-slate-400 shrink-0" />
+                <span className="flex-1 truncate text-slate-700">{ev.nome}</span>
+                <button onClick={() => removerEvidencia(i)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                  <X size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <input ref={evRef} type="file" accept=".pdf,.png,.jpg,.jpeg" multiple className="hidden" onChange={handleEvidencias} />
       </F>
 
       {mut.isError && (
