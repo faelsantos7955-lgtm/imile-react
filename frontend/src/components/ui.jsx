@@ -1,7 +1,7 @@
 /**
  * components/ui.jsx — Design System iMile · Clean & Premium
  */
-import { useState as _useState } from 'react'
+import { useState as _useState, useState, useEffect, useRef } from 'react'
 import { toast as _sonner } from 'sonner'
 import clsx from 'clsx'
 
@@ -14,44 +14,104 @@ export const toast = {
   promise: (p, opts) => _sonner.promise(p, opts),
 }
 
-// ── KPI Card ──────────────────────────────────────────────────
-const KPI_ACCENT = {
-  blue:   { dot: 'bg-imile-500',    num: 'text-slate-900' },
-  orange: { dot: 'bg-orange-500',   num: 'text-slate-900' },
-  green:  { dot: 'bg-emerald-500',  num: 'text-slate-900' },
-  red:    { dot: 'bg-red-500',      num: 'text-slate-900' },
-  violet: { dot: 'bg-violet-500',   num: 'text-slate-900' },
-  slate:  { dot: 'bg-slate-400',    num: 'text-slate-900' },
+// ── Counter hook ──────────────────────────────────────────────
+function useCounter(target, duration = 900) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (typeof target !== 'number' || isNaN(target)) { setCount(target ?? 0); return }
+    const start = performance.now()
+    let raf
+    const tick = (now) => {
+      const p = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setCount(Math.round(target * eased))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return count
 }
 
-export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend }) {
+// ── KPI Card ──────────────────────────────────────────────────
+const KPI_ACCENT = {
+  blue:   { dot: 'bg-imile-500',   bar: '#0032A0' },
+  green:  { dot: 'bg-emerald-500', bar: '#10b981' },
+  red:    { dot: 'bg-red-500',     bar: '#ef4444' },
+  violet: { dot: 'bg-violet-500',  bar: '#8b5cf6' },
+  slate:  { dot: 'bg-slate-400',   bar: '#94a3b8' },
+}
+
+export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, index = 0 }) {
   const ac = KPI_ACCENT[color] || KPI_ACCENT.blue
+  const ref = useRef(null)
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const [hovering, setHovering] = useState(false)
+  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 })
+
+  // Counter: if value is a number, animate it
+  const isNum = typeof value === 'number'
+  const counted = useCounter(isNum ? value : null, 900)
+  const display = isNum ? counted.toLocaleString('pt-BR') : value
+
+  const onMove = (e) => {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    const nx = (e.clientX - r.left) / r.width
+    const ny = (e.clientY - r.top) / r.height
+    setMousePos({ x: nx, y: ny })
+    setTilt({ x: (ny - 0.5) * -14, y: (nx - 0.5) * 14 })
+  }
+  const onLeave = () => { setTilt({ x: 0, y: 0 }); setHovering(false) }
+
   return (
-    <div className={clsx(
-      'group bg-white rounded-xl border border-slate-100 p-5',
-      'hover:border-slate-200 hover:shadow-card-hover transition-all duration-200 animate-in cursor-default'
-    )}>
-      <div className="flex items-start justify-between mb-3">
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={onLeave}
+      className="stagger relative bg-white rounded-xl p-5 cursor-default overflow-hidden"
+      style={{
+        border: hovering ? '1px solid rgba(0,50,160,.18)' : '1px solid #f1f5f9',
+        transform: `perspective(700px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateY(${hovering ? -4 : 0}px)`,
+        transition: hovering
+          ? 'transform .08s ease-out, box-shadow .2s, border-color .2s'
+          : 'transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .3s, border-color .2s',
+        boxShadow: hovering
+          ? '0 20px 48px -14px rgba(0,50,160,.22), 0 4px 16px -4px rgba(0,0,0,.08)'
+          : '0 1px 3px rgba(0,0,0,.05)',
+        animationDelay: `${index * 90}ms`,
+        willChange: 'transform',
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      {/* Shine spotlight seguindo o mouse */}
+      <div className="absolute inset-0 rounded-xl pointer-events-none transition-opacity duration-300"
+        style={{
+          opacity: hovering ? 1 : 0,
+          background: `radial-gradient(circle at ${mousePos.x * 100}% ${mousePos.y * 100}%, rgba(255,255,255,.18) 0%, transparent 65%)`,
+        }} />
+
+      {/* Accent bar no topo */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] rounded-t-xl transition-opacity duration-300"
+        style={{ background: ac.bar, opacity: hovering ? 1 : 0 }} />
+
+      <div className="flex items-start justify-between mb-3 relative">
         <div className="flex items-center gap-2">
           <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', ac.dot)} />
           <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 leading-none">
             {label}
           </p>
         </div>
-        {Icon && (
-          <Icon
-            size={15}
-            className="text-slate-300 group-hover:text-slate-400 transition-colors shrink-0"
-          />
-        )}
+        {Icon && <Icon size={15} className="text-slate-300 group-hover:text-slate-400 transition-colors shrink-0" />}
       </div>
 
-      <p className={clsx('text-[1.75rem] font-bold font-mono leading-none tracking-tight', ac.num)}>
-        {value}
+      <p className="text-[1.75rem] font-bold font-mono leading-none tracking-tight text-slate-900 relative">
+        {display}
       </p>
 
       {(sub || trend !== undefined) && (
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-2 relative">
           {sub && <p className="text-[11px] text-slate-400">{sub}</p>}
           {trend !== undefined && (
             <span className={clsx(
@@ -63,6 +123,32 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend }
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Particle Field ────────────────────────────────────────────
+export function ParticleField({ count = 22, className = '' }) {
+  const particles = Array.from({ length: count }, (_, i) => ({
+    left:  `${(i * 4.7 + Math.sin(i * 1.3) * 30 + 50) % 100}%`,
+    top:   `${(i * 7.1 + Math.cos(i * 0.9) * 20 + 50) % 100}%`,
+    size:  1.5 + (i % 3) * 1.2,
+    dur:   `${8 + (i % 7) * 2.5}s`,
+    delay: `${-(i * 1.3)}s`,
+    op:    0.15 + (i % 4) * 0.08,
+  }))
+  return (
+    <div className={clsx('absolute inset-0 overflow-hidden pointer-events-none', className)}>
+      {particles.map((p, i) => (
+        <span key={i} className="particle-dot absolute rounded-full"
+          style={{
+            left: p.left, top: p.top,
+            width: p.size, height: p.size,
+            background: `rgba(0,50,160,${p.op})`,
+            animationDuration: p.dur,
+            animationDelay: p.delay,
+          }} />
+      ))}
     </div>
   )
 }

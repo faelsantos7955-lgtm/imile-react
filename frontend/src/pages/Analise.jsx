@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, RankingRow, Alert, Skeleton, toast } from '../components/ui'
+import { PageHeader, KpiCard, ParticleField, SectionHeader, Card, RankingRow, Alert, Skeleton, toast } from '../components/ui'
 import Heatmap from '../components/Heatmap'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -349,6 +349,54 @@ function FilterBar({
   )
 }
 
+// ── Chart tooltip customizado ──────────────────────────────────────────
+function ChartTooltip({ active, payload, label, formatter }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{
+      background: 'rgba(10,16,40,.92)', backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,.1)', borderRadius: 10,
+      padding: '10px 14px', fontSize: 12, color: 'white',
+      boxShadow: '0 8px 32px rgba(0,0,0,.3)',
+    }}>
+      <p style={{ color: 'rgba(255,255,255,.5)', fontSize: 10, marginBottom: 6, fontFamily: 'monospace', letterSpacing: '.04em' }}>{label}</p>
+      {payload.map((p, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: i < payload.length-1 ? 4 : 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color || p.fill, flexShrink: 0 }} />
+          <span style={{ color: 'rgba(255,255,255,.65)', flex: 1 }}>{p.name}</span>
+          <span style={{ fontWeight: 700, fontFamily: 'monospace', color: 'white' }}>
+            {formatter ? formatter(p.value, p.name) : p.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Gradientes SVG para gráficos ───────────────────────────────────────
+function ChartGradients() {
+  return (
+    <defs>
+      <linearGradient id="grad-rec" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stopColor="#3b82f6" stopOpacity={0.9}/>
+        <stop offset="100%" stopColor="#0032A0" stopOpacity={0.5}/>
+      </linearGradient>
+      <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stopColor="#1048c8" stopOpacity={0.9}/>
+        <stop offset="100%" stopColor="#151741" stopOpacity={0.5}/>
+      </linearGradient>
+      <linearGradient id="grad-ent" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stopColor="#34d399" stopOpacity={0.9}/>
+        <stop offset="100%" stopColor="#059669" stopOpacity={0.4}/>
+      </linearGradient>
+      <linearGradient id="grad-area" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stopColor="#10b981" stopOpacity={0.25}/>
+        <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
+      </linearGradient>
+    </defs>
+  )
+}
+
 // ── Hero 3D ────────────────────────────────────────────────────────────
 function Hero3D({ kpis, nBases }) {
   const F = n => n?.toLocaleString('pt-BR') ?? '—'
@@ -677,7 +725,10 @@ export default function Analise() {
   }
 
   return (
-    <div>
+    <div className="relative">
+      {/* Partículas flutuantes de fundo */}
+      <ParticleField count={28} className="fixed inset-0 z-0" />
+
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
@@ -768,11 +819,11 @@ export default function Analise() {
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
-            <KpiCard label="Recebido"  value={F(dFiltrado.kpis.recebido)}  sub="waybills no dia" color="blue" />
-            <KpiCard label="Em Rota"   value={F(dFiltrado.kpis.expedido)}  sub={`taxa ${P(dFiltrado.kpis.taxa_exp)}`} color="blue" />
-            <KpiCard label="Entregas"  value={F(dFiltrado.kpis.entregas)}  sub={dFiltrado.kpis.entregas ? `taxa ${P(dFiltrado.kpis.taxa_ent)}` : 'sem dados'} color="blue" />
-            <KpiCard label="DS na Meta"  value={dFiltrado.kpis.n_ok}      sub={`de ${dFiltrado.kpis.n_ds} bases`} color="green" />
-            <KpiCard label="DS Abaixo"   value={dFiltrado.kpis.n_abaixo}  sub="precisam atenção" color="red" />
+            <KpiCard index={0} label="Recebido"   value={dFiltrado.kpis.recebido}  sub="waybills no dia" color="blue" />
+            <KpiCard index={1} label="Em Rota"    value={dFiltrado.kpis.expedido}  sub={`taxa ${P(dFiltrado.kpis.taxa_exp)}`} color="blue" />
+            <KpiCard index={2} label="Entregas"   value={dFiltrado.kpis.entregas}  sub={dFiltrado.kpis.entregas ? `taxa ${P(dFiltrado.kpis.taxa_ent)}` : 'sem dados'} color="blue" />
+            <KpiCard index={3} label="DS na Meta" value={dFiltrado.kpis.n_ok}      sub={`de ${dFiltrado.kpis.n_ds} bases`} color="green" />
+            <KpiCard index={4} label="DS Abaixo"  value={dFiltrado.kpis.n_abaixo}  sub="precisam atenção" color="red" />
           </div>
 
           {ontem?.recebido > 0 && (
@@ -892,15 +943,19 @@ export default function Analise() {
               <Card>
                 <ResponsiveContainer width="100%" height={380}>
                   <ComposedChart data={chartData} margin={{ bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey={xKey} tick={{ fontSize: 11 }} angle={-30} textAnchor="end" tickFormatter={xFmt} />
-                    <YAxis yAxisId="vol" tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                    <YAxis yAxisId="taxa" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1.1]} />
-                    <Tooltip formatter={(v, n) => n === 'Taxa Exp.' ? P(v) : F(v)} /><Legend />
-                    <Bar yAxisId="vol" dataKey="recebido" fill="#60a5fa" opacity={0.6} name="Recebido" radius={[3, 3, 0, 0]} />
-                    <Bar yAxisId="vol" dataKey="expedido" fill="#1048c8" opacity={0.6} name="Expedido" radius={[3, 3, 0, 0]} />
-                    <Line yAxisId="taxa" dataKey="taxa_exp" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} name="Taxa Exp."
-                      label={{ position: 'top', formatter: v => `${(v * 100).toFixed(0)}%`, fontSize: 10, fill: '#10b981' }} />
+                    <ChartGradients />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" tickFormatter={xFmt} />
+                    <YAxis yAxisId="vol" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                    <YAxis yAxisId="taxa" orientation="right" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1.1]} />
+                    <Tooltip content={<ChartTooltip formatter={(v, n) => n === 'Taxa Exp.' ? P(v) : F(v)} />} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: '#64748b' }} />
+                    <Bar yAxisId="vol" dataKey="recebido" fill="url(#grad-rec)" name="Recebido" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    <Bar yAxisId="vol" dataKey="expedido" fill="url(#grad-exp)" name="Expedido" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    <Line yAxisId="taxa" dataKey="taxa_exp" stroke="#10b981" strokeWidth={2.5}
+                      dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: 'white' }}
+                      activeDot={{ r: 6, fill: '#10b981', stroke: 'white', strokeWidth: 2 }}
+                      name="Taxa Exp." />
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>

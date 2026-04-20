@@ -72,6 +72,18 @@
 .orb-3 { animation: orb3 22s ease-in-out infinite; }
 .orb-4 { animation: orb4 40s ease-in-out infinite; }
 
+/* ── Particle field ──────────────────────────────────────────── */
+@keyframes particle-drift {
+  0%   { transform: translateY(0px)   translateX(0px)   scale(1);   opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(-120px) translateX(30px) scale(0.4); opacity: 0; }
+}
+.particle-dot { animation: particle-drift linear infinite; }
+
+/* ── Staggered entrance ──────────────────────────────────────── */
+.stagger { opacity: 0; animation: fadeUp 0.4s ease-out forwards; }
+
 /* ── Base typography ─────────────────────────────────────────── */
 html { scroll-behavior: smooth; }
 
