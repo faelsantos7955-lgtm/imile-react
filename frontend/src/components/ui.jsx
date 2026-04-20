@@ -341,3 +341,23 @@ export function EmptyState({ icon: Icon, title, description, action }) {
     </div>
   )
 }
+
+export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = 'Confirmar', danger = true }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4 animate-in">
+        <p className="text-sm text-slate-700 leading-relaxed mb-5">{message}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-xs rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+          >Cancelar</button>
+          <button
+            onClick={() => { onConfirm(); onCancel(); }}
+            className={`px-4 py-2 text-xs rounded-lg text-white transition-colors ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+          >{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  )
+}

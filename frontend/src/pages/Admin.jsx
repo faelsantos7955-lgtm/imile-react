@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import { PageHeader, Alert, Card, SectionHeader, toast } from '../components/ui'
+import { PageHeader, Alert, Card, SectionHeader, toast, ConfirmDialog } from '../components/ui'
 import {
   Upload, Users, Settings, CheckCircle, XCircle,
   ShieldOff, ShieldCheck, Loader,
@@ -358,6 +358,7 @@ function SolicitacoesPage() {
   const [aprovando, setAprovando]   = useState(false)
   const [rejeitando, setRejeitando] = useState({})
   const [reenviando, setReenviando] = useState({})
+  const [confirmDlg, setConfirmDlg] = useState(null)
 
   const { data: solicitacoes = [], isLoading: loadingSol } = useQuery({
     queryKey: ['solicitacoes'],
@@ -401,14 +402,18 @@ function SolicitacoesPage() {
     }
   }
 
-  const rejeitar = async (id) => {
-    if (!window.confirm('Rejeitar esta solicitação?')) return
-    setRejeitando(p => ({ ...p, [id]: true }))
-    try {
-      await api.post(`/api/admin/solicitacoes/${id}/rejeitar`)
-      qc.invalidateQueries({ queryKey: ['solicitacoes'] })
-    } catch { toast.erro('Erro ao processar.') }
-    finally { setRejeitando(p => { const n = { ...p }; delete n[id]; return n }) }
+  const rejeitar = (id) => {
+    setConfirmDlg({
+      message: 'Rejeitar esta solicitação?',
+      onConfirm: async () => {
+        setRejeitando(p => ({ ...p, [id]: true }))
+        try {
+          await api.post(`/api/admin/solicitacoes/${id}/rejeitar`)
+          qc.invalidateQueries({ queryKey: ['solicitacoes'] })
+        } catch { toast.erro('Erro ao processar.') }
+        finally { setRejeitando(p => { const n = { ...p }; delete n[id]; return n }) }
+      },
+    })
   }
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString('pt-BR') : '—'
@@ -554,6 +559,13 @@ function SolicitacoesPage() {
           usuario={drawerUser}
           onClose={() => setDrawerUser(null)}
           onSaved={() => qc.invalidateQueries({ queryKey: ['usuarios-admin'] })}
+        />
+      )}
+      {confirmDlg && (
+        <ConfirmDialog
+          message={confirmDlg.message}
+          onConfirm={confirmDlg.onConfirm}
+          onCancel={() => setConfirmDlg(null)}
         />
       )}
     </div>
@@ -779,7 +791,7 @@ function AuditLogPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600 font-mono">{r.alvo}</td>
-                      <td className="px-4 py-3 text-xs text-slate-700 truncate max-w-[180px]">{r.email}</td>
+                      <td className="px-4 py-3 text-xs text-slate-700 truncate max-w-[180px]" title={r.email}>{r.email}</td>
                       <td className="px-4 py-3 text-xs text-slate-500 max-w-[200px]">
                         {r.detalhe && Object.keys(r.detalhe).length > 0
                           ? Object.entries(r.detalhe).map(([k, v]) => (
@@ -833,6 +845,7 @@ function MetasPage() {
   const [novoEnt, setNovoEnt]  = useState('90')
   const [novoReg, setNovoReg]  = useState('')
   const [adicionando, setAdicionando] = useState(false)
+  const [confirmDlg, setConfirmDlg]   = useState(null)
 
   const mutation = useMutation({
     mutationFn: (rows) => api.put('/api/admin/metas', rows),
@@ -970,7 +983,7 @@ function MetasPage() {
                                 {mutation.isPending ? <Loader size={11} className="animate-spin" /> : <Save size={11} />} Salvar
                               </button>
                             )}
-                            <button onClick={() => { if (window.confirm(`Remover meta de ${m.ds}?`)) delMutation.mutate(m.ds) }}
+                            <button onClick={() => setConfirmDlg({ message: `Remover meta de ${m.ds}?`, onConfirm: () => delMutation.mutate(m.ds) })}
                               disabled={delMutation.isPending}
                               className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                               <Trash2 size={13} />
@@ -985,6 +998,13 @@ function MetasPage() {
             </div>
           </Card>
         </>
+      )}
+      {confirmDlg && (
+        <ConfirmDialog
+          message={confirmDlg.message}
+          onConfirm={confirmDlg.onConfirm}
+          onCancel={() => setConfirmDlg(null)}
+        />
       )}
     </div>
   )

@@ -11,7 +11,7 @@ import {
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
-  KpiCard, Card, SectionHeader, EmptyState, Alert, Badge, Button,
+  KpiCard, Card, SectionHeader, EmptyState, Alert, Badge, Button, toast,
 } from '../components/ui'
 import clsx from 'clsx'
 
@@ -605,7 +605,7 @@ export default function NotArrived() {
       a.download = `NotArrivedMov_${upload?.data_ref || 'relatorio'}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-    } catch { alert('Erro ao gerar Excel') }
+    } catch { toast.erro('Erro ao gerar Excel.') }
     finally { setBaixando(false) }
   }
 

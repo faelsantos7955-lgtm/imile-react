@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide, toast } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide, toast, ConfirmDialog } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
@@ -24,6 +24,7 @@ export default function Reclamacoes() {
   const [blocking, setBlocking]   = useState({})
   const [uploading, setUploading] = useState(false)
   const [erroUpload, setErroUpload] = useState('')
+  const [confirmDlg, setConfirmDlg] = useState(null)
   const inputRef = useRef()
 
   const { data: uploads = [] } = useQuery({
@@ -72,29 +73,38 @@ export default function Reclamacoes() {
     } finally { setUploading(false) }
   }
 
-  const handleDelete = async () => {
-    if (!sel || !window.confirm('Excluir este upload permanentemente?')) return
-    try {
-      await api.delete(`/api/reclamacoes/upload/${sel}`)
-      setSel(null)
-      queryClient.invalidateQueries({ queryKey: ['reclamacoes-uploads'] })
-      queryClient.invalidateQueries({ queryKey: ['reclamacoes-semanas'] })
-    } catch (e) { setErroUpload(e.response?.data?.detail || 'Erro ao excluir.') }
+  const handleDelete = () => {
+    if (!sel) return
+    setConfirmDlg({
+      message: 'Excluir este upload permanentemente?',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/api/reclamacoes/upload/${sel}`)
+          setSel(null)
+          queryClient.invalidateQueries({ queryKey: ['reclamacoes-uploads'] })
+          queryClient.invalidateQueries({ queryKey: ['reclamacoes-semanas'] })
+        } catch (e) { setErroUpload(e.response?.data?.detail || 'Erro ao excluir.') }
+      },
+    })
   }
 
-  const handleBloquear = async (motorista) => {
-    if (!window.confirm(`Bloquear "${motorista}" do ranking?\nEle será substituído pelo próximo da fila.`)) return
-    setBlocking(p => ({ ...p, [motorista]: true }))
-    try {
-      await api.post('/api/admin/motoristas', {
-        id_motorista:   motorista,
-        nome_motorista: motorista,
-        ativo:          false,
-        motivo:         'Bloqueado via painel de reclamações',
-      })
-      invalidateAll()
-    } catch { toast.erro('Erro ao bloquear motorista.') }
-    finally { setBlocking(p => { const n = { ...p }; delete n[motorista]; return n }) }
+  const handleBloquear = (motorista) => {
+    setConfirmDlg({
+      message: `Bloquear "${motorista}" do ranking? Ele será substituído pelo próximo da fila.`,
+      onConfirm: async () => {
+        setBlocking(p => ({ ...p, [motorista]: true }))
+        try {
+          await api.post('/api/admin/motoristas', {
+            id_motorista:   motorista,
+            nome_motorista: motorista,
+            ativo:          false,
+            motivo:         'Bloqueado via painel de reclamações',
+          })
+          invalidateAll()
+        } catch { toast.erro('Erro ao bloquear motorista.') }
+        finally { setBlocking(p => { const n = { ...p }; delete n[motorista]; return n }) }
+      },
+    })
   }
 
   const u = uploads.find(x => x.id === sel)
@@ -329,6 +339,13 @@ export default function Reclamacoes() {
             </>
           )}
         </>
+      )}
+      {confirmDlg && (
+        <ConfirmDialog
+          message={confirmDlg.message}
+          onConfirm={confirmDlg.onConfirm}
+          onCancel={() => setConfirmDlg(null)}
+        />
       )}
     </div>
   )

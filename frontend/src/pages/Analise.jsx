@@ -340,6 +340,9 @@ function FilterBar({
             )}
           </>
         )}
+        {!isHoje && (
+          <span className="text-[11px] text-slate-400 italic">Filtro por DS disponível apenas no modo Hoje</span>
+        )}
 
       </div>
     </div>

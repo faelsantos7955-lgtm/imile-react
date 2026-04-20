@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { useSearchParams } from 'react-router-dom'
+import { ConfirmDialog } from '../components/ui'
 import {
   Search, Plus, Download, Trash2, ChevronDown, Loader2,
   FileText, Image, AlertCircle, CheckCircle2, Clock, X,
@@ -166,6 +167,7 @@ function BaseDados() {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('Todos')
   const [editando, setEditando] = useState(null) // { id, obs, previsao }
+  const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm }
 
   const { data = [], isLoading } = useQuery({
     queryKey: ['contestacoes'],
@@ -265,7 +267,7 @@ function BaseDados() {
                       className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
                       title={r.faturamento_nome}
                     >
-                      <FileText size={13} /><span className="truncate max-w-[80px]">{r.faturamento_nome}</span>
+                      <FileText size={13} /><span className="truncate max-w-[120px]">{r.faturamento_nome}</span>
                     </button>
                   ) : <span className="text-slate-300">—</span>}
                 </td>
@@ -276,7 +278,7 @@ function BaseDados() {
                       className="flex items-center gap-1 text-violet-600 hover:text-violet-800 transition-colors"
                       title={r.evidencia_nome}
                     >
-                      <Image size={13} /><span className="truncate max-w-[80px]">{r.evidencia_nome}</span>
+                      <Image size={13} /><span className="truncate max-w-[120px]">{r.evidencia_nome}</span>
                     </button>
                   ) : <span className="text-slate-300">—</span>}
                 </td>
@@ -333,7 +335,7 @@ function BaseDados() {
                 <td className="px-3 py-2.5">
                   {isAdmin && (
                     <button
-                      onClick={() => window.confirm(`Excluir contestação ${r.waybill}?`) && mutDel.mutate(r.id)}
+                      onClick={() => setConfirmDlg({ message: `Excluir contestação ${r.waybill}?`, onConfirm: () => mutDel.mutate(r.id) })}
                       className="p-1 text-slate-300 hover:text-red-500 transition-colors"
                     >
                       <Trash2 size={13} />
@@ -345,6 +347,13 @@ function BaseDados() {
           </tbody>
         </table>
       </div>
+      {confirmDlg && (
+        <ConfirmDialog
+          message={confirmDlg.message}
+          onConfirm={confirmDlg.onConfirm}
+          onCancel={() => setConfirmDlg(null)}
+        />
+      )}
     </div>
   )
 }

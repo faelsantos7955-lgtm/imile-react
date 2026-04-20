@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import { PageHeader, Card, Alert, UploadGuide, toast, TableSkeleton } from '../components/ui'
+import { PageHeader, Card, Alert, UploadGuide, toast, TableSkeleton, ConfirmDialog } from '../components/ui'
 import { Upload, Download, Loader, RefreshCw, Trash2, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 import { useAuth } from '../lib/AuthContext'
@@ -119,6 +119,7 @@ export default function Backlog() {
   const [erro, setErro]               = useState('')
   const [showDetalhe, setShowDetalhe] = useState(true)
   const [clienteOffset, setClienteOffset] = useState(0)
+  const [confirmDlg, setConfirmDlg] = useState(null)
   const inputRef = useRef(null)
 
   const { data: uploads = [] } = useQuery({
@@ -159,14 +160,19 @@ export default function Backlog() {
     setClienteOffset(0)
   }
 
-  const handleDelete = async () => {
-    if (!uploadSel || !window.confirm('Excluir este upload permanentemente?')) return
-    try {
-      await api.delete(`/api/backlog/upload/${uploadSel}`)
-      setUploadSel(null)
-      setClienteSel('')
-      queryClient.invalidateQueries({ queryKey: ['backlog-uploads'] })
-    } catch (e) { setErro(e.response?.data?.detail || 'Erro ao excluir.') }
+  const handleDelete = () => {
+    if (!uploadSel) return
+    setConfirmDlg({
+      message: 'Excluir este upload permanentemente?',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/api/backlog/upload/${uploadSel}`)
+          setUploadSel(null)
+          setClienteSel('')
+          queryClient.invalidateQueries({ queryKey: ['backlog-uploads'] })
+        } catch (e) { setErro(e.response?.data?.detail || 'Erro ao excluir.') }
+      },
+    })
   }
 
   const handleFile = async (e) => {
@@ -461,6 +467,13 @@ export default function Backlog() {
         )}
 
       </>}
+      {confirmDlg && (
+        <ConfirmDialog
+          message={confirmDlg.message}
+          onConfirm={confirmDlg.onConfirm}
+          onCancel={() => setConfirmDlg(null)}
+        />
+      )}
     </div>
   )
 }
