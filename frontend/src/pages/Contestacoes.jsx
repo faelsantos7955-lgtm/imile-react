@@ -283,14 +283,15 @@ function BaseDados() {
                 <td className="px-3 py-2.5">
                   <StatusSelect id={r.id} current={r.status_analise} />
                 </td>
-                <td className="px-3 py-2.5 max-w-[160px]">
+                <td className="px-3 py-2.5 max-w-[220px]">
                   {editando?.id === r.id ? (
                     <div className="flex flex-col gap-1">
-                      <input
+                      <textarea
                         value={editando.obs}
                         onChange={e => setEditando(v => ({ ...v, obs: e.target.value }))}
-                        className="border border-slate-200 rounded px-2 py-1 text-[11px] w-full"
+                        className="border border-slate-200 rounded px-2 py-1 text-[11px] w-full resize-y"
                         placeholder="Observação..."
+                        rows={3}
                       />
                       <div className="flex gap-1">
                         <button
@@ -311,9 +312,9 @@ function BaseDados() {
                   ) : (
                     <button
                       onClick={() => setEditando({ id: r.id, obs: r.observacao || '', previsao: r.previsao || '' })}
-                      className="text-left text-slate-600 hover:text-slate-900 transition-colors group flex items-start gap-1"
+                      className="text-left text-slate-600 hover:text-slate-900 transition-colors group flex items-start gap-1 w-full"
                     >
-                      <span className="flex-1 truncate">{r.observacao || <span className="text-slate-300 italic">editar...</span>}</span>
+                      <span className="flex-1 whitespace-pre-wrap break-words text-[11px]">{r.observacao || <span className="text-slate-300 italic">editar...</span>}</span>
                     </button>
                   )}
                 </td>
