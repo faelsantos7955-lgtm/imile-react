@@ -109,8 +109,8 @@ function HeroBanner() {
           'M180,220 Q350,155 520,160',
           'M960,120 Q1010,170 1050,215',
         ].map((d, i) => (
-          <path key={i} d={d} stroke="#fff303" strokeWidth="1" strokeDasharray="6 8"
-            fill="none" strokeOpacity="0.18" className="route-flow"
+          <path key={i} d={d} stroke="rgba(255,255,255,0.5)" strokeWidth="1" strokeDasharray="6 8"
+            fill="none" strokeOpacity="0.35" className="route-flow"
             style={{ animationDelay: `${i * 0.7}s` }} />
         ))}
 
@@ -120,9 +120,9 @@ function HeroBanner() {
           { cx: 960,  cy: 120 }, { cx: 1160,cy: 150 }, { cx: 1050,cy: 215 },
         ].map((n, i) => (
           <g key={i}>
-            <circle cx={n.cx} cy={n.cy} r="4" fill="#fff303" fillOpacity="0.7" />
-            <circle cx={n.cx} cy={n.cy} r="10" fill="none" stroke="#fff303"
-              strokeWidth="0.8" strokeOpacity="0.25" className="signal-blink"
+            <circle cx={n.cx} cy={n.cy} r="4" fill="rgba(255,255,255,0.75)" />
+            <circle cx={n.cx} cy={n.cy} r="10" fill="none" stroke="rgba(255,255,255,0.3)"
+              strokeWidth="0.8" strokeOpacity="0.5" className="signal-blink"
               style={{ animationDelay: `${i * 0.4}s` }} />
           </g>
         ))}
@@ -130,7 +130,7 @@ function HeroBanner() {
 
       {/* Scanline */}
       <div className="absolute left-0 right-0 h-px pointer-events-none scanline"
-        style={{ background: 'linear-gradient(to right, transparent 5%, rgba(255,243,3,0.25) 50%, transparent 95%)' }} />
+        style={{ background: 'linear-gradient(to right, transparent 5%, rgba(255,255,255,0.18) 50%, transparent 95%)' }} />
 
       {/* Caminhão */}
       <div className="absolute overflow-hidden pointer-events-none" style={{ bottom: 8, left: 0, right: 0, height: 80 }}>
@@ -145,8 +145,8 @@ function HeroBanner() {
             {/* Faixa azul principal */}
             <rect x="2" y="44" width="148" height="12" rx="0" fill="#0032A0"/>
             <rect x="2" y="44" width="148" height="12" rx="3" fill="#0032A0"/>
-            {/* Faixa fina amarela sobre o azul */}
-            <rect x="2" y="42" width="148" height="3" fill="#fff303" fillOpacity="0.85"/>
+            {/* Faixa fina branca sobre o azul */}
+            <rect x="2" y="42" width="148" height="3" fill="white" fillOpacity="0.55"/>
             {/* Texto iMile no trailer */}
             <text x="46" y="40" fontFamily="Arial, sans-serif" fontSize="9" fontWeight="bold"
               fill="#0032A0" fillOpacity="0.7" letterSpacing="3">iMile</text>
@@ -189,11 +189,11 @@ function HeroBanner() {
             ))}
             {/* Para-choque — branco */}
             <rect x="247" y="47" width="8" height="9" rx="2" fill="white" fillOpacity="0.85" stroke="#0032A0" strokeWidth="0.6"/>
-            {/* Farol — amarelo */}
-            <rect x="251" y="19" width="6" height="9" rx="2" fill="#fff303" fillOpacity="0.95"/>
-            <rect x="251" y="30" width="5" height="4" rx="1" fill="#fff303" fillOpacity="0.5"/>
+            {/* Farol — branco */}
+            <rect x="251" y="19" width="6" height="9" rx="2" fill="white" fillOpacity="0.95"/>
+            <rect x="251" y="30" width="5" height="4" rx="1" fill="white" fillOpacity="0.4"/>
             {/* Feixe */}
-            <path d="M257 21 L263 17 L263 31 L257 28 Z" fill="#fff303" fillOpacity="0.08"/>
+            <path d="M257 21 L263 17 L263 31 L257 28 Z" fill="white" fillOpacity="0.06"/>
             {/* Chaminé */}
             <rect x="161" y="1" width="5" height="10" rx="2" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.2"/>
             {/* Faixa branca lateral no cab */}
@@ -258,9 +258,9 @@ function HeroBanner() {
           <div className="w-px h-9 shrink-0" style={{ background: 'rgba(255,255,255,0.12)' }} />
 
           <div>
-            {/* Tag amarela */}
+            {/* Tag */}
             <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
-              style={{ background: 'rgba(255,243,3,0.12)', border: '1px solid rgba(255,243,3,0.25)', color: '#fff303' }}>
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,.85)' }}>
               PORTAL OPERACIONAL
             </div>
             <h1 className="text-white font-bold text-[22px] leading-tight">

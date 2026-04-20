@@ -467,99 +467,78 @@ function Hero3D({ kpis, nBases }) {
         </div>
       </div>
 
-      {/* Globo 3D */}
-      <div className="relative shrink-0 hidden lg:block" style={{ width: 260, height: 260 }}>
-        <svg width="260" height="260" viewBox="0 0 260 260" overflow="visible">
+      {/* Mapa Brasil — cena de rotas */}
+      <div className="relative shrink-0 hidden lg:block" style={{ width: 340, height: 260 }}>
+        <svg className="w-full h-full overflow-visible" viewBox="0 0 340 260">
           <defs>
-            {/* Volume da esfera — escura nas bordas, clara no centro */}
-            <radialGradient id="sg" cx="36%" cy="30%" r="68%">
-              <stop offset="0%"   stopColor="#5a90e0" stopOpacity=".95"/>
-              <stop offset="45%"  stopColor="#1a4a9a" stopOpacity=".92"/>
-              <stop offset="100%" stopColor="#040c1e" stopOpacity=".98"/>
-            </radialGradient>
-            {/* Highlight especular */}
-            <radialGradient id="sh" cx="33%" cy="26%" r="42%">
-              <stop offset="0%"   stopColor="white" stopOpacity=".38"/>
-              <stop offset="100%" stopColor="white" stopOpacity="0"/>
-            </radialGradient>
-            {/* Rim light azul */}
-            <radialGradient id="sr" cx="68%" cy="68%" r="52%">
-              <stop offset="55%"  stopColor="transparent"/>
-              <stop offset="100%" stopColor="#60a5fa" stopOpacity=".45"/>
-            </radialGradient>
-            {/* Clip sphere */}
-            <clipPath id="gc">
-              <circle cx="130" cy="130" r="108"/>
-            </clipPath>
+            <filter id="br-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
           </defs>
 
-          {/* Anel de brilho externo */}
-          <circle cx="130" cy="130" r="120" fill="none" stroke="#1048c8" strokeWidth="16" strokeOpacity=".06"/>
-          <circle cx="130" cy="130" r="114" fill="none" stroke="#3b82f6" strokeWidth="7"  strokeOpacity=".10"/>
+          {/* Brazil outline */}
+          <path fill="rgba(147,197,253,.10)" stroke="rgba(147,197,253,.32)" strokeWidth=".8"
+            d="M 180 20 L 215 25 L 245 35 L 270 55 L 285 80 L 295 105 L 300 130 L 295 155 L 285 175 L 270 195 L 250 215 L 225 230 L 200 240 L 175 245 L 150 240 L 128 230 L 110 215 L 95 200 L 82 180 L 72 160 L 62 138 L 55 115 L 50 95 L 48 75 L 52 60 L 62 48 L 78 40 L 95 35 L 115 30 L 140 25 L 165 20 Z"/>
+          {/* Norte */}
+          <path fill="rgba(147,197,253,.07)" stroke="rgba(147,197,253,.2)" strokeWidth=".6"
+            d="M 95 55 L 145 45 L 175 55 L 170 90 L 130 95 L 95 85 Z" opacity=".55"/>
+          {/* Nordeste */}
+          <path fill="rgba(59,130,246,.3)" stroke="rgba(147,197,253,.7)" strokeWidth=".8"
+            d="M 200 40 L 260 55 L 285 90 L 270 125 L 225 120 L 205 90 L 195 65 Z"/>
+          {/* Centro-Oeste */}
+          <path fill="rgba(147,197,253,.08)" stroke="rgba(147,197,253,.2)" strokeWidth=".6"
+            d="M 130 100 L 190 95 L 215 130 L 185 160 L 135 155 L 115 125 Z" opacity=".7"/>
+          {/* Sudeste — hub */}
+          <path fill="rgba(29,78,216,.5)" stroke="#93c5fd" strokeWidth="1.2"
+            d="M 190 135 L 240 130 L 260 160 L 240 185 L 200 180 L 180 160 Z"/>
+          {/* Sul */}
+          <path fill="rgba(59,130,246,.28)" stroke="rgba(147,197,253,.7)" strokeWidth=".8"
+            d="M 150 175 L 200 185 L 215 215 L 185 235 L 140 225 L 125 200 Z"/>
 
-          {/* Base da esfera */}
-          <circle cx="130" cy="130" r="108" fill="url(#sg)"/>
-
-          {/* Tudo clipado à esfera */}
-          <g clipPath="url(#gc)">
-
-            {/* Paralelos estáticos */}
-            {[[-65, .14], [-38, .22], [0, .24], [38, .22], [65, .14]].map(([lat, op], i) => {
-              const y   = 130 + (lat / 90) * 108
-              const rx  = Math.cos(lat * Math.PI / 180) * 108
-              return <ellipse key={i} cx="130" cy={y} rx={rx} ry="4"
-                fill="none" stroke="rgba(147,197,253,1)" strokeWidth=".7" strokeOpacity={op}/>
-            })}
-
-            {/* Meridianos animados — elipses que encurtam/expandem o rx */}
-            {[0,1,2,3,4,5].map(i => (
-              <ellipse key={i} cx="130" cy="130" rx="90" ry="108"
-                fill="none" stroke="rgba(147,197,253,.26)" strokeWidth=".8"
-                className="globe-meridian"
-                style={{ animationDelay: `${i}s`, animationDuration: '6s' }}/>
-            ))}
-
-            {/* Massa continental — América do Sul estilizada */}
-            <path d="M108 72 Q122 60 140 64 Q162 68 168 88 Q174 108 170 132 Q166 156 154 170 Q138 184 122 178 Q106 170 100 152 Q93 130 96 108 Q100 86 108 72 Z"
-              fill="rgba(29,78,216,.42)" stroke="rgba(147,197,253,.55)" strokeWidth=".9"/>
-            {/* América Central / Norte (sugestão) */}
-            <path d="M68 48 Q86 38 100 48 Q114 58 108 76 Q96 92 80 86 Q62 76 60 60 Z"
-              fill="rgba(59,130,246,.25)" stroke="rgba(147,197,253,.3)" strokeWidth=".7" opacity=".7"/>
-            {/* Europa / África (sugestão) */}
-            <path d="M160 42 Q178 34 188 46 Q196 60 190 78 Q182 92 168 86 Q155 76 154 60 Z"
-              fill="rgba(59,130,246,.22)" stroke="rgba(147,197,253,.28)" strokeWidth=".7" opacity=".65"/>
-
-            {/* Anel de rede — delivery orbit */}
-            <ellipse cx="130" cy="130" rx="76" ry="27"
-              fill="none" stroke="rgba(251,191,36,.3)" strokeWidth="1" strokeDasharray="4 5"
-              className="route-dash"/>
-            <ellipse cx="130" cy="112" rx="60" ry="20"
-              fill="none" stroke="rgba(96,165,250,.22)" strokeWidth="1" strokeDasharray="3 6"
-              className="route-dash" style={{ animationDelay: '2s' }}/>
-          </g>
-
-          {/* Highlight especular (sobre o clip) */}
-          <circle cx="130" cy="130" r="108" fill="url(#sh)" pointerEvents="none"/>
-          {/* Rim light */}
-          <circle cx="130" cy="130" r="108" fill="url(#sr)" pointerEvents="none"/>
-          {/* Borda fina */}
-          <circle cx="130" cy="130" r="108" fill="none" stroke="rgba(147,197,253,.22)" strokeWidth="1"/>
-
-          {/* Pins de localização */}
+          {/* Rotas do hub SP */}
           {[
-            { cx: 130, cy: 122, label: 'SP', color: '#fbbf24' },
-            { cx: 148, cy: 110, label: 'RJ', color: '#60a5fa' },
-            { cx: 112, cy: 104, label: 'BSB', color: '#60a5fa' },
-          ].map((p, i) => (
+            { d: 'M 220 160 Q 250 100 265 65',  delay: '0s' },
+            { d: 'M 220 160 Q 210 140 195 120', delay: '.7s' },
+            { d: 'M 220 160 Q 170 100 110 65',  delay: '1.3s' },
+            { d: 'M 220 160 Q 190 190 160 220', delay: '2s' },
+            { d: 'M 220 160 Q 245 130 260 100', delay: '2.6s' },
+            { d: 'M 220 160 Q 232 160 245 165', delay: '3.2s' },
+          ].map((r, i) => (
             <g key={i}>
-              <circle cx={p.cx} cy={p.cy} r="3" fill={p.color}
-                style={{ filter: `drop-shadow(0 0 5px ${p.color})` }}/>
-              <circle cx={p.cx} cy={p.cy} r="3" fill="none" stroke={p.color} strokeWidth="1"
-                className="city-ping" style={{ animationDelay: `${i * .5}s` }}/>
-              <text x={p.cx + 5} y={p.cy - 3} fill="rgba(255,255,255,.8)"
-                fontSize="7" fontFamily="monospace" fontWeight="700">{p.label}</text>
+              <path d={r.d} fill="none" stroke="rgba(96,165,250,.55)" strokeWidth="1.2"
+                strokeLinecap="round" strokeDasharray="3 4" className="route-dash"/>
+              <path d={r.d} fill="none" stroke="#60a5fa" strokeWidth="2.5"
+                strokeLinecap="round" className="route-glow" style={{ animationDelay: r.delay, filter: 'blur(1.5px)' }}/>
             </g>
           ))}
+
+          {/* Cidades */}
+          {[
+            { x: 265, y: 65,  label: 'FOR' },
+            { x: 195, y: 120, label: 'BSB' },
+            { x: 110, y: 65,  label: 'MAO' },
+            { x: 160, y: 220, label: 'POA' },
+            { x: 260, y: 100, label: 'SSA' },
+            { x: 245, y: 165, label: 'RIO' },
+            { x: 250, y: 190, label: 'CWB' },
+          ].map((c, i) => (
+            <g key={i}>
+              <circle cx={c.x} cy={c.y} r="3" fill="none" stroke="#60a5fa" strokeWidth="1"
+                className="city-ping" style={{ animationDelay: `${i * .3}s` }}/>
+              <circle cx={c.x} cy={c.y} r="2.5" fill="#60a5fa"
+                style={{ filter: 'drop-shadow(0 0 6px rgba(96,165,250,.8))' }}/>
+              <text x={c.x + 5} y={c.y + 3} fill="rgba(203,213,225,.9)"
+                fontSize="8" fontFamily="monospace" fontWeight="600" letterSpacing=".04em">{c.label}</text>
+            </g>
+          ))}
+
+          {/* São Paulo hub */}
+          <circle cx="220" cy="160" r="4" fill="none" stroke="#fbbf24" strokeWidth="1.2"
+            className="hub-ring"/>
+          <circle cx="220" cy="160" r="4" fill="#fbbf24"
+            style={{ filter: 'drop-shadow(0 0 8px #fbbf24)' }}/>
+          <text x="226" y="158" fill="#fbbf24" fontSize="8" fontFamily="monospace" fontWeight="600">SP · HUB</text>
         </svg>
       </div>
     </div>
@@ -842,31 +821,57 @@ export default function Analise() {
           {chFiltrado && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
               <Card className="lg:col-span-2">
-                <h3 className="text-sm font-semibold text-slate-700 mb-4">Volume por DS</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-slate-700">Volume por DS</h3>
+                  <div className="flex items-center gap-4">
+                    {[{c:'#3b82f6',l:'Recebido'},{c:'#1048c8',l:'Expedido'},{c:'#10b981',l:'Entregas'}].map(({c,l}) => (
+                      <span key={l} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <span className="w-2 h-2 rounded-sm" style={{background:c}}/>
+                        {l}
+                      </span>
+                    ))}
+                  </div>
+                </div>
                 <ResponsiveContainer width="100%" height={340}>
                   <BarChart data={chFiltrado.volume_ds.slice(0, 20)} margin={{ bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="ds" tick={{ fontSize: 10 }} angle={-40} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                    <Tooltip formatter={v => F(v)} /><Legend />
-                    <Bar dataKey="recebido" fill={CB.recebido} name="Recebido" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="expedido" fill={CB.expedido} name="Expedido" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="entregas" fill={CB.entregas} name="Entregas" radius={[3, 3, 0, 0]} />
+                    <ChartGradients />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="ds" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-40} textAnchor="end" />
+                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                    <Tooltip content={<ChartTooltip formatter={v => F(v)} />} />
+                    <Bar dataKey="recebido" fill="url(#grad-rec)" name="Recebido" radius={[4, 4, 0, 0]} maxBarSize={14} />
+                    <Bar dataKey="expedido" fill="url(#grad-exp)" name="Expedido" radius={[4, 4, 0, 0]} maxBarSize={14} />
+                    <Bar dataKey="entregas" fill="url(#grad-ent)" name="Entregas" radius={[4, 4, 0, 0]} maxBarSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
               <Card>
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">Proporção de Expedição</h3>
-                <ResponsiveContainer width="100%" height={340}>
+                <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
+                    <defs>
+                      <linearGradient id="grad-pie-exp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
+                        <stop offset="100%" stopColor="#0032A0" stopOpacity={1}/>
+                      </linearGradient>
+                    </defs>
                     <Pie data={[{ name: 'Expedido', value: chFiltrado.donut.expedido }, { name: 'Backlog', value: chFiltrado.donut.backlog }]}
-                      cx="50%" cy="50%" innerRadius={80} outerRadius={110} paddingAngle={2} dataKey="value">
-                      <Cell fill="#2563eb" /><Cell fill="#e2e8f0" />
-                      <Label value={P(chFiltrado.donut.taxa)} position="center" fill="#0f172a" />
+                      cx="50%" cy="50%" innerRadius={72} outerRadius={100} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                      <Cell fill="url(#grad-pie-exp)" />
+                      <Cell fill="#e2e8f0" />
+                      <Label value={P(chFiltrado.donut.taxa)} position="center" fill="#0f172a" fontSize={20} fontWeight={700} />
                     </Pie>
-                    <Tooltip formatter={v => F(v)} /><Legend />
+                    <Tooltip content={<ChartTooltip formatter={v => F(v)} />} />
                   </PieChart>
                 </ResponsiveContainer>
+                <div className="flex items-center justify-center gap-6 mt-2">
+                  {[{c:'url(#grad-pie-exp)',hex:'#3b82f6',l:'Expedido'},{c:'#e2e8f0',hex:'#e2e8f0',l:'Backlog'}].map(({hex,l}) => (
+                    <span key={l} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <span className="w-2.5 h-2.5 rounded-sm" style={{background:hex}}/>
+                      {l}
+                    </span>
+                  ))}
+                </div>
               </Card>
             </div>
           )}
@@ -879,7 +884,7 @@ export default function Analise() {
                   <div><div className="w-full h-24 bg-blue-500 rounded-xl flex items-center justify-center text-white">
                     <div><p className="text-2xl font-bold font-mono">{F(chFiltrado.funil.recebido)}</p><p className="text-xs opacity-80">Recebido</p></div>
                   </div></div>
-                  <div><div className="w-full h-20 bg-orange-500 rounded-xl flex items-center justify-center text-white mx-auto" style={{ width: '85%' }}>
+                  <div><div className="w-full h-20 rounded-xl flex items-center justify-center text-white mx-auto" style={{ width: '85%', background: '#0032A0' }}>
                     <div><p className="text-2xl font-bold font-mono">{F(chFiltrado.funil.expedido)}</p><p className="text-xs opacity-80">Expedido ({P(chFiltrado.funil.taxa_exp)})</p></div>
                   </div><p className="text-xs text-red-500 mt-1">-{F(chFiltrado.funil.perda_exp)} perdidos</p></div>
                   <div><div className="w-full h-16 bg-emerald-500 rounded-xl flex items-center justify-center text-white mx-auto" style={{ width: '70%' }}>
@@ -892,16 +897,30 @@ export default function Analise() {
 
           <SectionHeader title="Taxa de Expedição por DS" />
           <Card>
-            <ResponsiveContainer width="100%" height={Math.max(300, (dFiltrado.stations?.length || 0) * 28 + 60)}>
-              <BarChart data={dFiltrado.stations?.slice().sort((a, b) => a.taxa_exp - b.taxa_exp)} layout="vertical" margin={{ left: 80, right: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1.1]} />
-                <YAxis type="category" dataKey="scan_station" tick={{ fontSize: 11 }} width={75} />
-                <Tooltip formatter={v => P(v)} />
-                <Bar dataKey="taxa_exp" name="Taxa" radius={[0, 4, 4, 0]} fill="#10b981"
-                  label={{ position: 'right', formatter: v => `${(v * 100).toFixed(1)}%`, fontSize: 10 }} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="space-y-2 py-1">
+              {dFiltrado.stations?.slice().sort((a, b) => b.taxa_exp - a.taxa_exp).map((s, i) => {
+                const pct = Math.min(s.taxa_exp * 100, 110)
+                const ok = s.taxa_exp >= (s.meta || 0.9)
+                const barColor = ok ? '#10b981' : s.taxa_exp >= 0.7 ? '#f59e0b' : '#ef4444'
+                return (
+                  <div key={s.scan_station} className="flex items-center gap-3 py-1 px-1 rounded-lg hover:bg-slate-50 transition-colors">
+                    <span className="text-[10px] font-mono text-slate-400 w-5 text-right">{i+1}</span>
+                    <span className="text-xs font-semibold text-slate-700 w-20 shrink-0">{s.scan_station}</span>
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+                    </div>
+                    <span className="text-xs font-mono font-bold w-12 text-right" style={{ color: barColor }}>
+                      {(s.taxa_exp * 100).toFixed(1)}%
+                    </span>
+                    {s.meta && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                        {ok ? '✓' : '✗'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </Card>
 
           {heatmap?.heatmap_exp?.length > 0 && (
@@ -973,13 +992,14 @@ export default function Analise() {
                   {evoChartData.length > 0 && (
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={evoChartData} margin={{ bottom: 30 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="data_ref" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" tickFormatter={fD} />
-                        <YAxis tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1.1]} />
-                        <Tooltip formatter={v => v !== null ? P(v) : '—'} /><Legend />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="data_ref" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" tickFormatter={fD} />
+                        <YAxis tickFormatter={v => `${(v * 100).toFixed(0)}%`} tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} domain={[0, 1.1]} />
+                        <Tooltip content={<ChartTooltip formatter={(v) => v !== null ? P(v) : '—'} />} />
                         {evoData?.series?.map((s, i) => (
                           <Line key={s.ds} type="monotone" dataKey={s.ds} stroke={COLORS[i % COLORS.length]}
-                            strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                            strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2, stroke: 'white' }}
+                            activeDot={{ r: 5, strokeWidth: 2, stroke: 'white' }} connectNulls={false} />
                         ))}
                       </LineChart>
                     </ResponsiveContainer>
@@ -991,9 +1011,10 @@ export default function Analise() {
                     <h3 className="text-sm font-semibold text-slate-700 mb-4">Top DS — Taxa de Expedição</h3>
                     <ResponsiveContainer width="100%" height={300}>
                       <RadarChart data={radarData}>
-                        <PolarGrid /><PolarAngleAxis dataKey="ds" tick={{ fontSize: 9 }} />
-                        <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9 }} />
-                        <Radar name="Taxa %" dataKey="taxa" stroke="#2563eb" fill="#2563eb" fillOpacity={0.3} />
+                        <PolarGrid stroke="#f1f5f9" />
+                        <PolarAngleAxis dataKey="ds" tick={{ fontSize: 9, fill: '#64748b' }} />
+                        <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 8, fill: '#94a3b8' }} />
+                        <Radar name="Taxa %" dataKey="taxa" stroke="#0032A0" strokeWidth={2} fill="#0032A0" fillOpacity={0.18} />
                       </RadarChart>
                     </ResponsiveContainer>
                   </Card>

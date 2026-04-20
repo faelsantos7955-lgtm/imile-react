@@ -7,32 +7,6 @@ import { useAuth } from '../lib/AuthContext'
 import { Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react'
 import api from '../lib/api'
 
-// ── Data chips decorativos sobrepostos na foto ────────────────
-const CHIPS = [
-  { top: '18%', left: '8%',  delay: '0s',    text: 'SP → RJ',   sub: '12.4k pkgs/dia' },
-  { top: '32%', right: '6%', delay: '1.2s',  text: 'DS BJP',    sub: 'Taxa 94.2%' },
-  { top: '54%', left: '5%',  delay: '0.6s',  text: 'Em rota',   sub: '287 veículos' },
-  { top: '66%', right: '8%', delay: '1.8s',  text: 'SLA OK',    sub: '92.1% atingido' },
-]
-
-function DataChip({ top, left, right, delay, text, sub }) {
-  return (
-    <div className="absolute animate-fade" style={{
-      top, left, right,
-      animationDelay: delay,
-      backdropFilter: 'blur(12px)',
-      background: 'rgba(255,255,255,0.07)',
-      border: '1px solid rgba(255,255,255,0.12)',
-      borderRadius: 10,
-      padding: '7px 12px',
-      pointerEvents: 'none',
-    }}>
-      <p style={{ color: 'rgba(255,255,255,.9)', fontSize: 11, fontWeight: 700, letterSpacing: '.02em' }}>{text}</p>
-      <p style={{ color: 'rgba(255,255,255,.4)', fontSize: 10, marginTop: 1 }}>{sub}</p>
-    </div>
-  )
-}
-
 // ── Componente principal ──────────────────────────────────────
 export default function Login() {
   const { login } = useAuth()
@@ -119,9 +93,6 @@ export default function Login() {
         <div className="absolute top-0 left-0 right-0 h-[3px]" style={{
           background: 'linear-gradient(to right, #0032A0, #1048c8, #0032A0)',
         }} />
-
-        {/* Data chips sobrepostos */}
-        {CHIPS.map((c, i) => <DataChip key={i} {...c} />)}
 
         {/* Logo */}
         <div className="relative z-10 p-10 pb-0">
