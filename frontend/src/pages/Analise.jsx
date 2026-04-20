@@ -349,6 +349,130 @@ function FilterBar({
   )
 }
 
+// ── Hero 3D ────────────────────────────────────────────────────────────
+function Hero3D({ kpis, nBases }) {
+  const F = n => n?.toLocaleString('pt-BR') ?? '—'
+  const P = n => n != null ? `${(n * 100).toFixed(1)}%` : '—'
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden mb-6 flex items-center gap-6" style={{
+      minHeight: 280,
+      background: 'radial-gradient(circle at 20% 30%, rgba(59,130,246,.22) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(14,40,65,.8) 0%, transparent 60%), linear-gradient(135deg, #0a1628 0%, #0E2841 40%, #13305a 100%)',
+      color: 'white', padding: '28px 32px',
+    }}>
+      {/* Grid overlay */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)',
+        backgroundSize: '28px 28px',
+        maskImage: 'radial-gradient(circle at 70% 50%, black, transparent 70%)',
+      }} />
+
+      {/* Trucks */}
+      <div className="absolute pointer-events-none overflow-hidden" style={{ top: '14%', left: 0, right: 0 }}>
+        <svg className="hero-truck" style={{ width: 56, height: 28, position: 'relative', left: -80 }} viewBox="0 0 80 40" fill="none">
+          <rect x="4" y="14" width="40" height="18" rx="2" fill="#1D4ED8"/>
+          <rect x="44" y="18" width="22" height="14" rx="2" fill="#1e3a8a"/>
+          <rect x="48" y="20" width="14" height="6" rx="1" fill="#93c5fd" fillOpacity=".7"/>
+          <text x="8" y="26" fontSize="7" fontWeight="800" fill="white" fontFamily="Arial">iMile</text>
+          {[14,32,58].map(cx => <g key={cx}><circle cx={cx} cy={34} r="4" fill="#0f172a"/><circle cx={cx} cy={34} r="1.5" fill="#475569"/></g>)}
+        </svg>
+      </div>
+      <div className="absolute pointer-events-none overflow-hidden" style={{ bottom: '10%', left: 0, right: 0 }}>
+        <svg className="hero-truck2" style={{ width: 56, height: 28, position: 'relative', left: -80 }} viewBox="0 0 80 40" fill="none">
+          <rect x="4" y="14" width="40" height="18" rx="2" fill="#1D4ED8"/>
+          <rect x="44" y="18" width="22" height="14" rx="2" fill="#1e3a8a"/>
+          <rect x="48" y="20" width="14" height="6" rx="1" fill="#93c5fd" fillOpacity=".7"/>
+          <text x="8" y="26" fontSize="7" fontWeight="800" fill="white" fontFamily="Arial">iMile</text>
+          {[14,32,58].map(cx => <g key={cx}><circle cx={cx} cy={34} r="4" fill="#0f172a"/><circle cx={cx} cy={34} r="1.5" fill="#475569"/></g>)}
+        </svg>
+      </div>
+
+      {/* Floating particles */}
+      {[{ top:'20%', left:'40%', delay:'0s' }, { top:'70%', left:'20%', delay:'1.5s' }, { top:'30%', left:'75%', delay:'3s' }].map((p, i) => (
+        <span key={i} className="hero-particle" style={{ position:'absolute', width:3, height:3, borderRadius:'50%', background:'rgba(147,197,253,.6)', top:p.top, left:p.left, animationDelay:p.delay }} />
+      ))}
+
+      {/* Conteúdo */}
+      <div className="relative z-10 flex-1 min-w-0">
+        <div className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full text-[11px] font-semibold tracking-widest uppercase"
+          style={{ background: 'rgba(59,130,246,.14)', border: '1px solid rgba(147,197,253,.25)', color: 'rgba(147,197,253,.9)' }}>
+          <span className="pulse-dot relative w-1.5 h-1.5 rounded-full" style={{ background: '#60a5fa' }} />
+          Live · Portal Operacional
+        </div>
+        <h2 className="font-bold mb-2" style={{ fontSize: 28, letterSpacing: '-.8px', lineHeight: 1.1, background: 'linear-gradient(90deg, #fff 0%, #cbd5e1 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          Operação iMile Brasil
+        </h2>
+        <p style={{ color: 'rgba(203,213,225,.75)', fontSize: 13.5, maxWidth: 420, lineHeight: 1.55 }}>
+          Rede de delivery stations conectadas, monitoramento em tempo real de expedição e entregas.
+        </p>
+        <div className="flex gap-7 mt-5">
+          {[
+            { v: F(kpis?.recebido), l: 'Recebido' },
+            { v: P(kpis?.taxa_exp), l: 'Taxa Exp.' },
+            { v: nBases ?? '—', l: 'Bases DS' },
+          ].map(({ v, l }) => (
+            <div key={l}>
+              <div className="font-bold" style={{ fontSize: 22, letterSpacing: '-.5px' }}>{v}</div>
+              <div className="font-semibold uppercase tracking-widest mt-1" style={{ fontSize: 10.5, color: 'rgba(147,197,253,.75)' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Mapa do Brasil */}
+      <div className="relative shrink-0 hidden lg:block" style={{ width: 340, height: 260 }}>
+        <svg viewBox="0 0 340 260" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+          <defs>
+            <filter id="br-glow">
+              <feGaussianBlur stdDeviation="2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          {/* Contorno Brasil simplificado */}
+          <path d="M180 20 L215 25 L245 35 L270 55 L285 80 L295 105 L300 130 L295 155 L285 175 L270 195 L250 215 L225 230 L200 240 L175 245 L150 240 L128 230 L110 215 L95 200 L82 180 L72 160 L62 138 L55 115 L50 95 L48 75 L52 60 L62 48 L78 40 L95 35 L115 30 L140 25 L165 20 Z"
+            fill="rgba(147,197,253,.1)" stroke="rgba(147,197,253,.3)" strokeWidth=".8"/>
+          {/* Regiões */}
+          <path d="M95 55 L145 45 L175 55 L170 90 L130 95 L95 85 Z" fill="rgba(147,197,253,.08)" stroke="rgba(147,197,253,.25)" strokeWidth=".6" opacity=".6"/>
+          <path d="M200 40 L260 55 L285 90 L270 125 L225 120 L205 90 L195 65 Z" fill="rgba(59,130,246,.15)" stroke="rgba(147,197,253,.5)" strokeWidth=".7"/>
+          <path d="M130 100 L190 95 L215 130 L185 160 L135 155 L115 125 Z" fill="rgba(147,197,253,.07)" stroke="rgba(147,197,253,.2)" strokeWidth=".6" opacity=".8"/>
+          <path d="M190 135 L240 130 L260 160 L240 185 L200 180 L180 160 Z" fill="rgba(29,78,216,.5)" stroke="#93c5fd" strokeWidth="1.2"/>
+          <path d="M150 175 L200 185 L215 215 L185 235 L140 225 L125 200 Z" fill="rgba(59,130,246,.15)" stroke="rgba(147,197,253,.4)" strokeWidth=".7"/>
+          {/* Rotas do hub SP */}
+          {[
+            { d: 'M220 160 Q250 100 265 65', delay: '0s' },
+            { d: 'M220 160 Q210 140 195 120', delay: '.7s' },
+            { d: 'M220 160 Q170 100 110 65', delay: '1.3s' },
+            { d: 'M220 160 Q190 190 160 220', delay: '2s' },
+            { d: 'M220 160 Q245 130 260 100', delay: '2.6s' },
+            { d: 'M220 160 Q232 160 245 165', delay: '3.2s' },
+          ].map((r, i) => (
+            <g key={i}>
+              <path d={r.d} fill="none" stroke="rgba(96,165,250,.55)" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="3 4" className="route-dash"/>
+              <path d={r.d} fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round" opacity="0" className="route-glow" style={{ filter:'blur(1.5px)', animationDelay: r.delay }}/>
+            </g>
+          ))}
+          {/* Cidades */}
+          {[
+            { x:265, y:65,  label:'FOR' }, { x:195, y:120, label:'BSB' },
+            { x:110, y:65,  label:'MAO' }, { x:160, y:220, label:'POA' },
+            { x:260, y:100, label:'SSA' }, { x:245, y:165, label:'RIO' },
+          ].map((c, i) => (
+            <g key={i}>
+              <circle className="city-ping" cx={c.x} cy={c.y} r="3" fill="none" stroke="#60a5fa" strokeWidth="1" style={{ animationDelay:`${i*.3}s` }}/>
+              <circle cx={c.x} cy={c.y} r="2.5" fill="#60a5fa" style={{ filter:'drop-shadow(0 0 6px rgba(96,165,250,.8))' }}/>
+              <text x={c.x+5} y={c.y+3} fill="rgba(203,213,225,.9)" fontSize="8" fontFamily="monospace" fontWeight="600" letterSpacing=".04em">{c.label}</text>
+            </g>
+          ))}
+          {/* Hub SP */}
+          <circle className="hub-ring" cx="220" cy="160" r="4" fill="none" stroke="#fbbf24" strokeWidth="1.2"/>
+          <circle cx="220" cy="160" r="4" fill="#fbbf24" style={{ filter:'drop-shadow(0 0 8px #fbbf24)' }}/>
+          <text x="226" y="158" fill="#fbbf24" fontSize="8" fontFamily="monospace" fontWeight="600">SP · HUB</text>
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 // ── Componente principal ───────────────────────────────────────────────
 export default function Analise() {
   const { isAdmin } = useAuth()
@@ -520,6 +644,12 @@ export default function Analise() {
           }}
         />
       )}
+
+      {/* Hero 3D */}
+      <Hero3D
+        kpis={isHoje ? dFiltrado?.kpis : periodoData?.totais}
+        nBases={isHoje ? dFiltrado?.kpis?.n_ds : periodoData?.por_ds?.length}
+      />
 
       {/* Banner de avisos não lidos */}
       {naoLidos.length > 0 && (

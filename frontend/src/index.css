@@ -181,6 +181,23 @@ table { border-collapse: collapse; }
   100% { top: 100%; opacity: 0; }
 }
 
+/* ── Hero3D — mapa + caminhões + rotas ──────────────────────── */
+@keyframes route-dash  { to { stroke-dashoffset: -70; } }
+@keyframes ring-pulse  { 0% { r: 4; opacity: .9; } 100% { r: 22; opacity: 0; } }
+@keyframes drive       { 0% { transform: translateX(0); } 100% { transform: translateX(calc(100% + 900px)); } }
+@keyframes hero-float  { 0%,100% { transform: translateY(0) translateX(0); opacity: .3; } 50% { transform: translateY(-20px) translateX(10px); opacity: .8; } }
+@keyframes route-flash { 0%,100% { opacity: 0; } 50% { opacity: .7; } }
+@keyframes pulse-ring  { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.8); opacity: 0; } }
+
+.route-dash  { animation: route-dash  8s  linear       infinite; }
+.route-glow  { animation: route-flash 3s  ease-in-out  infinite; }
+.hub-ring    { animation: ring-pulse  2.2s ease-out    infinite; transform-box: fill-box; transform-origin: center; }
+.city-ping   { animation: ring-pulse  2.6s ease-out    infinite; transform-box: fill-box; transform-origin: center; }
+.hero-truck  { animation: drive       16s linear       infinite; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+.hero-truck2 { animation: drive       22s linear       infinite; animation-delay: -9s; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+.hero-particle { animation: hero-float 8s ease-in-out  infinite; }
+.pulse-dot::after { content:''; position:absolute; inset:-4px; border-radius:50%; background:#60a5fa; opacity:.5; animation: pulse-ring 2s infinite; }
+
 .truck-anim   { animation: truck-move 12s linear infinite; }
 .box-float    { animation: box-float 3.5s ease-in-out infinite; }
 .signal-blink { animation: signal-blink 1.8s ease-in-out infinite; }
