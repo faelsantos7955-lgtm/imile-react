@@ -35,6 +35,43 @@
 .animate-slide  { animation: slideIn  0.2s ease-out; }
 .animate-scale  { animation: scaleIn  0.15s ease-out; }
 
+/* ── Floating orbs (background) ─────────────────────────────── */
+@keyframes orb1 {
+  0%,100% { transform: translate(0px,   0px)   scale(1);    }
+  25%     { transform: translate(60px, -40px)  scale(1.08); }
+  50%     { transform: translate(30px,  50px)  scale(0.95); }
+  75%     { transform: translate(-40px, 20px)  scale(1.03); }
+}
+@keyframes orb2 {
+  0%,100% { transform: translate(0px,   0px)   scale(1);    }
+  30%     { transform: translate(-50px, 40px)  scale(1.06); }
+  60%     { transform: translate(40px,  60px)  scale(0.92); }
+  80%     { transform: translate(20px, -30px)  scale(1.04); }
+}
+@keyframes orb3 {
+  0%,100% { transform: translate(0px,   0px)   scale(1);    }
+  20%     { transform: translate(40px,  30px)  scale(1.1);  }
+  55%     { transform: translate(-30px,-50px)  scale(0.94); }
+  80%     { transform: translate(50px, -20px)  scale(1.02); }
+}
+@keyframes orb4 {
+  0%,100% { transform: translate(0px,  0px)    scale(1);    }
+  35%     { transform: translate(-60px,30px)   scale(1.07); }
+  65%     { transform: translate(30px, 60px)   scale(0.96); }
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  will-change: transform;
+}
+.orb-1 { animation: orb1 28s ease-in-out infinite; }
+.orb-2 { animation: orb2 34s ease-in-out infinite; }
+.orb-3 { animation: orb3 22s ease-in-out infinite; }
+.orb-4 { animation: orb4 40s ease-in-out infinite; }
+
 /* ── Base typography ─────────────────────────────────────────── */
 html { scroll-behavior: smooth; }
 
@@ -60,3 +97,53 @@ body {
 
 /* ── Table base ──────────────────────────────────────────────── */
 table { border-collapse: collapse; }
+
+/* ── Login — Logistics Scene ─────────────────────────────────── */
+.login-dot-grid {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@keyframes truck-move {
+  0%   { transform: translateX(-220px); opacity: 0; }
+  5%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { transform: translateX(900px); opacity: 0; }
+}
+@keyframes truck-wheel {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes delivery-pulse {
+  0%   { r: 8; opacity: 0.6; }
+  100% { r: 28; opacity: 0; }
+}
+@keyframes box-float {
+  0%, 100% { transform: translateY(0px) rotate(-4deg); }
+  50%       { transform: translateY(-14px) rotate(4deg); }
+}
+@keyframes signal-blink {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 1; }
+}
+@keyframes route-flow {
+  from { stroke-dashoffset: 120; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes radar-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes scanline {
+  0%   { top: 0%; opacity: 0; }
+  5%   { opacity: 0.35; }
+  95%  { opacity: 0.35; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.truck-anim   { animation: truck-move 12s linear infinite; }
+.box-float    { animation: box-float 3.5s ease-in-out infinite; }
+.signal-blink { animation: signal-blink 1.8s ease-in-out infinite; }
+.route-flow   { animation: route-flow 3s linear infinite; }
+.radar-rotate { animation: radar-rotate 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+.scanline     { animation: scanline 5s linear infinite; }
