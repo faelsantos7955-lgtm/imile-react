@@ -33,14 +33,14 @@ const DS_LIST = [
 
 const STATUS_STYLE = {
   'Pendente':              'bg-slate-100 text-slate-600 border-slate-200',
-  'Em Andamento':          'bg-amber-50 text-amber-700 border-amber-200',
+  'Em Andamento':          'bg-sky-50 text-sky-700 border-sky-200',
   'Enviado ao Financeiro': 'bg-blue-50 text-blue-700 border-blue-200',
   'Aprovado':              'bg-emerald-50 text-emerald-700 border-emerald-200',
   'Reprovado':             'bg-red-50 text-red-600 border-red-200',
 }
 const STATUS_DOT = {
   'Pendente':              'bg-slate-400',
-  'Em Andamento':          'bg-amber-400',
+  'Em Andamento':          'bg-sky-400',
   'Enviado ao Financeiro': 'bg-blue-500',
   'Aprovado':              'bg-emerald-500',
   'Reprovado':             'bg-red-500',
