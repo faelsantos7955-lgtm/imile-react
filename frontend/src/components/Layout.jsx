@@ -11,6 +11,7 @@ import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
   GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale, Megaphone,
+  Search, RefreshCw,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -121,12 +122,16 @@ function Sidebar({ onClose }) {
 
       {/* Logo */}
       <div className="px-4 h-14 flex items-center justify-between shrink-0 border-b border-white/5">
-        <img
-          src="/imile-logo.png"
-          alt="iMile Delivery"
-          className="h-7 w-auto object-contain"
-          style={{ filter: 'brightness(0) invert(1)' }}
-        />
+        <div className="flex items-center gap-2.5">
+          <div className="w-[26px] h-[26px] rounded-[7px] flex items-center justify-center text-white font-extrabold text-[13px] shrink-0"
+            style={{ background: 'linear-gradient(135deg, #3b82f6, #1D4ED8)', boxShadow: '0 4px 12px rgba(29,78,216,.35)', letterSpacing: '-.5px' }}>
+            i
+          </div>
+          <div>
+            <p className="text-white font-bold text-[14px] leading-none tracking-[-0.2px]">iMile</p>
+            <p className="text-white/40 font-medium text-[10px] mt-0.5 tracking-[0.5px]">PORTAL BRASIL</p>
+          </div>
+        </div>
         {onClose && (
           <button onClick={onClose} className="lg:hidden p-1 text-white/30 hover:text-white/70">
             <X size={16} />
@@ -283,8 +288,9 @@ export default function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Header */}
-        <header className="h-14 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 shrink-0">
-          <div className="flex items-center gap-3">
+        <header className="h-14 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 shrink-0 gap-3">
+          {/* Esquerda: menu mobile + título */}
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setMobileOpen(true)}
               className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
@@ -293,23 +299,39 @@ export default function Layout() {
               <Menu size={18} />
             </button>
             <div>
-              <h1 className="text-[13px] font-semibold text-slate-900 leading-none">{pageTitle}</h1>
-              <p className="text-[10px] text-slate-400 mt-0.5 leading-none hidden sm:block tracking-wide">
+              <h1 className="text-[13.5px] font-semibold text-slate-900 leading-none">{pageTitle}</h1>
+              <p className="text-[10.5px] text-slate-400 mt-0.5 leading-none hidden sm:block tracking-[0.02em]">
                 iMile Brasil · Portal Operacional
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          {/* Centro: barra de busca */}
+          <div className="hidden md:flex flex-1 max-w-[320px] items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-[7px] text-slate-400 text-[12.5px] cursor-pointer hover:border-slate-200 hover:bg-white transition-all select-none">
+            <Search size={13} className="shrink-0" />
+            <span className="flex-1">Buscar pedido, cliente, DS…</span>
+            <kbd className="ml-auto font-mono text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500">⌘K</kbd>
+          </div>
+
+          {/* Direita: refresh + bell + user */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              className="w-[34px] h-[34px] rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
+              title="Atualizar"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw size={14} />
+            </button>
             <BellMenu isAdmin={isAdmin} />
             <div className="w-px h-5 bg-slate-100 mx-0.5" />
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-default transition-colors">
-              <div className="w-6 h-6 rounded-full bg-imile-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-default transition-colors">
+              <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #1D4ED8)' }}>
                 {initial}
               </div>
-              <div className="hidden sm:block">
+              <div className="hidden sm:block text-left">
                 <p className="text-[12px] font-semibold text-slate-700 leading-none">{firstName}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[120px]">{user?.email}</p>
+                <p className="text-[10px] text-slate-400 mt-[3px] truncate max-w-[130px] leading-none">{user?.email}</p>
               </div>
             </div>
           </div>
