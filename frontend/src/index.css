@@ -98,6 +98,46 @@ body {
 /* ── Table base ──────────────────────────────────────────────── */
 table { border-collapse: collapse; }
 
+/* ── iMile brand (cores reais extraídas do site oficial) ─────── */
+:root {
+  --imile-navy:  #151741;
+  --imile-blue:  #0032A0;
+  --imile-blue2: #1048c8;
+  --imile-yellow:#fff303;
+  --imile-light: #E8EAF3;
+  --imile-bg:    #F6F7FA;
+}
+
+/* ── 3D hero — blobs de cor animados ────────────────────────── */
+@keyframes blob-a {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33%     { transform: translate(70px,-90px) scale(1.15); }
+  66%     { transform: translate(-50px,70px) scale(0.88); }
+}
+@keyframes blob-b {
+  0%,100% { transform: translate(0,0) scale(1); }
+  25%     { transform: translate(-80px,50px) scale(1.1); }
+  75%     { transform: translate(60px,-60px) scale(0.92); }
+}
+@keyframes blob-c {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%     { transform: translate(40px,80px) scale(1.08); }
+}
+.blob   { position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none; will-change:transform; }
+.blob-a { animation: blob-a 22s ease-in-out infinite; }
+.blob-b { animation: blob-b 28s ease-in-out infinite; }
+.blob-c { animation: blob-c 18s ease-in-out infinite; }
+
+/* ── Grade 3D (chão em perspectiva) ─────────────────────────── */
+.grid-3d {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 52px 52px;
+  transform: perspective(480px) rotateX(50deg) scaleX(1.4);
+  transform-origin: bottom center;
+}
+
 /* ── Login — Logistics Scene ─────────────────────────────────── */
 .login-dot-grid {
   background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
