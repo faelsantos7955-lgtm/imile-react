@@ -133,33 +133,111 @@ function HeroBanner() {
         style={{ background: 'linear-gradient(to right, transparent 5%, rgba(255,243,3,0.25) 50%, transparent 95%)' }} />
 
       {/* Caminhão */}
-      <div className="absolute overflow-hidden pointer-events-none" style={{ bottom: 2, left: 0, right: 0, height: 68 }}>
+      <div className="absolute overflow-hidden pointer-events-none" style={{ bottom: 8, left: 0, right: 0, height: 80 }}>
         <div className="truck-anim absolute" style={{ bottom: 0 }}>
-          <svg width="190" height="66" viewBox="0 0 200 72" fill="none">
-            {/* Trailer */}
-            <rect x="2" y="18" width="116" height="34" rx="3" fill="#151741" stroke="#0032A0" strokeWidth="0.9" strokeOpacity="0.8"/>
-            {/* Faixa azul */}
-            <rect x="10" y="26" width="44" height="4" rx="1" fill="#0032A0" fillOpacity="0.7"/>
-            {/* Ponto amarelo iMile */}
-            <circle cx="70" cy="35" r="3" fill="#fff303" fillOpacity="0.6"/>
-            {/* Cab */}
-            <rect x="119" y="10" width="77" height="44" rx="4" fill="#0d1640" stroke="#0032A0" strokeWidth="0.9" strokeOpacity="0.8"/>
-            {/* Vidro */}
-            <rect x="152" y="14" width="36" height="22" rx="2" fill="#0032A0" fillOpacity="0.2" stroke="#0032A0" strokeWidth="0.6" strokeOpacity="0.5"/>
-            {/* Janela lateral */}
-            <rect x="122" y="14" width="24" height="14" rx="2" fill="#0032A0" fillOpacity="0.15"/>
-            {/* Farol — amarelo iMile */}
-            <rect x="190" y="24" width="7" height="6" rx="2" fill="#fff303" fillOpacity="0.95"/>
-            <path d="M197 24 L200 18 L200 36 L197 30 Z" fill="#fff303" fillOpacity="0.15"/>
-            {/* Exaustor */}
-            <rect x="124" y="4" width="5" height="9" rx="2" fill="#0a0d2e" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.4"/>
-            {/* Conector */}
-            <rect x="115" y="26" width="6" height="14" rx="2" fill="#080b20"/>
-            {/* Rodas */}
-            {[35, 85, 155].map(cx => (
-              <g key={cx}>
-                <circle cx={cx} cy={62} r="9" fill="#060810" stroke="#0032A0" strokeWidth="1.8"/>
-                <circle cx={cx} cy={62} r="3.5" fill="#0032A0" fillOpacity="0.7"/>
+          <svg width="260" height="72" viewBox="0 0 260 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* === TRAILER === */}
+            {/* Corpo do trailer */}
+            <rect x="2" y="12" width="148" height="44" rx="3" fill="#151741"/>
+            <rect x="2" y="12" width="148" height="44" rx="3" stroke="#0032A0" strokeWidth="1" strokeOpacity="0.6"/>
+            {/* Teto do trailer (chanfro) */}
+            <path d="M5 12 L145 12 L148 15 L2 15 Z" fill="#0032A0" fillOpacity="0.3"/>
+            {/* Faixa lateral iMile */}
+            <rect x="8" y="28" width="80" height="5" rx="1.5" fill="#0032A0" fillOpacity="0.5"/>
+            <rect x="8" y="35" width="55" height="2.5" rx="1" fill="#fff303" fillOpacity="0.35"/>
+            {/* Porta traseira (linhas) */}
+            <line x1="8" y1="16" x2="8" y2="56" stroke="#0032A0" strokeWidth="0.7" strokeOpacity="0.4"/>
+            <line x1="8" y1="36" x2="148" y2="36" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.2"/>
+            {/* Texto iMile no trailer */}
+            <text x="50" y="48" fontFamily="Arial, sans-serif" fontSize="8" fontWeight="bold"
+              fill="#fff303" fillOpacity="0.5" letterSpacing="2">iMile</text>
+            {/* Luz traseira */}
+            <rect x="2" y="18" width="4" height="8" rx="1" fill="#fff303" fillOpacity="0.8"/>
+            <rect x="2" y="28" width="4" height="6" rx="1" fill="#ff4444" fillOpacity="0.6"/>
+            {/* Skirt / saia lateral */}
+            <rect x="12" y="56" width="120" height="5" rx="1" fill="#0d1640"/>
+
+            {/* === ENGATE === */}
+            <rect x="148" y="38" width="8" height="8" rx="1" fill="#080c20"/>
+            <rect x="152" y="34" width="3" height="4" rx="1" fill="#0032A0" fillOpacity="0.5"/>
+
+            {/* === CAB (cavalo mecânico) === */}
+            {/* Corpo principal do cab */}
+            <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" fill="#0d1840"/>
+            <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" stroke="#0032A0" strokeWidth="1" strokeOpacity="0.7"/>
+            {/* Teto arredondado */}
+            <path d="M165 16 Q170 10 195 10 L248 10 L255 18 L255 16 L248 16 L165 16 Z" fill="#151741"/>
+            <path d="M165 10 Q170 6 200 6 L248 6 L255 14 L248 10 L165 10 Z" fill="#0d1440"/>
+            {/* Para-brisa */}
+            <path d="M222 12 L250 12 L255 30 L222 30 Z" fill="#0032A0" fillOpacity="0.18" stroke="#0032A0" strokeWidth="0.8" strokeOpacity="0.5"/>
+            {/* Janela lateral do cab */}
+            <rect x="160" y="18" width="28" height="16" rx="2" fill="#0032A0" fillOpacity="0.15" stroke="#0032A0" strokeWidth="0.6" strokeOpacity="0.4"/>
+            {/* Divisória janela lateral */}
+            <line x1="172" y1="18" x2="172" y2="34" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.4"/>
+            {/* Espelho retrovisor */}
+            <rect x="154" y="20" width="5" height="7" rx="1" fill="#0a1030" stroke="#0032A0" strokeWidth="0.5"/>
+            <rect x="152" y="22" width="3" height="1.5" rx="0.5" fill="#0032A0" fillOpacity="0.5"/>
+            {/* Para-choque dianteiro */}
+            <rect x="248" y="46" width="9" height="10" rx="2" fill="#0a1030" stroke="#0032A0" strokeWidth="0.7" strokeOpacity="0.5"/>
+            {/* Grade/grelha dianteira */}
+            <rect x="249" y="34" width="6" height="11" rx="1" fill="#060c20" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.4"/>
+            {[36,38,40,42].map(y => (
+              <line key={y} x1="249" y1={y} x2="255" y2={y} stroke="#0032A0" strokeWidth="0.4" strokeOpacity="0.5"/>
+            ))}
+            {/* Farol principal — amarelo */}
+            <rect x="251" y="20" width="6" height="9" rx="2" fill="#fff303" fillOpacity="0.95"/>
+            {/* Feixe de luz */}
+            <path d="M257 22 L262 18 L262 32 L257 28 Z" fill="#fff303" fillOpacity="0.08"/>
+            {/* Farol auxiliar */}
+            <rect x="251" y="31" width="5" height="4" rx="1" fill="#fff303" fillOpacity="0.4"/>
+            {/* Chaminé/exaustor */}
+            <rect x="161" y="2" width="5" height="10" rx="2" fill="#0a0d2e" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.5"/>
+            <ellipse cx="163.5" cy="2" rx="2.5" ry="1" fill="#1048c8" fillOpacity="0.3"/>
+            {/* Passo da cabine */}
+            <rect x="220" y="50" width="20" height="6" rx="1" fill="#080c1e"/>
+            <rect x="226" y="56" width="12" height="3" rx="1" fill="#060a18"/>
+
+            {/* === RODAS === */}
+            {/* Traseiras duplas do trailer */}
+            {[30, 45].map(cx => (
+              <g key={`tw${cx}`}>
+                <circle cx={cx} cy={64} r="10" fill="#06080f" stroke="#1048c8" strokeWidth="1.5"/>
+                <circle cx={cx} cy={64} r="6" fill="#0a0f20" stroke="#0032A0" strokeWidth="1"/>
+                <circle cx={cx} cy={64} r="2.5" fill="#0032A0" fillOpacity="0.8"/>
+                {[0,60,120,180,240,300].map(a => (
+                  <line key={a} x1={cx} y1={64}
+                    x2={cx + 4.5*Math.cos(a*Math.PI/180)}
+                    y2={64 + 4.5*Math.sin(a*Math.PI/180)}
+                    stroke="#0032A0" strokeWidth="0.8" strokeOpacity="0.6"/>
+                ))}
+              </g>
+            ))}
+            {/* Rodas dianteiras do trailer */}
+            {[105, 120].map(cx => (
+              <g key={`tw2${cx}`}>
+                <circle cx={cx} cy={64} r="10" fill="#06080f" stroke="#1048c8" strokeWidth="1.5"/>
+                <circle cx={cx} cy={64} r="6" fill="#0a0f20" stroke="#0032A0" strokeWidth="1"/>
+                <circle cx={cx} cy={64} r="2.5" fill="#0032A0" fillOpacity="0.8"/>
+                {[0,60,120,180,240,300].map(a => (
+                  <line key={a} x1={cx} y1={64}
+                    x2={cx + 4.5*Math.cos(a*Math.PI/180)}
+                    y2={64 + 4.5*Math.sin(a*Math.PI/180)}
+                    stroke="#0032A0" strokeWidth="0.8" strokeOpacity="0.6"/>
+                ))}
+              </g>
+            ))}
+            {/* Rodas do cab */}
+            {[190, 235].map(cx => (
+              <g key={`cw${cx}`}>
+                <circle cx={cx} cy={64} r="11" fill="#06080f" stroke="#1048c8" strokeWidth="1.8"/>
+                <circle cx={cx} cy={64} r="7" fill="#0a0f20" stroke="#0032A0" strokeWidth="1.2"/>
+                <circle cx={cx} cy={64} r="3" fill="#0032A0" fillOpacity="0.9"/>
+                {[0,45,90,135,180,225,270,315].map(a => (
+                  <line key={a} x1={cx} y1={64}
+                    x2={cx + 5.5*Math.cos(a*Math.PI/180)}
+                    y2={64 + 5.5*Math.sin(a*Math.PI/180)}
+                    stroke="#0032A0" strokeWidth="0.9" strokeOpacity="0.65"/>
+                ))}
               </g>
             ))}
           </svg>
