@@ -6,8 +6,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional, List, Any
-from datetime import date
+from datetime import date, timedelta
 import json
+
+
+def add_business_days(d: date, days: int) -> date:
+    current = d
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:  # seg–sex
+            added += 1
+    return current
 
 from api.deps import get_db, get_current_user, require_admin
 
@@ -113,7 +123,7 @@ def criar(body: ContestacaoCreate, db: Session = Depends(get_db)):
         "observacao":       body.observacao or "",
         "evidencia_b64":    ev_b64,
         "evidencia_nome":   ev_nome,
-        "previsao":         body.previsao,
+        "previsao":         body.previsao or add_business_days(body.data_contestacao, 3),
     })
     db.commit()
     return {"ok": True}
