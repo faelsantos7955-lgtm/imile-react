@@ -419,54 +419,99 @@ function Hero3D({ kpis, nBases }) {
         </div>
       </div>
 
-      {/* Mapa do Brasil */}
-      <div className="relative shrink-0 hidden lg:block" style={{ width: 340, height: 260 }}>
-        <svg viewBox="0 0 340 260" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+      {/* Globo 3D */}
+      <div className="relative shrink-0 hidden lg:block" style={{ width: 260, height: 260 }}>
+        <svg width="260" height="260" viewBox="0 0 260 260" overflow="visible">
           <defs>
-            <filter id="br-glow">
-              <feGaussianBlur stdDeviation="2" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
+            {/* Volume da esfera — escura nas bordas, clara no centro */}
+            <radialGradient id="sg" cx="36%" cy="30%" r="68%">
+              <stop offset="0%"   stopColor="#5a90e0" stopOpacity=".95"/>
+              <stop offset="45%"  stopColor="#1a4a9a" stopOpacity=".92"/>
+              <stop offset="100%" stopColor="#040c1e" stopOpacity=".98"/>
+            </radialGradient>
+            {/* Highlight especular */}
+            <radialGradient id="sh" cx="33%" cy="26%" r="42%">
+              <stop offset="0%"   stopColor="white" stopOpacity=".38"/>
+              <stop offset="100%" stopColor="white" stopOpacity="0"/>
+            </radialGradient>
+            {/* Rim light azul */}
+            <radialGradient id="sr" cx="68%" cy="68%" r="52%">
+              <stop offset="55%"  stopColor="transparent"/>
+              <stop offset="100%" stopColor="#60a5fa" stopOpacity=".45"/>
+            </radialGradient>
+            {/* Clip sphere */}
+            <clipPath id="gc">
+              <circle cx="130" cy="130" r="108"/>
+            </clipPath>
           </defs>
-          {/* Contorno Brasil simplificado */}
-          <path d="M180 20 L215 25 L245 35 L270 55 L285 80 L295 105 L300 130 L295 155 L285 175 L270 195 L250 215 L225 230 L200 240 L175 245 L150 240 L128 230 L110 215 L95 200 L82 180 L72 160 L62 138 L55 115 L50 95 L48 75 L52 60 L62 48 L78 40 L95 35 L115 30 L140 25 L165 20 Z"
-            fill="rgba(147,197,253,.1)" stroke="rgba(147,197,253,.3)" strokeWidth=".8"/>
-          {/* Regiões */}
-          <path d="M95 55 L145 45 L175 55 L170 90 L130 95 L95 85 Z" fill="rgba(147,197,253,.08)" stroke="rgba(147,197,253,.25)" strokeWidth=".6" opacity=".6"/>
-          <path d="M200 40 L260 55 L285 90 L270 125 L225 120 L205 90 L195 65 Z" fill="rgba(59,130,246,.15)" stroke="rgba(147,197,253,.5)" strokeWidth=".7"/>
-          <path d="M130 100 L190 95 L215 130 L185 160 L135 155 L115 125 Z" fill="rgba(147,197,253,.07)" stroke="rgba(147,197,253,.2)" strokeWidth=".6" opacity=".8"/>
-          <path d="M190 135 L240 130 L260 160 L240 185 L200 180 L180 160 Z" fill="rgba(29,78,216,.5)" stroke="#93c5fd" strokeWidth="1.2"/>
-          <path d="M150 175 L200 185 L215 215 L185 235 L140 225 L125 200 Z" fill="rgba(59,130,246,.15)" stroke="rgba(147,197,253,.4)" strokeWidth=".7"/>
-          {/* Rotas do hub SP */}
+
+          {/* Anel de brilho externo */}
+          <circle cx="130" cy="130" r="120" fill="none" stroke="#1048c8" strokeWidth="16" strokeOpacity=".06"/>
+          <circle cx="130" cy="130" r="114" fill="none" stroke="#3b82f6" strokeWidth="7"  strokeOpacity=".10"/>
+
+          {/* Base da esfera */}
+          <circle cx="130" cy="130" r="108" fill="url(#sg)"/>
+
+          {/* Tudo clipado à esfera */}
+          <g clipPath="url(#gc)">
+
+            {/* Paralelos estáticos */}
+            {[[-65, .14], [-38, .22], [0, .24], [38, .22], [65, .14]].map(([lat, op], i) => {
+              const y   = 130 + (lat / 90) * 108
+              const rx  = Math.cos(lat * Math.PI / 180) * 108
+              return <ellipse key={i} cx="130" cy={y} rx={rx} ry="4"
+                fill="none" stroke="rgba(147,197,253,1)" strokeWidth=".7" strokeOpacity={op}/>
+            })}
+
+            {/* Meridianos animados — elipses que encurtam/expandem o rx */}
+            {[0,1,2,3,4,5].map(i => (
+              <ellipse key={i} cx="130" cy="130" rx="90" ry="108"
+                fill="none" stroke="rgba(147,197,253,.26)" strokeWidth=".8"
+                className="globe-meridian"
+                style={{ animationDelay: `${i}s`, animationDuration: '6s' }}/>
+            ))}
+
+            {/* Massa continental — América do Sul estilizada */}
+            <path d="M108 72 Q122 60 140 64 Q162 68 168 88 Q174 108 170 132 Q166 156 154 170 Q138 184 122 178 Q106 170 100 152 Q93 130 96 108 Q100 86 108 72 Z"
+              fill="rgba(29,78,216,.42)" stroke="rgba(147,197,253,.55)" strokeWidth=".9"/>
+            {/* América Central / Norte (sugestão) */}
+            <path d="M68 48 Q86 38 100 48 Q114 58 108 76 Q96 92 80 86 Q62 76 60 60 Z"
+              fill="rgba(59,130,246,.25)" stroke="rgba(147,197,253,.3)" strokeWidth=".7" opacity=".7"/>
+            {/* Europa / África (sugestão) */}
+            <path d="M160 42 Q178 34 188 46 Q196 60 190 78 Q182 92 168 86 Q155 76 154 60 Z"
+              fill="rgba(59,130,246,.22)" stroke="rgba(147,197,253,.28)" strokeWidth=".7" opacity=".65"/>
+
+            {/* Anel de rede — delivery orbit */}
+            <ellipse cx="130" cy="130" rx="76" ry="27"
+              fill="none" stroke="rgba(251,191,36,.3)" strokeWidth="1" strokeDasharray="4 5"
+              className="route-dash"/>
+            <ellipse cx="130" cy="112" rx="60" ry="20"
+              fill="none" stroke="rgba(96,165,250,.22)" strokeWidth="1" strokeDasharray="3 6"
+              className="route-dash" style={{ animationDelay: '2s' }}/>
+          </g>
+
+          {/* Highlight especular (sobre o clip) */}
+          <circle cx="130" cy="130" r="108" fill="url(#sh)" pointerEvents="none"/>
+          {/* Rim light */}
+          <circle cx="130" cy="130" r="108" fill="url(#sr)" pointerEvents="none"/>
+          {/* Borda fina */}
+          <circle cx="130" cy="130" r="108" fill="none" stroke="rgba(147,197,253,.22)" strokeWidth="1"/>
+
+          {/* Pins de localização */}
           {[
-            { d: 'M220 160 Q250 100 265 65', delay: '0s' },
-            { d: 'M220 160 Q210 140 195 120', delay: '.7s' },
-            { d: 'M220 160 Q170 100 110 65', delay: '1.3s' },
-            { d: 'M220 160 Q190 190 160 220', delay: '2s' },
-            { d: 'M220 160 Q245 130 260 100', delay: '2.6s' },
-            { d: 'M220 160 Q232 160 245 165', delay: '3.2s' },
-          ].map((r, i) => (
+            { cx: 130, cy: 122, label: 'SP', color: '#fbbf24' },
+            { cx: 148, cy: 110, label: 'RJ', color: '#60a5fa' },
+            { cx: 112, cy: 104, label: 'BSB', color: '#60a5fa' },
+          ].map((p, i) => (
             <g key={i}>
-              <path d={r.d} fill="none" stroke="rgba(96,165,250,.55)" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="3 4" className="route-dash"/>
-              <path d={r.d} fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round" opacity="0" className="route-glow" style={{ filter:'blur(1.5px)', animationDelay: r.delay }}/>
+              <circle cx={p.cx} cy={p.cy} r="3" fill={p.color}
+                style={{ filter: `drop-shadow(0 0 5px ${p.color})` }}/>
+              <circle cx={p.cx} cy={p.cy} r="3" fill="none" stroke={p.color} strokeWidth="1"
+                className="city-ping" style={{ animationDelay: `${i * .5}s` }}/>
+              <text x={p.cx + 5} y={p.cy - 3} fill="rgba(255,255,255,.8)"
+                fontSize="7" fontFamily="monospace" fontWeight="700">{p.label}</text>
             </g>
           ))}
-          {/* Cidades */}
-          {[
-            { x:265, y:65,  label:'FOR' }, { x:195, y:120, label:'BSB' },
-            { x:110, y:65,  label:'MAO' }, { x:160, y:220, label:'POA' },
-            { x:260, y:100, label:'SSA' }, { x:245, y:165, label:'RIO' },
-          ].map((c, i) => (
-            <g key={i}>
-              <circle className="city-ping" cx={c.x} cy={c.y} r="3" fill="none" stroke="#60a5fa" strokeWidth="1" style={{ animationDelay:`${i*.3}s` }}/>
-              <circle cx={c.x} cy={c.y} r="2.5" fill="#60a5fa" style={{ filter:'drop-shadow(0 0 6px rgba(96,165,250,.8))' }}/>
-              <text x={c.x+5} y={c.y+3} fill="rgba(203,213,225,.9)" fontSize="8" fontFamily="monospace" fontWeight="600" letterSpacing=".04em">{c.label}</text>
-            </g>
-          ))}
-          {/* Hub SP */}
-          <circle className="hub-ring" cx="220" cy="160" r="4" fill="none" stroke="#fbbf24" strokeWidth="1.2"/>
-          <circle cx="220" cy="160" r="4" fill="#fbbf24" style={{ filter:'drop-shadow(0 0 8px #fbbf24)' }}/>
-          <text x="226" y="158" fill="#fbbf24" fontSize="8" fontFamily="monospace" fontWeight="600">SP · HUB</text>
         </svg>
       </div>
     </div>

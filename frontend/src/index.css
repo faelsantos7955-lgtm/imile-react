@@ -189,6 +189,13 @@ table { border-collapse: collapse; }
 @keyframes route-flash { 0%,100% { opacity: 0; } 50% { opacity: .7; } }
 @keyframes pulse-ring  { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.8); opacity: 0; } }
 
+/* ── Globo 3D — meridianos girando ──────────────────────────── */
+@keyframes meridian-spin {
+  0%,100% { rx: 90px; opacity: .28; }
+  25%,75% { rx: 2px;  opacity: .04; }
+}
+.globe-meridian { animation: meridian-spin 6s ease-in-out infinite; }
+
 .route-dash  { animation: route-dash  8s  linear       infinite; }
 .route-glow  { animation: route-flash 3s  ease-in-out  infinite; }
 .hub-ring    { animation: ring-pulse  2.2s ease-out    infinite; transform-box: fill-box; transform-origin: center; }
