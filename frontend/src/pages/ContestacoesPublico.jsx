@@ -270,17 +270,6 @@ function HeroBanner() {
           </div>
         </div>
 
-        {/* Stats — glass pill */}
-        <div className="mt-6 inline-flex items-stretch rounded-2xl overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)' }}>
-          {[['15+','Bases DS'], ['100k+','Pacotes/mês'], ['24h','Monitoramento']].map(([v, l], i) => (
-            <div key={l} className="flex flex-col items-center justify-center px-7 py-3"
-              style={{ borderRight: i < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
-              <span className="font-bold text-[15px] leading-none" style={{ color: '#fff303' }}>{v}</span>
-              <span className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.32)' }}>{l}</span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   )
