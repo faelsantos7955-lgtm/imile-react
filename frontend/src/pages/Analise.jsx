@@ -19,8 +19,8 @@ import { Download, Upload, X, Filter, Loader, ChevronDown, Check, Megaphone, Arr
 import { useNavigate } from 'react-router-dom'
 import { validarArquivos } from '../lib/validarArquivo'
 
-const CB = { recebido: '#095EF7', expedido: '#f97316', entregas: '#10b981' }
-const COLORS = ['#095EF7', '#f97316', '#10b981', '#06b6d4', '#ef4444', '#f59e0b', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899']
+const CB = { recebido: '#0032A0', expedido: '#1048c8', entregas: '#10b981' }
+const COLORS = ['#0032A0', '#1048c8', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899']
 
 const PRESETS = [
   { key: 'hoje',        label: 'Hoje',         days: 0 },
@@ -769,7 +769,7 @@ export default function Analise() {
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
             <KpiCard label="Recebido"  value={F(dFiltrado.kpis.recebido)}  sub="waybills no dia" color="blue" />
-            <KpiCard label="Em Rota"   value={F(dFiltrado.kpis.expedido)}  sub={`taxa ${P(dFiltrado.kpis.taxa_exp)}`} color="orange" />
+            <KpiCard label="Em Rota"   value={F(dFiltrado.kpis.expedido)}  sub={`taxa ${P(dFiltrado.kpis.taxa_exp)}`} color="blue" />
             <KpiCard label="Entregas"  value={F(dFiltrado.kpis.entregas)}  sub={dFiltrado.kpis.entregas ? `taxa ${P(dFiltrado.kpis.taxa_ent)}` : 'sem dados'} color="blue" />
             <KpiCard label="DS na Meta"  value={dFiltrado.kpis.n_ok}      sub={`de ${dFiltrado.kpis.n_ds} bases`} color="green" />
             <KpiCard label="DS Abaixo"   value={dFiltrado.kpis.n_abaixo}  sub="precisam atenção" color="red" />
@@ -882,7 +882,7 @@ export default function Analise() {
             : <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <KpiCard label="Total Recebido" value={F(periodoData.resumo.recebido)} color="blue" />
-                <KpiCard label="Total Expedido" value={F(periodoData.resumo.expedido)} color="orange" />
+                <KpiCard label="Total Expedido" value={F(periodoData.resumo.expedido)} color="blue" />
                 <KpiCard label="Taxa Média"      value={P(periodoData.resumo.taxa_exp)} color="green" />
                 <KpiCard label={agrup === 'Diário' ? 'Dias' : agrup === 'Semanal' ? 'Semanas' : 'Meses'}
                   value={chartData.length} color="slate" />
@@ -898,7 +898,7 @@ export default function Analise() {
                     <YAxis yAxisId="taxa" orientation="right" tick={{ fontSize: 11 }} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1.1]} />
                     <Tooltip formatter={(v, n) => n === 'Taxa Exp.' ? P(v) : F(v)} /><Legend />
                     <Bar yAxisId="vol" dataKey="recebido" fill="#60a5fa" opacity={0.6} name="Recebido" radius={[3, 3, 0, 0]} />
-                    <Bar yAxisId="vol" dataKey="expedido" fill="#f97316" opacity={0.6} name="Expedido" radius={[3, 3, 0, 0]} />
+                    <Bar yAxisId="vol" dataKey="expedido" fill="#1048c8" opacity={0.6} name="Expedido" radius={[3, 3, 0, 0]} />
                     <Line yAxisId="taxa" dataKey="taxa_exp" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} name="Taxa Exp."
                       label={{ position: 'top', formatter: v => `${(v * 100).toFixed(0)}%`, fontSize: 10, fill: '#10b981' }} />
                   </ComposedChart>
