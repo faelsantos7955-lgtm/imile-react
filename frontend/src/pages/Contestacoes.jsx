@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../components/ui'
 import {
   Search, Plus, Download, Trash2, ChevronDown, Loader2,
   FileText, Image, AlertCircle, CheckCircle2, Clock, X,
-  Database, ClipboardList, ScanSearch,
+  Database, ClipboardList, ScanSearch, RefreshCw,
 } from 'lucide-react'
 
 // ── Constantes ────────────────────────────────────────────────
@@ -169,7 +169,7 @@ function BaseDados() {
   const [editando, setEditando] = useState(null) // { id, obs, previsao }
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm }
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['contestacoes'],
     queryFn: () => api.get('/api/contestacoes').then(r => r.data),
     refetchInterval: 30_000,
@@ -229,7 +229,18 @@ function BaseDados() {
           <option>Todos</option>
           {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
         </select>
-        <span className="ml-auto text-[12px] text-slate-400 self-center">{linhas.length} registro{linhas.length !== 1 ? 's' : ''}</span>
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Atualizar listagem"
+            className="flex items-center gap-1.5 px-3 py-2 text-[12px] border border-slate-200 rounded-lg bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
+          <span className="text-[12px] text-slate-400">{linhas.length} registro{linhas.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
       {/* Tabela */}
