@@ -193,28 +193,42 @@ table { border-collapse: collapse; }
   100% { top: 100%; opacity: 0; }
 }
 
-/* ── Hero3D — mapa + caminhões + rotas ──────────────────────── */
-@keyframes route-dash  { to { stroke-dashoffset: -70; } }
-@keyframes ring-pulse  { 0% { r: 4; opacity: .9; } 100% { r: 22; opacity: 0; } }
-@keyframes drive       { 0% { transform: translateX(0); } 100% { transform: translateX(calc(100% + 900px)); } }
-@keyframes hero-float  { 0%,100% { transform: translateY(0) translateX(0); opacity: .3; } 50% { transform: translateY(-20px) translateX(10px); opacity: .8; } }
-@keyframes route-flash { 0%,100% { opacity: 0; } 50% { opacity: .7; } }
+/* ── Hero3D — globo 3D ───────────────────────────────────────── */
 @keyframes pulse-ring  { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(2.8); opacity: 0; } }
+@keyframes route-dash  { to { stroke-dashoffset: -70; } }
+@keyframes route-flash { 0%,100% { opacity: 0; } 50% { opacity: .7; } }
+@keyframes ring-pulse  { 0% { r: 4; opacity: .9; } 100% { r: 22; opacity: 0; } }
 
-/* ── Globo 3D — meridianos girando ──────────────────────────── */
+/* Meridianos do globo — efeito de rotação por mudança de rx */
 @keyframes meridian-spin {
-  0%,100% { rx: 90px; opacity: .28; }
-  25%,75% { rx: 2px;  opacity: .04; }
+  0%,100% { rx: 50px; opacity: .18; }
+  25%,75% { rx: 2px;  opacity: .03; }
 }
-.globe-meridian { animation: meridian-spin 6s ease-in-out infinite; }
+.globe-meridian { animation: meridian-spin 8s ease-in-out infinite; }
 
-.route-dash  { animation: route-dash  8s  linear       infinite; }
-.route-glow  { animation: route-flash 3s  ease-in-out  infinite; }
-.hub-ring    { animation: ring-pulse  2.2s ease-out    infinite; transform-box: fill-box; transform-origin: center; }
-.city-ping   { animation: ring-pulse  2.6s ease-out    infinite; transform-box: fill-box; transform-origin: center; }
-.hero-truck  { animation: drive       16s linear       infinite; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
-.hero-truck2 { animation: drive       22s linear       infinite; animation-delay: -9s; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
-.hero-particle { animation: hero-float 8s ease-in-out  infinite; }
+/* Pins pulsantes */
+@keyframes pin-pulse {
+  0%   { transform: scale(1);   opacity: .85; }
+  100% { transform: scale(3.8); opacity: 0;   }
+}
+.globe-pin {
+  animation: pin-pulse 2.8s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Partículas flutuantes */
+@keyframes globe-float {
+  0%,100% { transform: translateY(0)   translateX(0);   opacity: .5; }
+  33%      { transform: translateY(-7px) translateX(5px);  opacity: .9; }
+  66%      { transform: translateY(5px)  translateX(-4px); opacity: .6; }
+}
+.globe-particle { animation: globe-float 5.5s ease-in-out infinite; }
+
+.route-dash    { animation: route-dash   8s  linear       infinite; }
+.route-glow    { animation: route-flash  3s  ease-in-out  infinite; }
+.hub-ring      { animation: ring-pulse  2.2s ease-out     infinite; transform-box: fill-box; transform-origin: center; }
+.city-ping     { animation: ring-pulse  2.6s ease-out     infinite; transform-box: fill-box; transform-origin: center; }
 .pulse-dot::after { content:''; position:absolute; inset:-4px; border-radius:50%; background:#60a5fa; opacity:.5; animation: pulse-ring 2s infinite; }
 
 .truck-anim   { animation: truck-move 12s linear infinite; }

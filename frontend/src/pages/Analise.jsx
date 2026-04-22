@@ -397,137 +397,72 @@ function ChartGradients() {
   )
 }
 
-// ── Hero 3D ────────────────────────────────────────────────────────────
+// ── Hero 3D — Globo ────────────────────────────────────────────────────
 function Hero3D({ kpis, nBases }) {
   const F = n => n?.toLocaleString('pt-BR') ?? '—'
   const P = n => n != null ? `${(n * 100).toFixed(1)}%` : '—'
 
+  const PINS = [
+    { cx: 140, cy: 84,  d: '0s'   },
+    { cx: 162, cy: 108, d: '.9s'  },
+    { cx: 108, cy: 120, d: '1.7s' },
+    { cx: 150, cy: 155, d: '2.5s' },
+    { cx: 90,  cy: 128, d: '3.3s' },
+  ]
+  const PARTS = [
+    { cx: 34,  cy: 82,  r: 1.5, d: '0s'   },
+    { cx: 222, cy: 96,  r: 1.2, d: '1.2s' },
+    { cx: 248, cy: 158, r: 1.8, d: '2.4s' },
+    { cx: 165, cy: 232, r: 1.3, d: '.6s'  },
+    { cx: 28,  cy: 172, r: 1.6, d: '3s'   },
+    { cx: 94,  cy: 20,  r: 1.2, d: '1.8s' },
+    { cx: 212, cy: 38,  r: 1.0, d: '2.8s' },
+    { cx: 16,  cy: 128, r: 1.4, d: '.4s'  },
+  ]
+
   return (
-    <div className="relative rounded-2xl overflow-hidden mb-6 flex items-center gap-6" style={{
-      minHeight: 280,
-      background: 'radial-gradient(circle at 20% 30%, rgba(59,130,246,.22) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(14,40,65,.8) 0%, transparent 60%), linear-gradient(135deg, #0a1628 0%, #0E2841 40%, #13305a 100%)',
-      color: 'white', padding: '28px 32px',
+    <div className="relative rounded-2xl overflow-hidden mb-6 flex items-center gap-8" style={{
+      minHeight: 300,
+      background: 'linear-gradient(135deg, #060d1a 0%, #091525 55%, #0c1c35 100%)',
+      color: 'white', padding: '32px 36px',
     }}>
-      {/* Grid overlay */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-        maskImage: 'radial-gradient(circle at 70% 50%, black, transparent 70%)',
+      {/* Grid perspectiva ao fundo */}
+      <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{
+        height: 130,
+        backgroundImage: 'linear-gradient(rgba(0,80,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0,80,255,.08) 1px, transparent 1px)',
+        backgroundSize: '38px 38px',
+        transform: 'perspective(260px) rotateX(60deg)',
+        transformOrigin: 'bottom center',
+        maskImage: 'linear-gradient(to top, rgba(0,0,0,.55), transparent)',
+        WebkitMaskImage: 'linear-gradient(to top, rgba(0,0,0,.55), transparent)',
       }} />
 
-      {/* Trucks */}
-      <div className="absolute pointer-events-none overflow-hidden" style={{ top: '12%', left: 0, right: 0 }}>
-        <svg className="hero-truck" style={{ width: 130, height: 36, position: 'relative', left: -140 }} viewBox="0 0 260 72" fill="none">
-          <rect x="2" y="12" width="148" height="44" rx="3" fill="white" fillOpacity="0.92"/>
-          <rect x="2" y="12" width="148" height="44" rx="3" stroke="#0032A0" strokeWidth="1"/>
-          <path d="M2 12 L150 12 L150 16 L2 16 Z" fill="#0032A0" fillOpacity="0.12"/>
-          <rect x="2" y="44" width="148" height="12" rx="3" fill="#0032A0"/>
-          <rect x="2" y="42" width="148" height="3" fill="white" fillOpacity="0.55"/>
-          <text x="46" y="40" fontFamily="Arial, sans-serif" fontSize="9" fontWeight="bold" fill="#0032A0" fillOpacity="0.7" letterSpacing="3">iMile</text>
-          <line x1="8" y1="16" x2="8" y2="42" stroke="#0032A0" strokeWidth="0.6" strokeOpacity="0.3"/>
-          <line x1="8" y1="29" x2="148" y2="29" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.18"/>
-          <rect x="2" y="18" width="4" height="7" rx="1" fill="#ff4040" fillOpacity="0.85"/>
-          <rect x="2" y="27" width="4" height="5" rx="1" fill="#ff8800" fillOpacity="0.7"/>
-          <rect x="12" y="56" width="120" height="4" rx="1" fill="#0032A0" fillOpacity="0.4"/>
-          <rect x="148" y="38" width="8" height="8" rx="1" fill="#aab8cc"/>
-          <rect x="152" y="34" width="3" height="5" rx="1" fill="#8899b0"/>
-          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" fill="#0032A0"/>
-          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" stroke="#001d6e" strokeWidth="0.8"/>
-          <path d="M165 16 Q170 9 198 9 L248 9 L255 18 L248 16 L165 16 Z" fill="#0032A0"/>
-          <path d="M165 9 Q172 4 202 4 L248 4 L255 13 L248 9 L165 9 Z" fill="#0028a0"/>
-          <path d="M222 11 L250 11 L255 30 L222 30 Z" fill="white" fillOpacity="0.15" stroke="white" strokeWidth="0.7" strokeOpacity="0.4"/>
-          <rect x="160" y="18" width="28" height="16" rx="2" fill="white" fillOpacity="0.18" stroke="white" strokeWidth="0.6" strokeOpacity="0.35"/>
-          <line x1="173" y1="18" x2="173" y2="34" stroke="white" strokeWidth="0.5" strokeOpacity="0.3"/>
-          <rect x="153" y="20" width="5" height="8" rx="1" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.3"/>
-          <rect x="249" y="33" width="6" height="12" rx="1" fill="#001d6e"/>
-          {[35,38,41,44].map(y => <line key={y} x1="249" y1={y} x2="255" y2={y} stroke="white" strokeWidth="0.4" strokeOpacity="0.25"/>)}
-          <rect x="247" y="47" width="8" height="9" rx="2" fill="white" fillOpacity="0.85" stroke="#0032A0" strokeWidth="0.6"/>
-          <rect x="251" y="19" width="6" height="9" rx="2" fill="white" fillOpacity="0.95"/>
-          <rect x="161" y="1" width="5" height="10" rx="2" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.2"/>
-          <rect x="156" y="49" width="90" height="3" rx="0" fill="white" fillOpacity="0.15"/>
-          <rect x="220" y="50" width="22" height="6" rx="1" fill="#001d6e"/>
-          {[30, 45].map(cx => <g key={`tw${cx}`}>
-            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
-            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
-            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
-            {[0,60,120,180,240,300].map(a => <line key={a} x1={cx} y1={64} x2={cx+4.5*Math.cos(a*Math.PI/180)} y2={64+4.5*Math.sin(a*Math.PI/180)} stroke="white" strokeWidth="0.8" strokeOpacity="0.4"/>)}
-          </g>)}
-          {[105, 120].map(cx => <g key={`tw2${cx}`}>
-            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
-            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
-            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
-            {[0,60,120,180,240,300].map(a => <line key={a} x1={cx} y1={64} x2={cx+4.5*Math.cos(a*Math.PI/180)} y2={64+4.5*Math.sin(a*Math.PI/180)} stroke="white" strokeWidth="0.8" strokeOpacity="0.4"/>)}
-          </g>)}
-          {[190, 235].map(cx => <g key={`cw${cx}`}>
-            <circle cx={cx} cy={64} r="11" fill="#1a1a2e" stroke="white" strokeWidth="1.5" strokeOpacity="0.6"/>
-            <circle cx={cx} cy={64} r="7" fill="#111122" stroke="#0032A0" strokeWidth="1.2"/>
-            <circle cx={cx} cy={64} r="3" fill="white" fillOpacity="0.75"/>
-            {[0,45,90,135,180,225,270,315].map(a => <line key={a} x1={cx} y1={64} x2={cx+5.5*Math.cos(a*Math.PI/180)} y2={64+5.5*Math.sin(a*Math.PI/180)} stroke="white" strokeWidth="0.9" strokeOpacity="0.4"/>)}
-          </g>)}
-        </svg>
-      </div>
-      <div className="absolute pointer-events-none overflow-hidden" style={{ bottom: '8%', left: 0, right: 0 }}>
-        <svg className="hero-truck2" style={{ width: 110, height: 30, position: 'relative', left: -120 }} viewBox="0 0 260 72" fill="none">
-          <rect x="2" y="12" width="148" height="44" rx="3" fill="white" fillOpacity="0.85"/>
-          <rect x="2" y="12" width="148" height="44" rx="3" stroke="#0032A0" strokeWidth="1"/>
-          <path d="M2 12 L150 12 L150 16 L2 16 Z" fill="#0032A0" fillOpacity="0.12"/>
-          <rect x="2" y="44" width="148" height="12" rx="3" fill="#0032A0"/>
-          <rect x="2" y="42" width="148" height="3" fill="white" fillOpacity="0.55"/>
-          <text x="46" y="40" fontFamily="Arial, sans-serif" fontSize="9" fontWeight="bold" fill="#0032A0" fillOpacity="0.7" letterSpacing="3">iMile</text>
-          <line x1="8" y1="16" x2="8" y2="42" stroke="#0032A0" strokeWidth="0.6" strokeOpacity="0.3"/>
-          <line x1="8" y1="29" x2="148" y2="29" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.18"/>
-          <rect x="2" y="18" width="4" height="7" rx="1" fill="#ff4040" fillOpacity="0.85"/>
-          <rect x="148" y="38" width="8" height="8" rx="1" fill="#aab8cc"/>
-          <rect x="152" y="34" width="3" height="5" rx="1" fill="#8899b0"/>
-          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" fill="#0032A0"/>
-          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" stroke="#001d6e" strokeWidth="0.8"/>
-          <path d="M165 16 Q170 9 198 9 L248 9 L255 18 L248 16 L165 16 Z" fill="#0032A0"/>
-          <path d="M165 9 Q172 4 202 4 L248 4 L255 13 L248 9 L165 9 Z" fill="#0028a0"/>
-          <path d="M222 11 L250 11 L255 30 L222 30 Z" fill="white" fillOpacity="0.15" stroke="white" strokeWidth="0.7" strokeOpacity="0.4"/>
-          <rect x="160" y="18" width="28" height="16" rx="2" fill="white" fillOpacity="0.18" stroke="white" strokeWidth="0.6" strokeOpacity="0.35"/>
-          <rect x="153" y="20" width="5" height="8" rx="1" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.3"/>
-          <rect x="249" y="33" width="6" height="12" rx="1" fill="#001d6e"/>
-          <rect x="247" y="47" width="8" height="9" rx="2" fill="white" fillOpacity="0.85" stroke="#0032A0" strokeWidth="0.6"/>
-          <rect x="251" y="19" width="6" height="9" rx="2" fill="white" fillOpacity="0.95"/>
-          <rect x="161" y="1" width="5" height="10" rx="2" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.2"/>
-          <rect x="156" y="49" width="90" height="3" rx="0" fill="white" fillOpacity="0.15"/>
-          {[30, 45].map(cx => <g key={`tw${cx}`}>
-            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
-            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
-            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
-          </g>)}
-          {[105, 120].map(cx => <g key={`tw2${cx}`}>
-            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
-            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
-            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
-          </g>)}
-          {[190, 235].map(cx => <g key={`cw${cx}`}>
-            <circle cx={cx} cy={64} r="11" fill="#1a1a2e" stroke="white" strokeWidth="1.5" strokeOpacity="0.6"/>
-            <circle cx={cx} cy={64} r="7" fill="#111122" stroke="#0032A0" strokeWidth="1.2"/>
-            <circle cx={cx} cy={64} r="3" fill="white" fillOpacity="0.75"/>
-          </g>)}
-        </svg>
-      </div>
+      {/* Halo de fundo do globo */}
+      <div className="absolute pointer-events-none" style={{
+        right: 20, top: '50%', transform: 'translateY(-50%)',
+        width: 310, height: 310,
+        background: 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 68%)',
+        borderRadius: '50%',
+      }} />
 
-      {/* Floating particles */}
-      {[{ top:'20%', left:'40%', delay:'0s' }, { top:'70%', left:'20%', delay:'1.5s' }, { top:'30%', left:'75%', delay:'3s' }].map((p, i) => (
-        <span key={i} className="hero-particle" style={{ position:'absolute', width:3, height:3, borderRadius:'50%', background:'rgba(147,197,253,.6)', top:p.top, left:p.left, animationDelay:p.delay }} />
-      ))}
-
-      {/* Conteúdo */}
+      {/* Conteúdo esquerdo */}
       <div className="relative z-10 flex-1 min-w-0">
         <div className="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full text-[11px] font-semibold tracking-widest uppercase"
           style={{ background: 'rgba(59,130,246,.14)', border: '1px solid rgba(147,197,253,.25)', color: 'rgba(147,197,253,.9)' }}>
           <span className="pulse-dot relative w-1.5 h-1.5 rounded-full" style={{ background: '#60a5fa' }} />
           Live · Portal Operacional
         </div>
-        <h2 className="font-bold mb-2" style={{ fontSize: 28, letterSpacing: '-.8px', lineHeight: 1.1, background: 'linear-gradient(90deg, #fff 0%, #cbd5e1 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+        <h2 className="font-bold mb-2" style={{
+          fontSize: 30, letterSpacing: '-.8px', lineHeight: 1.1,
+          background: 'linear-gradient(90deg, #ffffff 0%, #93c5fd 55%, #60a5fa 100%)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        }}>
           Operação iMile Brasil
         </h2>
-        <p style={{ color: 'rgba(203,213,225,.75)', fontSize: 13.5, maxWidth: 420, lineHeight: 1.55 }}>
-          Rede de delivery stations conectadas, monitoramento em tempo real de expedição e entregas.
+        <p style={{ color: 'rgba(203,213,225,.65)', fontSize: 13.5, maxWidth: 380, lineHeight: 1.55 }}>
+          Rede de filiais conectadas, monitoramento em tempo real de expedição e entregas.
         </p>
-        <div className="flex gap-7 mt-5">
+        <div className="flex gap-7 mt-6">
           {[
             { v: F(kpis?.recebido), l: 'Recebido' },
             { v: P(kpis?.taxa_exp), l: 'Taxa Exp.' },
@@ -535,84 +470,109 @@ function Hero3D({ kpis, nBases }) {
           ].map(({ v, l }) => (
             <div key={l}>
               <div className="font-bold" style={{ fontSize: 22, letterSpacing: '-.5px' }}>{v}</div>
-              <div className="font-semibold uppercase tracking-widest mt-1" style={{ fontSize: 10.5, color: 'rgba(147,197,253,.75)' }}>{l}</div>
+              <div className="font-semibold uppercase tracking-widest mt-1" style={{ fontSize: 10.5, color: 'rgba(147,197,253,.72)' }}>{l}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Mapa Brasil — cena de rotas */}
-      <div className="relative shrink-0 hidden lg:block" style={{ width: 340, height: 260 }}>
-        <svg className="w-full h-full overflow-visible" viewBox="0 0 340 260">
+      {/* Globo 3D */}
+      <div className="relative shrink-0 hidden lg:flex items-center justify-center" style={{ width: 264, height: 264 }}>
+        <svg viewBox="0 0 264 264" width="264" height="264" overflow="visible">
           <defs>
-            <filter id="br-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="b"/>
+            <radialGradient id="gb-body" cx="38%" cy="32%" r="70%">
+              <stop offset="0%" stopColor="#2563eb"/>
+              <stop offset="48%" stopColor="#0c2a6e"/>
+              <stop offset="100%" stopColor="#04102a"/>
+            </radialGradient>
+            <radialGradient id="gb-shine" cx="33%" cy="28%" r="50%">
+              <stop offset="0%" stopColor="white" stopOpacity=".15"/>
+              <stop offset="100%" stopColor="white" stopOpacity="0"/>
+            </radialGradient>
+            <filter id="gb-glow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="9" result="b"/>
               <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
+            <filter id="gb-pin" x="-200%" y="-200%" width="500%" height="500%">
+              <feGaussianBlur stdDeviation="2.5" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <clipPath id="gb-clip"><circle cx="132" cy="132" r="97"/></clipPath>
           </defs>
 
-          {/* Brazil outline */}
-          <path fill="rgba(147,197,253,.10)" stroke="rgba(147,197,253,.32)" strokeWidth=".8"
-            d="M 180 20 L 215 25 L 245 35 L 270 55 L 285 80 L 295 105 L 300 130 L 295 155 L 285 175 L 270 195 L 250 215 L 225 230 L 200 240 L 175 245 L 150 240 L 128 230 L 110 215 L 95 200 L 82 180 L 72 160 L 62 138 L 55 115 L 50 95 L 48 75 L 52 60 L 62 48 L 78 40 L 95 35 L 115 30 L 140 25 L 165 20 Z"/>
-          {/* Norte */}
-          <path fill="rgba(147,197,253,.07)" stroke="rgba(147,197,253,.2)" strokeWidth=".6"
-            d="M 95 55 L 145 45 L 175 55 L 170 90 L 130 95 L 95 85 Z" opacity=".55"/>
-          {/* Nordeste */}
-          <path fill="rgba(59,130,246,.3)" stroke="rgba(147,197,253,.7)" strokeWidth=".8"
-            d="M 200 40 L 260 55 L 285 90 L 270 125 L 225 120 L 205 90 L 195 65 Z"/>
-          {/* Centro-Oeste */}
-          <path fill="rgba(147,197,253,.08)" stroke="rgba(147,197,253,.2)" strokeWidth=".6"
-            d="M 130 100 L 190 95 L 215 130 L 185 160 L 135 155 L 115 125 Z" opacity=".7"/>
-          {/* Sudeste — hub */}
-          <path fill="rgba(29,78,216,.5)" stroke="#93c5fd" strokeWidth="1.2"
-            d="M 190 135 L 240 130 L 260 160 L 240 185 L 200 180 L 180 160 Z"/>
-          {/* Sul */}
-          <path fill="rgba(59,130,246,.28)" stroke="rgba(147,197,253,.7)" strokeWidth=".8"
-            d="M 150 175 L 200 185 L 215 215 L 185 235 L 140 225 L 125 200 Z"/>
+          {/* Atmospheric glow */}
+          <circle cx="132" cy="132" r="106" fill="rgba(37,99,235,.1)" style={{ filter: 'blur(14px)' }}/>
+          <circle cx="132" cy="132" r="100" fill="none" stroke="rgba(96,165,250,.16)" strokeWidth="6" style={{ filter: 'blur(5px)' }}/>
 
-          {/* Rotas do hub SP */}
-          {[
-            { d: 'M 220 160 Q 250 100 265 65',  delay: '0s' },
-            { d: 'M 220 160 Q 210 140 195 120', delay: '.7s' },
-            { d: 'M 220 160 Q 170 100 110 65',  delay: '1.3s' },
-            { d: 'M 220 160 Q 190 190 160 220', delay: '2s' },
-            { d: 'M 220 160 Q 245 130 260 100', delay: '2.6s' },
-            { d: 'M 220 160 Q 232 160 245 165', delay: '3.2s' },
-          ].map((r, i) => (
-            <g key={i}>
-              <path d={r.d} fill="none" stroke="rgba(96,165,250,.55)" strokeWidth="1.2"
-                strokeLinecap="round" strokeDasharray="3 4" className="route-dash"/>
-              <path d={r.d} fill="none" stroke="#60a5fa" strokeWidth="2.5"
-                strokeLinecap="round" className="route-glow" style={{ animationDelay: r.delay, filter: 'blur(1.5px)' }}/>
+          {/* Globe body */}
+          <circle cx="132" cy="132" r="97" fill="url(#gb-body)"/>
+
+          {/* Grid lines */}
+          <g clipPath="url(#gb-clip)">
+            {[-62, -33, 0, 33, 62].map((lat, i) => {
+              const y = 132 + lat
+              const rx = Math.sqrt(97 * 97 - lat * lat) * 0.94
+              return <ellipse key={i} cx="132" cy={y} rx={rx} ry="9"
+                fill="none" stroke="rgba(147,197,253,.1)" strokeWidth=".8"/>
+            })}
+            {[0, 36, 72, 108, 144].map((angle, i) => (
+              <ellipse key={i} cx="132" cy="132" rx="50" ry="97"
+                fill="none" stroke="rgba(147,197,253,.11)" strokeWidth=".7"
+                className="globe-meridian"
+                style={{ animationDelay: `${i * 1.6}s`, animationDuration: '8s', transformOrigin: '132px 132px', transformBox: 'fill-box' }}
+                transform={`rotate(${angle}, 132, 132)`}/>
+            ))}
+            {/* Massas de terra estilizadas */}
+            <path d="M 120 75 Q 142 68 158 78 Q 170 92 164 110 Q 150 118 128 115 Q 110 110 106 92 Z"
+              fill="rgba(37,99,235,.42)" stroke="rgba(147,197,253,.45)" strokeWidth=".7"/>
+            <path d="M 84 114 Q 98 108 110 120 Q 105 138 86 135 Q 72 128 84 114 Z"
+              fill="rgba(37,99,235,.32)" stroke="rgba(147,197,253,.3)" strokeWidth=".6"/>
+            <path d="M 135 140 Q 158 134 172 152 Q 170 170 152 175 Q 130 173 128 156 Z"
+              fill="rgba(37,99,235,.36)" stroke="rgba(147,197,253,.4)" strokeWidth=".6"/>
+            <path d="M 97 150 Q 114 146 120 160 Q 115 173 97 171 Q 84 162 97 150 Z"
+              fill="rgba(37,99,235,.24)" stroke="rgba(147,197,253,.26)" strokeWidth=".5"/>
+          </g>
+
+          {/* Globe border */}
+          <circle cx="132" cy="132" r="97" fill="none" stroke="rgba(147,197,253,.22)" strokeWidth="1"/>
+          {/* Shine overlay */}
+          <circle cx="132" cy="132" r="97" fill="url(#gb-shine)"/>
+
+          {/* Órbita 1 (inclinada -25°) + satélite */}
+          <g transform="translate(132,132) rotate(-25)">
+            <ellipse cx="0" cy="0" rx="118" ry="32"
+              fill="none" stroke="rgba(96,165,250,.28)" strokeWidth="1" strokeDasharray="4 3"/>
+            <circle r="4.5" fill="#60a5fa" style={{ filter: 'drop-shadow(0 0 6px rgba(96,165,250,.9))' }}>
+              <animateMotion dur="9s" repeatCount="indefinite"
+                path="M 118,0 A 118,32 0 1,0 -118,0 A 118,32 0 1,0 118,0"/>
+            </circle>
+          </g>
+
+          {/* Órbita 2 (inclinada +42°) + satélite */}
+          <g transform="translate(132,132) rotate(42)">
+            <ellipse cx="0" cy="0" rx="125" ry="22"
+              fill="none" stroke="rgba(147,197,253,.2)" strokeWidth="1" strokeDasharray="3 4"/>
+            <circle r="3" fill="#93c5fd" style={{ filter: 'drop-shadow(0 0 4px rgba(147,197,253,.8))' }}>
+              <animateMotion dur="14s" repeatCount="indefinite"
+                path="M -125,0 A 125,22 0 1,0 125,0 A 125,22 0 1,0 -125,0"/>
+            </circle>
+          </g>
+
+          {/* Pins pulsantes */}
+          {PINS.map((p, i) => (
+            <g key={i} filter="url(#gb-pin)">
+              <circle cx={p.cx} cy={p.cy} r="2.8" fill="#60a5fa" opacity=".95"/>
+              <circle cx={p.cx} cy={p.cy} r="2.8" fill="none" stroke="#60a5fa" strokeWidth="1.2"
+                className="globe-pin" style={{ animationDelay: p.d }}/>
             </g>
           ))}
 
-          {/* Cidades */}
-          {[
-            { x: 265, y: 65,  label: 'FOR' },
-            { x: 195, y: 120, label: 'BSB' },
-            { x: 110, y: 65,  label: 'MAO' },
-            { x: 160, y: 220, label: 'POA' },
-            { x: 260, y: 100, label: 'SSA' },
-            { x: 245, y: 165, label: 'RIO' },
-            { x: 250, y: 190, label: 'CWB' },
-          ].map((c, i) => (
-            <g key={i}>
-              <circle cx={c.x} cy={c.y} r="3" fill="none" stroke="#60a5fa" strokeWidth="1"
-                className="city-ping" style={{ animationDelay: `${i * .3}s` }}/>
-              <circle cx={c.x} cy={c.y} r="2.5" fill="#60a5fa"
-                style={{ filter: 'drop-shadow(0 0 6px rgba(96,165,250,.8))' }}/>
-              <text x={c.x + 5} y={c.y + 3} fill="rgba(203,213,225,.9)"
-                fontSize="8" fontFamily="monospace" fontWeight="600" letterSpacing=".04em">{c.label}</text>
-            </g>
+          {/* Partículas flutuantes */}
+          {PARTS.map((p, i) => (
+            <circle key={i} cx={p.cx} cy={p.cy} r={p.r}
+              fill="rgba(96,165,250,.65)" className="globe-particle"
+              style={{ animationDelay: p.d }}/>
           ))}
-
-          {/* São Paulo hub */}
-          <circle cx="220" cy="160" r="4" fill="none" stroke="#fbbf24" strokeWidth="1.2"
-            className="hub-ring"/>
-          <circle cx="220" cy="160" r="4" fill="#fbbf24"
-            style={{ filter: 'drop-shadow(0 0 8px #fbbf24)' }}/>
-          <text x="226" y="158" fill="#fbbf24" fontSize="8" fontFamily="monospace" fontWeight="600">SP · HUB</text>
         </svg>
       </div>
     </div>
