@@ -137,26 +137,6 @@ export default function Login() {
             Entregas, backlog, contestações e triagem — visibilidade total da operação em um único painel.
           </p>
 
-          {/* Stats row — glass */}
-          <div className="flex gap-0 rounded-2xl overflow-hidden" style={{
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            backdropFilter: 'blur(16px)',
-          }}>
-            {[
-              { v: '15+',   l: 'Bases DS' },
-              { v: '100k+', l: 'Pacotes/mês' },
-              { v: '24/7',  l: 'Monitoramento' },
-            ].map(({ v, l }, i) => (
-              <div key={l} className="flex-1 px-5 py-3.5 text-center" style={{
-                borderRight: i < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none',
-              }}>
-                <p style={{ color: '#93c5fd', fontWeight: 800, fontSize: 16, lineHeight: 1 }}>{v}</p>
-                <p style={{ color: 'rgba(255,255,255,.3)', fontSize: 10, marginTop: 4, letterSpacing: '.04em' }}>{l}</p>
-              </div>
-            ))}
-          </div>
-
           <p className="mt-6" style={{ color: 'rgba(255,255,255,.18)', fontSize: 11 }}>
             © 2025 iMile Delivery Brasil · Acesso restrito
           </p>

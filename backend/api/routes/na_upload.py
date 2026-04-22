@@ -69,7 +69,13 @@ def _processar_export(xl: pd.ExcelFile) -> dict:
     if not datas_validas.empty:
         data_ref = datas_validas.dt.date.max().isoformat()
 
-    df["_is_thr"] = df["_data_parsed"].isna()
+    data_ref_dt = pd.Timestamp(data_ref)
+    _text_thr = df["_data_parsed"].isna()
+    _date_thr = (
+        df["_data_parsed"].notna() &
+        ((data_ref_dt - df["_data_parsed"]).dt.days >= 10)
+    )
+    df["_is_thr"] = _text_thr | _date_thr
     total_grd_pre = int(df["_is_thr"].sum())
 
     # Renomeia colunas com prefixo _ para evitar bug do itertuples
