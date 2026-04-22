@@ -55,7 +55,7 @@ def excel_extravios(
     # ── Aba "Por DS" ──────────────────────────────────────────
     ws = wb.active
     ws.title = "Por DS"
-    _titulo_aba(ws, f"Extravios — Por DS — {data_ref}", 7)
+    _titulo_aba(ws, f"Extravios — Por DS — {data_ref}", 8)
     _write_header(ws, ["#", "DS", "Supervisor", "Regional", "Total", "Goods Lost", "Avaria", "Valor Declarado"], 2)
     rows = []
     for i, d in enumerate(por_ds, 1):

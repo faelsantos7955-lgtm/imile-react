@@ -52,6 +52,8 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
     C_ERR    = "C00000"   # vermelho escuro — chegou errado
 
     tem_arrival = bool(u.get("tem_arrival", False))
+    # T5_START: quando tem_arrival=True a tabela DS usa cols 1-8, então Top5 começa na 10
+    T5_START = 10 if tem_arrival else 8
 
     def _hfnt(color="FFFFFF"): return Font(name="Calibri", bold=True, color=color, size=11)
     def _bfnt(bold=False, color="000000"): return Font(name="Calibri", size=10, bold=bold, color=color)
@@ -61,7 +63,7 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
     ws.title = "Dashboard"
     ws.sheet_view.showGridLines = False
 
-    ncols_title = 10
+    ncols_title = T5_START + 3 if tem_arrival else T5_START + 1
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols_title)
     t = ws.cell(1, 1, f"ERRO DE TRIAGEM (DC > DS)  —  {u['data_ref']}")
     t.font = Font(bold=True, color="FFFFFF", name="Calibri", size=16)
@@ -144,7 +146,6 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
                 c.font = _hfnt(color="FFFFFF")
 
     # ── Tabela Top 5 ─────────────────────────────────────────
-    T5_START = 8
     ws.merge_cells(start_row=2, start_column=T5_START, end_row=2, end_column=T5_START + 1)
     th = ws.cell(2, T5_START, "🏆 TOP 5 DS com mais Erros")
     th.fill = PatternFill("solid", fgColor=C_HDR_T5)
@@ -191,7 +192,14 @@ def excel_triagem(request: Request, upload_id: int, user: dict = Depends(get_cur
         val2.font = Font(name="Calibri", bold=True, size=20, color="FFFFFF")
         val2.alignment = _CTR; val2.number_format = "#,##0"
 
-    for col, w in [(1, 22), (2, 18), (3, 14), (4, 16), (5, 16), (6, 10), (7, 4), (8, 22), (9, 14), (10, 4), (11, 22), (12, 18)]:
+    if tem_arrival:
+        # DS usa cols 1-8; spacer col 9; Top5 cols 10-11; spacer col 12; box2 cols 13-14
+        _col_ws = [(1,22),(2,18),(3,14),(4,16),(5,16),(6,10),(7,16),(8,18),
+                   (9,4),(10,22),(11,14),(12,4),(13,22),(14,18)]
+    else:
+        # DS usa cols 1-6; spacer col 7; Top5 cols 8-9
+        _col_ws = [(1,22),(2,18),(3,14),(4,16),(5,16),(6,10),(7,4),(8,22),(9,14)]
+    for col, w in _col_ws:
         ws.column_dimensions[get_column_letter(col)].width = w
     ws.freeze_panes = "A4"
 

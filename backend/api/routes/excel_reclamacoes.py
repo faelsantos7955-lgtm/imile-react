@@ -155,16 +155,14 @@ def excel_reclamacoes(request: Request, upload_id: int, user: dict = Depends(get
         mot_row_start = max(row_ds, 4 + (len(r_sup) if not r_sup.empty else 0)) + 2
         hf_mot = PatternFill("solid", fgColor=C_HDR_MOT)
 
-        ws.merge_cells(start_row=mot_row_start, start_column=MOT_START,
-                       end_row=mot_row_start, end_column=MOT_START + 4)
-        tm = ws.cell(mot_row_start, MOT_START, "🏆 TOP Motoristas Ofensores")
-        tm.fill = hf_mot; tm.font = _hfnt(); tm.alignment = _CTR
-        ws.row_dimensions[mot_row_start].height = 24
-
         MOT_HDR = ["SUPERVISOR", "TOP Motorista Ofensor", "ID Motorista", "DS", f"Qt Reclamações Week {semana_ref}", "% do Total"]
         ncols_mot = len(MOT_HDR)
         ws.merge_cells(start_row=mot_row_start, start_column=MOT_START,
                        end_row=mot_row_start, end_column=MOT_START + ncols_mot - 1)
+        tm = ws.cell(mot_row_start, MOT_START, "🏆 TOP Motoristas Ofensores")
+        tm.fill = hf_mot; tm.font = _hfnt(); tm.alignment = _CTR
+        ws.row_dimensions[mot_row_start].height = 24
+
         for ci, cn in enumerate(MOT_HDR, MOT_START):
             c = ws.cell(mot_row_start + 1, ci, cn)
             c.fill = hf_mot; c.font = _hfnt(); c.alignment = _CTR; c.border = _BRD
