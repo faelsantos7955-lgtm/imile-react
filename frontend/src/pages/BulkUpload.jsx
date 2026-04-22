@@ -274,7 +274,7 @@ export default function BulkUpload() {
   const [collapsed, setCollapsed] = useState(() => Object.fromEntries(MODULES.map(m => [m.id, false])))
   const [progress,  setProgress]  = useState({ current: 0, total: 0 })
   const [done,      setDone]      = useState(false)
-  const [skipExisting, setSkipExisting] = useState(true)
+  const [skipExisting, setSkipExisting] = useState(false)
   const abortRef = useRef(false)
 
   const totalFiles = MODULES.reduce((s, m) => s + files[m.id].length, 0)
@@ -479,7 +479,7 @@ export default function BulkUpload() {
       {/* Dica */}
       <p className="text-[10px] text-slate-400 text-center">
         {CONCURRENCY} uploads simultâneos. Em rate limit (429), aguarda 15s e tenta novamente.
-        {skipExisting && ' Arquivos com data já no banco são pulados automaticamente.'}
+        {skipExisting ? ' Arquivos com data já no banco são pulados.' : ' Datas já existentes serão substituídas.'}
       </p>
     </div>
   )
