@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide, toast, ConfirmDialog } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide, toast, ConfirmDialog, chartTheme } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
@@ -244,14 +244,18 @@ export default function Reclamacoes() {
                     <Card>
                       <ResponsiveContainer width="100%" height={240}>
                         <BarChart data={detail.top5.slice().reverse()} layout="vertical" margin={{ left: 100, right: 40 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis type="number" />
-                          <YAxis type="category" dataKey="motorista" tick={{ fontSize: 11 }} width={95} />
-                          <Tooltip />
-                          <Bar dataKey="total" name="Reclamações" radius={[0, 4, 4, 0]}
-                            label={{ position: 'right', fontSize: 11, fontWeight: 700 }}>
-                            {detail.top5.slice().reverse().map((_, i) => <Cell key={i} fill={COLORS_TOP[i]} />)}
-                          </Bar>
+                          <defs>
+                            <linearGradient id="gradRecH" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#dc2626" stopOpacity={0.95}/>
+                              <stop offset="100%" stopColor="#1048c8" stopOpacity={0.8}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid {...chartTheme.grid} />
+                          <XAxis type="number" tick={chartTheme.axisStyle} />
+                          <YAxis type="category" dataKey="motorista" tick={chartTheme.axisStyle} width={95} />
+                          <Tooltip {...chartTheme.tooltip} />
+                          <Bar dataKey="total" name="Reclamações" fill="url(#gradRecH)" radius={[0, 4, 4, 0]}
+                            label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#dc2626' }} />
                         </BarChart>
                       </ResponsiveContainer>
                     </Card>
@@ -265,12 +269,20 @@ export default function Reclamacoes() {
                   <Card>
                     <ResponsiveContainer width="100%" height={350}>
                       <BarChart data={weeklyChartData} margin={{ bottom: 30 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} />
-                        <Tooltip /><Legend />
+                        <defs>
+                          {COLORS_WEEK.map((c, i) => (
+                            <linearGradient key={i} id={`gradWeek${i}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={c} stopOpacity={0.95}/>
+                              <stop offset="100%" stopColor={c} stopOpacity={0.7}/>
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <CartesianGrid {...chartTheme.grid} />
+                        <XAxis dataKey="semana" tick={chartTheme.axisStyle} />
+                        <YAxis tick={chartTheme.axisStyle} />
+                        <Tooltip {...chartTheme.tooltip} /><Legend />
                         {weeklyMotoristas.map((m, i) => (
-                          <Bar key={m} dataKey={m} stackId="a" fill={COLORS_WEEK[i % COLORS_WEEK.length]}
+                          <Bar key={m} dataKey={m} stackId="a" fill={`url(#gradWeek${i % COLORS_WEEK.length})`}
                             name={m.length > 15 ? m.slice(0, 15) + '…' : m} />
                         ))}
                       </BarChart>
@@ -286,8 +298,8 @@ export default function Reclamacoes() {
                     <Card>
                       <div className="max-h-[400px] overflow-y-auto">
                         <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-slate-100">
-                            <tr className="text-xs uppercase text-slate-600">
+                          <thead className="sticky top-0" style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
+                            <tr className="text-[10px] uppercase text-white/70">
                               <th className="px-3 py-2 text-left">Supervisor</th>
                               <th className="px-3 py-2 text-right">Qtd Dia</th>
                               <th className="px-3 py-2 text-right">Qtd Mês</th>
@@ -314,8 +326,8 @@ export default function Reclamacoes() {
                     <Card>
                       <div className="max-h-[400px] overflow-y-auto">
                         <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-slate-100">
-                            <tr className="text-xs uppercase text-slate-600">
+                          <thead className="sticky top-0" style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
+                            <tr className="text-[10px] uppercase text-white/70">
                               <th className="px-3 py-2 text-left">Station</th>
                               <th className="px-3 py-2 text-right">Qtd Dia</th>
                               <th className="px-3 py-2 text-right">Qtd Mês</th>

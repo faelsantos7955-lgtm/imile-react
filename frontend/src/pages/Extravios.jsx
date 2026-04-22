@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts'
 import { Upload, Loader, Trash2, AlertCircle, TrendingDown, Download } from 'lucide-react'
-import { PageHeader, Card, SectionHeader, toast, TableSkeleton } from '../components/ui'
+import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
 
@@ -185,15 +185,25 @@ export default function Extravios() {
               <Card>
                 <ResponsiveContainer width="100%" height={340}>
                   <BarChart data={top15} layout="vertical" margin={{ left: 70, right: 30 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="ds" tick={{ fontSize: 11 }} width={70} />
-                    <Tooltip
+                    <defs>
+                      <linearGradient id="gradLostH" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#f87171" stopOpacity={0.95}/>
+                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.85}/>
+                      </linearGradient>
+                      <linearGradient id="gradDmgH" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#fb923c" stopOpacity={0.95}/>
+                        <stop offset="100%" stopColor="#ea580c" stopOpacity={0.85}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid {...chartTheme.grid} horizontal={false} />
+                    <XAxis type="number" tick={chartTheme.axisStyle} />
+                    <YAxis type="category" dataKey="ds" tick={chartTheme.axisStyle} width={70} />
+                    <Tooltip {...chartTheme.tooltip}
                       formatter={(v, n) => [v.toLocaleString('pt-BR'), n === 'total_lost' ? 'Perdidos' : 'Avarias']}
                     />
                     <Legend formatter={n => n === 'total_lost' ? 'Goods Lost' : 'Avaria'} />
-                    <Bar dataKey="total_lost"    stackId="a" fill="#ef4444" name="total_lost" radius={[0,0,0,0]} />
-                    <Bar dataKey="total_damaged" stackId="a" fill="#f97316" name="total_damaged" radius={[0,4,4,0]} />
+                    <Bar dataKey="total_lost"    stackId="a" fill="url(#gradLostH)" name="total_lost" radius={[0,0,0,0]} />
+                    <Bar dataKey="total_damaged" stackId="a" fill="url(#gradDmgH)"  name="total_damaged" radius={[0,4,4,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
@@ -228,12 +238,12 @@ export default function Extravios() {
                 <Card>
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={porSem} margin={{ right: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left"  tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }}
+                      <CartesianGrid {...chartTheme.grid} />
+                      <XAxis dataKey="semana" tick={chartTheme.axisStyle} />
+                      <YAxis yAxisId="left"  tick={chartTheme.axisStyle} />
+                      <YAxis yAxisId="right" orientation="right" tick={chartTheme.axisStyle}
                         tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-                      <Tooltip
+                      <Tooltip {...chartTheme.tooltip}
                         formatter={(v, n) => n === 'valor_total' ? [BRL(v), 'Valor'] : [v.toLocaleString('pt-BR'), 'Ocorrências']}
                       />
                       <Legend />
@@ -254,7 +264,8 @@ export default function Extravios() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-800 text-white text-xs">
+                      <tr className="text-[10px] uppercase text-white/70"
+                        style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
                         <th className="px-4 py-3 text-left">#</th>
                         <th className="px-4 py-3 text-left">DS / Responsável</th>
                         <th className="px-4 py-3 text-left">Supervisor</th>

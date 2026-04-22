@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts'
 import { Upload, Loader, Trash2, AlertCircle, Clock, Download } from 'lucide-react'
-import { PageHeader, Card, SectionHeader, toast, TableSkeleton } from '../components/ui'
+import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
 
@@ -210,13 +210,23 @@ export default function NoTracking() {
               <Card>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={supChart} margin={{ left: 10, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={v => v.toLocaleString('pt-BR')} />
+                    <defs>
+                      <linearGradient id="gradBlueV" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#1048c8" stopOpacity={0.95}/>
+                        <stop offset="100%" stopColor="#0032A0" stopOpacity={0.85}/>
+                      </linearGradient>
+                      <linearGradient id="gradRedV" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f87171" stopOpacity={0.95}/>
+                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.85}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid {...chartTheme.grid} />
+                    <XAxis dataKey="name" tick={chartTheme.axisStyle} />
+                    <YAxis tick={chartTheme.axisStyle} />
+                    <Tooltip {...chartTheme.tooltip} formatter={v => v.toLocaleString('pt-BR')} />
                     {viewSup === 'total'
-                      ? <Bar dataKey="Total"    fill="#3b82f6" radius={[4,4,0,0]} />
-                      : <Bar dataKey="≥7 dias"  fill="#ef4444" radius={[4,4,0,0]} />
+                      ? <Bar dataKey="Total"   fill="url(#gradBlueV)" radius={[4,4,0,0]} />
+                      : <Bar dataKey="≥7 dias" fill="url(#gradRedV)"  radius={[4,4,0,0]} />
                     }
                   </BarChart>
                 </ResponsiveContainer>
@@ -232,10 +242,10 @@ export default function NoTracking() {
                 <Card>
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={porFaixa} margin={{ right: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="faixa" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={40} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v, n) => [v.toLocaleString('pt-BR'), n === 'total' ? 'Pacotes' : n]} />
+                      <CartesianGrid {...chartTheme.grid} />
+                      <XAxis dataKey="faixa" tick={chartTheme.axisStyle} angle={-15} textAnchor="end" height={40} />
+                      <YAxis tick={chartTheme.axisStyle} />
+                      <Tooltip {...chartTheme.tooltip} formatter={(v, n) => [v.toLocaleString('pt-BR'), n === 'total' ? 'Pacotes' : n]} />
                       <Bar dataKey="total" name="total" radius={[4,4,0,0]}>
                         {porFaixa.map((f, i) => (
                           <Cell key={i} fill={COR_FAIXA[f.faixa] || '#94a3b8'} />
@@ -275,7 +285,8 @@ export default function NoTracking() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-800 text-white text-xs">
+                      <tr className="text-[10px] uppercase text-white/70"
+                        style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
                         <th className="px-4 py-3 text-left">#</th>
                         <th className="px-4 py-3 text-left">DS</th>
                         <th className="px-4 py-3 text-left">Supervisor</th>

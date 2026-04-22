@@ -15,7 +15,7 @@ import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
   KpiCard, Card, SectionHeader, EmptyState, Alert, Button,
-  toast } from '../components/ui'
+  toast, chartTheme } from '../components/ui'
 import clsx from 'clsx'
 
 const fmt = (n) => (n ?? 0).toLocaleString('pt-BR')
@@ -429,11 +429,10 @@ function HistoricoNA({ uploads }) {
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={globalData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="data" tick={{ fontSize: 11, fill: '#64748b' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} width={50} />
-              <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+              <CartesianGrid {...chartTheme.grid} />
+              <XAxis dataKey="data" tick={chartTheme.axisStyle} />
+              <YAxis tick={chartTheme.axisStyle} width={50} />
+              <Tooltip {...chartTheme.tooltip}
                 formatter={(v, name) => [v?.toLocaleString('pt-BR'), name]}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -451,11 +450,10 @@ function HistoricoNA({ uploads }) {
         <Card title="Total por Supervisor" subtitle="Evolução semanal de waybills em atraso por supervisor">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={supChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="data" tick={{ fontSize: 11, fill: '#64748b' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#64748b' }} width={50} />
-              <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+              <CartesianGrid {...chartTheme.grid} />
+              <XAxis dataKey="data" tick={chartTheme.axisStyle} />
+              <YAxis tick={chartTheme.axisStyle} width={50} />
+              <Tooltip {...chartTheme.tooltip}
                 formatter={(v, name) => [v?.toLocaleString('pt-BR'), name]}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />

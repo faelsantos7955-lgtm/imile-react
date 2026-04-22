@@ -640,16 +640,18 @@ export default function Triagem() {
                 <Card>
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={detail.top5.slice().reverse()} layout="vertical" margin={{ left: 100, right: 50 }}>
+                      <defs>
+                        <linearGradient id="gradTopH" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#dc2626" stopOpacity={0.95}/>
+                          <stop offset="100%" stopColor="#1048c8" stopOpacity={0.8}/>
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid {...chartTheme.grid} />
                       <XAxis type="number" tick={chartTheme.axisStyle} />
                       <YAxis type="category" dataKey="ds" tick={chartTheme.axisStyle} width={95} />
                       <Tooltip {...chartTheme.tooltip} />
-                      <Bar dataKey="total_erros" name="Erros" radius={[0, 4, 4, 0]}
-                        label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#dc2626' }}>
-                        {detail.top5.slice().reverse().map((_, i) => (
-                          <Cell key={i} fill={COLOR_TOP[COLOR_TOP.length - 1 - i]} />
-                        ))}
-                      </Bar>
+                      <Bar dataKey="total_erros" name="Erros" fill="url(#gradTopH)" radius={[0, 4, 4, 0]}
+                        label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#dc2626' }} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -664,6 +666,12 @@ export default function Triagem() {
               <Card className="mb-4">
                 <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={erradaPorDia} margin={{ top: 22, right: 50, left: 0, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="gradNOKV" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f87171" stopOpacity={0.95}/>
+                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.85}/>
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid {...chartTheme.grid} />
                     <XAxis dataKey="dia" tick={chartTheme.axisStyle} />
                     <YAxis yAxisId="left" tick={chartTheme.axisStyle} allowDecimals={false} />
@@ -674,7 +682,7 @@ export default function Triagem() {
                       }
                     />
                     <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar yAxisId="left" dataKey="qtd" name="Qtd Erros (NOK)" fill={COLOR_NOK} radius={[4, 4, 0, 0]}
+                    <Bar yAxisId="left" dataKey="qtd" name="Qtd Erros (NOK)" fill="url(#gradNOKV)" radius={[4, 4, 0, 0]}
                       label={{ position: 'top', fontSize: 10, fill: '#ef4444', formatter: v => v > 0 ? v.toLocaleString('pt-BR') : '' }}
                     />
                     <Line yAxisId="right" type="monotone" dataKey="pct" name="% Erro"
@@ -741,12 +749,22 @@ export default function Triagem() {
                   <Card className="mb-6">
                     <ResponsiveContainer width="100%" height={Math.max(300, dsChartData.length * 34 + 60)}>
                       <BarChart data={dsChartData} layout="vertical" margin={{ left: 90, right: 70 }} barCategoryGap="30%">
+                        <defs>
+                          <linearGradient id="gradOKH" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity={0.9}/>
+                            <stop offset="100%" stopColor="#059669" stopOpacity={0.85}/>
+                          </linearGradient>
+                          <linearGradient id="gradNOKH" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#f87171" stopOpacity={0.95}/>
+                            <stop offset="100%" stopColor="#dc2626" stopOpacity={0.85}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid {...chartTheme.grid} horizontal={false} />
                         <XAxis type="number" tick={chartTheme.axisStyle} />
                         <YAxis type="category" dataKey="ds" tick={chartTheme.axisStyle} width={85} />
                         <Tooltip {...chartTheme.tooltip} />
-                        <Bar dataKey="ok"  name="OK"  stackId="a" fill={COLOR_OK} />
-                        <Bar dataKey="nok" name="NOK" stackId="a" fill={COLOR_NOK} radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="ok"  name="OK"  stackId="a" fill="url(#gradOKH)" />
+                        <Bar dataKey="nok" name="NOK" stackId="a" fill="url(#gradNOKH)" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Card>
