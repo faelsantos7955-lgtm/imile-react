@@ -111,7 +111,7 @@ async function uploadFile(endpoint, field, file, skipIfExists, onStatus) {
   while (attempts < 4) {
     try {
       onStatus('uploading')
-      const res = await api.post(url, form, { timeout: 300_000 })
+      const res = await api.post(url, form, { timeout: 600_000 })
       if (res.data?.skipped) {
         onStatus('skipped', res.data)
       } else {

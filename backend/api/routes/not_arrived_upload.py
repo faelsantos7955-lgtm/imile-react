@@ -53,11 +53,15 @@ def _norm_regiao(s) -> str:
     return REGIAO_MAP.get(s.strip(), s.strip() or "Outros")
 
 
+_KEEP = {"waybill_no", "oc_name", "oc_code", "站点类型", "区域",
+         "last_operate", "日期", "Supervisor", "Process"}
+
+
 def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
     if "汇总" not in xl.sheet_names:
         return []
     try:
-        df = xl.parse("汇总", header=None)
+        df = xl.parse("汇总", header=None, nrows=20)
     except Exception:
         return []
 
@@ -108,8 +112,8 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     if "Planilha1" not in xl.sheet_names:
         raise HTTPException(400, "Aba 'Planilha1' (DS) não encontrada no arquivo.")
 
-    dc = xl.parse("数据源")
-    ds_raw = xl.parse("Planilha1")
+    dc = xl.parse("数据源",   usecols=lambda c: str(c).strip() in _KEEP)
+    ds_raw = xl.parse("Planilha1", usecols=lambda c: str(c).strip() in _KEEP)
 
     sup_map: dict[str, str] = {}
     if "DS" in xl.sheet_names:
@@ -232,14 +236,12 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
 def _peek_data_ref_not_arrived(conteudo: bytes) -> str | None:
     """Extrai data_ref lendo apenas a coluna 日期 das abas 数据源 + Planilha1."""
     try:
-        import io as _io
-        xl = pd.ExcelFile(_io.BytesIO(conteudo))
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
         frames = []
         for aba in ("数据源", "Planilha1"):
             if aba in xl.sheet_names:
                 try:
-                    df = pd.read_excel(_io.BytesIO(conteudo), sheet_name=aba, usecols=["日期"])
-                    frames.append(df)
+                    frames.append(xl.parse(aba, usecols=["日期"]))
                 except Exception:
                     pass
         if not frames:

@@ -55,7 +55,7 @@ function UploadPanel({ onClose, onSuccess }) {
       fd.append('file', file)
       const r = await api.post('/api/not-arrived/processar', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 300_000, // 5 min — arquivo grande
+        timeout: 600_000, // 10 min — arquivo grande
       })
       return r.data
     },
