@@ -416,22 +416,96 @@ function Hero3D({ kpis, nBases }) {
       }} />
 
       {/* Trucks */}
-      <div className="absolute pointer-events-none overflow-hidden" style={{ top: '14%', left: 0, right: 0 }}>
-        <svg className="hero-truck" style={{ width: 56, height: 28, position: 'relative', left: -80 }} viewBox="0 0 80 40" fill="none">
-          <rect x="4" y="14" width="40" height="18" rx="2" fill="#1D4ED8"/>
-          <rect x="44" y="18" width="22" height="14" rx="2" fill="#1e3a8a"/>
-          <rect x="48" y="20" width="14" height="6" rx="1" fill="#93c5fd" fillOpacity=".7"/>
-          <text x="8" y="26" fontSize="7" fontWeight="800" fill="white" fontFamily="Arial">iMile</text>
-          {[14,32,58].map(cx => <g key={cx}><circle cx={cx} cy={34} r="4" fill="#0f172a"/><circle cx={cx} cy={34} r="1.5" fill="#475569"/></g>)}
+      <div className="absolute pointer-events-none overflow-hidden" style={{ top: '12%', left: 0, right: 0 }}>
+        <svg className="hero-truck" style={{ width: 130, height: 36, position: 'relative', left: -140 }} viewBox="0 0 260 72" fill="none">
+          <rect x="2" y="12" width="148" height="44" rx="3" fill="white" fillOpacity="0.92"/>
+          <rect x="2" y="12" width="148" height="44" rx="3" stroke="#0032A0" strokeWidth="1"/>
+          <path d="M2 12 L150 12 L150 16 L2 16 Z" fill="#0032A0" fillOpacity="0.12"/>
+          <rect x="2" y="44" width="148" height="12" rx="3" fill="#0032A0"/>
+          <rect x="2" y="42" width="148" height="3" fill="white" fillOpacity="0.55"/>
+          <text x="46" y="40" fontFamily="Arial, sans-serif" fontSize="9" fontWeight="bold" fill="#0032A0" fillOpacity="0.7" letterSpacing="3">iMile</text>
+          <line x1="8" y1="16" x2="8" y2="42" stroke="#0032A0" strokeWidth="0.6" strokeOpacity="0.3"/>
+          <line x1="8" y1="29" x2="148" y2="29" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.18"/>
+          <rect x="2" y="18" width="4" height="7" rx="1" fill="#ff4040" fillOpacity="0.85"/>
+          <rect x="2" y="27" width="4" height="5" rx="1" fill="#ff8800" fillOpacity="0.7"/>
+          <rect x="12" y="56" width="120" height="4" rx="1" fill="#0032A0" fillOpacity="0.4"/>
+          <rect x="148" y="38" width="8" height="8" rx="1" fill="#aab8cc"/>
+          <rect x="152" y="34" width="3" height="5" rx="1" fill="#8899b0"/>
+          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" fill="#0032A0"/>
+          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" stroke="#001d6e" strokeWidth="0.8"/>
+          <path d="M165 16 Q170 9 198 9 L248 9 L255 18 L248 16 L165 16 Z" fill="#0032A0"/>
+          <path d="M165 9 Q172 4 202 4 L248 4 L255 13 L248 9 L165 9 Z" fill="#0028a0"/>
+          <path d="M222 11 L250 11 L255 30 L222 30 Z" fill="white" fillOpacity="0.15" stroke="white" strokeWidth="0.7" strokeOpacity="0.4"/>
+          <rect x="160" y="18" width="28" height="16" rx="2" fill="white" fillOpacity="0.18" stroke="white" strokeWidth="0.6" strokeOpacity="0.35"/>
+          <line x1="173" y1="18" x2="173" y2="34" stroke="white" strokeWidth="0.5" strokeOpacity="0.3"/>
+          <rect x="153" y="20" width="5" height="8" rx="1" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.3"/>
+          <rect x="249" y="33" width="6" height="12" rx="1" fill="#001d6e"/>
+          {[35,38,41,44].map(y => <line key={y} x1="249" y1={y} x2="255" y2={y} stroke="white" strokeWidth="0.4" strokeOpacity="0.25"/>)}
+          <rect x="247" y="47" width="8" height="9" rx="2" fill="white" fillOpacity="0.85" stroke="#0032A0" strokeWidth="0.6"/>
+          <rect x="251" y="19" width="6" height="9" rx="2" fill="white" fillOpacity="0.95"/>
+          <rect x="161" y="1" width="5" height="10" rx="2" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.2"/>
+          <rect x="156" y="49" width="90" height="3" rx="0" fill="white" fillOpacity="0.15"/>
+          <rect x="220" y="50" width="22" height="6" rx="1" fill="#001d6e"/>
+          {[30, 45].map(cx => <g key={`tw${cx}`}>
+            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
+            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
+            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
+            {[0,60,120,180,240,300].map(a => <line key={a} x1={cx} y1={64} x2={cx+4.5*Math.cos(a*Math.PI/180)} y2={64+4.5*Math.sin(a*Math.PI/180)} stroke="white" strokeWidth="0.8" strokeOpacity="0.4"/>)}
+          </g>)}
+          {[105, 120].map(cx => <g key={`tw2${cx}`}>
+            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
+            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
+            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
+            {[0,60,120,180,240,300].map(a => <line key={a} x1={cx} y1={64} x2={cx+4.5*Math.cos(a*Math.PI/180)} y2={64+4.5*Math.sin(a*Math.PI/180)} stroke="white" strokeWidth="0.8" strokeOpacity="0.4"/>)}
+          </g>)}
+          {[190, 235].map(cx => <g key={`cw${cx}`}>
+            <circle cx={cx} cy={64} r="11" fill="#1a1a2e" stroke="white" strokeWidth="1.5" strokeOpacity="0.6"/>
+            <circle cx={cx} cy={64} r="7" fill="#111122" stroke="#0032A0" strokeWidth="1.2"/>
+            <circle cx={cx} cy={64} r="3" fill="white" fillOpacity="0.75"/>
+            {[0,45,90,135,180,225,270,315].map(a => <line key={a} x1={cx} y1={64} x2={cx+5.5*Math.cos(a*Math.PI/180)} y2={64+5.5*Math.sin(a*Math.PI/180)} stroke="white" strokeWidth="0.9" strokeOpacity="0.4"/>)}
+          </g>)}
         </svg>
       </div>
-      <div className="absolute pointer-events-none overflow-hidden" style={{ bottom: '10%', left: 0, right: 0 }}>
-        <svg className="hero-truck2" style={{ width: 56, height: 28, position: 'relative', left: -80 }} viewBox="0 0 80 40" fill="none">
-          <rect x="4" y="14" width="40" height="18" rx="2" fill="#1D4ED8"/>
-          <rect x="44" y="18" width="22" height="14" rx="2" fill="#1e3a8a"/>
-          <rect x="48" y="20" width="14" height="6" rx="1" fill="#93c5fd" fillOpacity=".7"/>
-          <text x="8" y="26" fontSize="7" fontWeight="800" fill="white" fontFamily="Arial">iMile</text>
-          {[14,32,58].map(cx => <g key={cx}><circle cx={cx} cy={34} r="4" fill="#0f172a"/><circle cx={cx} cy={34} r="1.5" fill="#475569"/></g>)}
+      <div className="absolute pointer-events-none overflow-hidden" style={{ bottom: '8%', left: 0, right: 0 }}>
+        <svg className="hero-truck2" style={{ width: 110, height: 30, position: 'relative', left: -120 }} viewBox="0 0 260 72" fill="none">
+          <rect x="2" y="12" width="148" height="44" rx="3" fill="white" fillOpacity="0.85"/>
+          <rect x="2" y="12" width="148" height="44" rx="3" stroke="#0032A0" strokeWidth="1"/>
+          <path d="M2 12 L150 12 L150 16 L2 16 Z" fill="#0032A0" fillOpacity="0.12"/>
+          <rect x="2" y="44" width="148" height="12" rx="3" fill="#0032A0"/>
+          <rect x="2" y="42" width="148" height="3" fill="white" fillOpacity="0.55"/>
+          <text x="46" y="40" fontFamily="Arial, sans-serif" fontSize="9" fontWeight="bold" fill="#0032A0" fillOpacity="0.7" letterSpacing="3">iMile</text>
+          <line x1="8" y1="16" x2="8" y2="42" stroke="#0032A0" strokeWidth="0.6" strokeOpacity="0.3"/>
+          <line x1="8" y1="29" x2="148" y2="29" stroke="#0032A0" strokeWidth="0.5" strokeOpacity="0.18"/>
+          <rect x="2" y="18" width="4" height="7" rx="1" fill="#ff4040" fillOpacity="0.85"/>
+          <rect x="148" y="38" width="8" height="8" rx="1" fill="#aab8cc"/>
+          <rect x="152" y="34" width="3" height="5" rx="1" fill="#8899b0"/>
+          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" fill="#0032A0"/>
+          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" stroke="#001d6e" strokeWidth="0.8"/>
+          <path d="M165 16 Q170 9 198 9 L248 9 L255 18 L248 16 L165 16 Z" fill="#0032A0"/>
+          <path d="M165 9 Q172 4 202 4 L248 4 L255 13 L248 9 L165 9 Z" fill="#0028a0"/>
+          <path d="M222 11 L250 11 L255 30 L222 30 Z" fill="white" fillOpacity="0.15" stroke="white" strokeWidth="0.7" strokeOpacity="0.4"/>
+          <rect x="160" y="18" width="28" height="16" rx="2" fill="white" fillOpacity="0.18" stroke="white" strokeWidth="0.6" strokeOpacity="0.35"/>
+          <rect x="153" y="20" width="5" height="8" rx="1" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.3"/>
+          <rect x="249" y="33" width="6" height="12" rx="1" fill="#001d6e"/>
+          <rect x="247" y="47" width="8" height="9" rx="2" fill="white" fillOpacity="0.85" stroke="#0032A0" strokeWidth="0.6"/>
+          <rect x="251" y="19" width="6" height="9" rx="2" fill="white" fillOpacity="0.95"/>
+          <rect x="161" y="1" width="5" height="10" rx="2" fill="#001d6e" stroke="white" strokeWidth="0.4" strokeOpacity="0.2"/>
+          <rect x="156" y="49" width="90" height="3" rx="0" fill="white" fillOpacity="0.15"/>
+          {[30, 45].map(cx => <g key={`tw${cx}`}>
+            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
+            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
+            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
+          </g>)}
+          {[105, 120].map(cx => <g key={`tw2${cx}`}>
+            <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
+            <circle cx={cx} cy={64} r="6" fill="#111122" stroke="#0032A0" strokeWidth="1"/>
+            <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
+          </g>)}
+          {[190, 235].map(cx => <g key={`cw${cx}`}>
+            <circle cx={cx} cy={64} r="11" fill="#1a1a2e" stroke="white" strokeWidth="1.5" strokeOpacity="0.6"/>
+            <circle cx={cx} cy={64} r="7" fill="#111122" stroke="#0032A0" strokeWidth="1.2"/>
+            <circle cx={cx} cy={64} r="3" fill="white" fillOpacity="0.75"/>
+          </g>)}
         </svg>
       </div>
 
@@ -457,7 +531,7 @@ function Hero3D({ kpis, nBases }) {
           {[
             { v: F(kpis?.recebido), l: 'Recebido' },
             { v: P(kpis?.taxa_exp), l: 'Taxa Exp.' },
-            { v: nBases ?? '—', l: 'Bases DS' },
+            { v: nBases ?? '—', l: 'Filiais' },
           ].map(({ v, l }) => (
             <div key={l}>
               <div className="font-bold" style={{ fontSize: 22, letterSpacing: '-.5px' }}>{v}</div>
