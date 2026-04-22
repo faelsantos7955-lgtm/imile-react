@@ -643,28 +643,6 @@ export default function Triagem() {
                 </ResponsiveContainer>
               </Card>
 
-              {/* Top 5 abaixo do gráfico */}
-              {detail?.top5?.length > 0 && (
-                <div className="mb-6">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                    Top 5 DS com mais erros — upload selecionado
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    {detail.top5.map((r, i) => (
-                      <div key={i} className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
-                        <span className="block text-[10px] font-bold text-red-300 mb-1">#{i + 1}</span>
-                        <span className="block text-xs font-semibold text-slate-700 mb-2 truncate" title={r.ds}>{r.ds}</span>
-                        <span className="block text-2xl font-black text-red-600">{F(r.total_erros)}</span>
-                        {u?.qtd_erro > 0 && (
-                          <span className="block text-[10px] text-slate-400 mt-1">
-                            {(r.total_erros / u.qtd_erro * 100).toFixed(0)}% dos erros
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
 
