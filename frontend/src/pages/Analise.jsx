@@ -910,25 +910,6 @@ export default function Analise() {
             </div>
           )}
 
-          {chFiltrado?.funil && (
-            <>
-              <SectionHeader title="Funil Operacional" />
-              <Card>
-                <div className="grid grid-cols-3 gap-8 text-center py-6">
-                  <div><div className="w-full h-24 bg-blue-500 rounded-xl flex items-center justify-center text-white">
-                    <div><p className="text-2xl font-bold font-mono">{F(chFiltrado.funil.recebido)}</p><p className="text-xs opacity-80">Recebido</p></div>
-                  </div></div>
-                  <div><div className="w-full h-20 rounded-xl flex items-center justify-center text-white mx-auto" style={{ width: '85%', background: '#0032A0' }}>
-                    <div><p className="text-2xl font-bold font-mono">{F(chFiltrado.funil.expedido)}</p><p className="text-xs opacity-80">Expedido ({P(chFiltrado.funil.taxa_exp)})</p></div>
-                  </div><p className="text-xs text-red-500 mt-1">-{F(chFiltrado.funil.perda_exp)} perdidos</p></div>
-                  <div><div className="w-full h-16 bg-emerald-500 rounded-xl flex items-center justify-center text-white mx-auto" style={{ width: '70%' }}>
-                    <div><p className="text-2xl font-bold font-mono">{F(chFiltrado.funil.entregas)}</p><p className="text-xs opacity-80">Entregue ({P(chFiltrado.funil.taxa_ent)})</p></div>
-                  </div><p className="text-xs text-red-500 mt-1">-{F(chFiltrado.funil.perda_ent)} perdidos</p></div>
-                </div>
-              </Card>
-            </>
-          )}
-
           <SectionHeader title="Taxa de Expedição por DS" />
           <Card>
             <div className="space-y-2 py-1">
@@ -967,14 +948,6 @@ export default function Analise() {
             </>
           )}
 
-          <SectionHeader title="Ranking por Taxa de Expedição" />
-          <Card>
-            <div className="max-h-[500px] overflow-y-auto">
-              {dFiltrado.stations?.map((s, i) => (
-                <RankingRow key={s.scan_station} pos={i + 1} ds={s.scan_station} taxa={s.taxa_exp} meta={s.meta} atingiu={s.atingiu_meta} />
-              ))}
-            </div>
-          </Card>
         </>
       )}
 
@@ -1091,37 +1064,6 @@ export default function Analise() {
                 </>
               )}
 
-              {periodoData.por_dia?.length > 0 && (
-                <>
-                  <SectionHeader title="Resumo por Dia" />
-                  <Card>
-                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-slate-100">
-                          <tr className="text-xs uppercase text-slate-600">
-                            <th className="px-3 py-2 text-left">Data</th>
-                            <th className="px-3 py-2 text-right">Recebido</th>
-                            <th className="px-3 py-2 text-right">Expedido</th>
-                            <th className="px-3 py-2 text-right">Entregas</th>
-                            <th className="px-3 py-2 text-right">Taxa Exp.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {periodoData.por_dia.map((r, i) => (
-                            <tr key={i} className="border-t border-slate-100 hover:bg-slate-50">
-                              <td className="px-3 py-2 font-medium">{fD(r.data_ref)}</td>
-                              <td className="px-3 py-2 text-right font-mono">{F(r.recebido)}</td>
-                              <td className="px-3 py-2 text-right font-mono">{F(r.expedido)}</td>
-                              <td className="px-3 py-2 text-right font-mono">{F(r.entregas)}</td>
-                              <td className="px-3 py-2 text-right font-mono">{P(r.taxa_exp)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-                </>
-              )}
             </>
           }
         </>
