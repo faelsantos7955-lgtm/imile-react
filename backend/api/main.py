@@ -53,6 +53,16 @@ async def _neon_keepalive():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Migrações idempotentes
+    try:
+        from api.deps import get_db as _get_db
+        db = next(_get_db())
+        from api.routes.contestacoes import _ensure_resolucao_column
+        _ensure_resolucao_column(db)
+        db.close()
+    except Exception as e:
+        print(f"[lifespan] migration warn: {e}")
+
     task = asyncio.create_task(_neon_keepalive())
     yield
     task.cancel()

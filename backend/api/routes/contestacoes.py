@@ -23,6 +23,19 @@ from api.deps import get_db, get_current_user, require_admin
 
 router = APIRouter()
 
+
+def _ensure_resolucao_column(db: Session):
+    """Adiciona coluna resolucao se ainda não existir."""
+    try:
+        db.execute(text("""
+            ALTER TABLE contestacoes
+            ADD COLUMN IF NOT EXISTS resolucao TEXT DEFAULT ''
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 MOTIVOS = ["Extravio", "Avaria", "Fake Delivery", "Fake POD"]
 STATUS_OPTIONS = ["Pendente", "Em Análise", "Em Andamento", "Enviado ao Financeiro", "Atraso do Financeiro", "Aprovado", "Reprovado"]
 
@@ -51,6 +64,7 @@ class StatusUpdate(BaseModel):
     status_analise: str
     observacao: Optional[str] = None
     previsao: Optional[date] = None
+    resolucao: Optional[str] = None
 
 
 # ── Consulta pública por waybill (sem autenticação) ───────────
@@ -58,7 +72,7 @@ class StatusUpdate(BaseModel):
 def consulta_publica(waybill: str, db: Session = Depends(get_db)):
     rows = db.execute(text("""
         SELECT waybill, motivo_desconto, valor_desconto, ds,
-               status_analise, observacao, previsao, data_contestacao
+               status_analise, observacao, resolucao, previsao, data_contestacao
         FROM contestacoes
         WHERE UPPER(waybill) = UPPER(:waybill)
         ORDER BY criado_em DESC
@@ -72,7 +86,7 @@ def listar(db: Session = Depends(get_db), user: dict = Depends(get_current_user)
     rows = db.execute(text("""
         SELECT id, data_contestacao, quem_solicitou, ds, waybill,
                motivo_desconto, faturamento_nome, valor_desconto,
-               status_analise, observacao, evidencia_nome, previsao,
+               status_analise, observacao, resolucao, evidencia_nome, previsao,
                criado_em, atualizado_em
         FROM contestacoes
         ORDER BY criado_em DESC
@@ -139,13 +153,15 @@ def atualizar_status(
         raise HTTPException(400, f"Status inválido. Opções: {', '.join(STATUS_OPTIONS)}")
 
     params = {"id": id, "status_analise": body.status_analise,
-              "observacao": body.observacao, "previsao": body.previsao}
+              "observacao": body.observacao, "previsao": body.previsao,
+              "resolucao": body.resolucao}
 
     result = db.execute(text("""
         UPDATE contestacoes SET
             status_analise = :status_analise,
             observacao     = CASE WHEN :observacao IS NOT NULL THEN :observacao ELSE observacao END,
             previsao       = CASE WHEN :previsao   IS NOT NULL THEN :previsao   ELSE previsao   END,
+            resolucao      = CASE WHEN :resolucao  IS NOT NULL THEN :resolucao  ELSE resolucao  END,
             atualizado_em  = NOW()
         WHERE id = :id
     """), params)

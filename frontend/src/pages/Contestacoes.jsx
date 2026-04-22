@@ -166,13 +166,14 @@ function BaseDados() {
   const qc = useQueryClient()
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('Todos')
-  const [editando, setEditando] = useState(null) // { id, obs, previsao }
+  const [editando, setEditando] = useState(null) // { id, obs, previsao, resolucao }
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm }
 
   const { data = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['contestacoes'],
     queryFn: () => api.get('/api/contestacoes').then(r => r.data),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   })
 
   const mutDel = useMutation({
@@ -181,8 +182,8 @@ function BaseDados() {
   })
 
   const mutObs = useMutation({
-    mutationFn: ({ id, observacao, previsao, status_analise }) =>
-      api.patch(`/api/contestacoes/${id}/status`, { status_analise, observacao, previsao }),
+    mutationFn: ({ id, observacao, previsao, status_analise, resolucao }) =>
+      api.patch(`/api/contestacoes/${id}/status`, { status_analise, observacao, previsao, resolucao }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['contestacoes'] }); setEditando(null) },
   })
 
@@ -248,7 +249,7 @@ function BaseDados() {
         <table className="w-full text-[12px]">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50 text-left">
-              {['Data','Waybill','Motivo','DS','Solicitante','Valor','Faturamento','Evidência','Status','Observação','Previsão',''].map(h => (
+              {['Data','Waybill','Motivo','DS','Solicitante','Valor','Faturamento','Evidência','Status','Observação','Resolução','Previsão',''].map(h => (
                 <th key={h} className="px-3 py-2.5 font-semibold text-slate-500 whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -313,6 +314,7 @@ function BaseDados() {
                             observacao: editando.obs,
                             previsao: editando.previsao || null,
                             status_analise: r.status_analise,
+                            resolucao: editando.resolucao || null,
                           })}
                           className="flex-1 bg-blue-600 text-white text-[10px] rounded px-2 py-0.5 hover:bg-blue-700"
                         >Salvar</button>
@@ -324,13 +326,36 @@ function BaseDados() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => setEditando({ id: r.id, obs: r.observacao || '', previsao: r.previsao || '' })}
+                      onClick={() => setEditando({ id: r.id, obs: r.observacao || '', previsao: r.previsao || '', resolucao: r.resolucao || '' })}
                       className="text-left text-slate-600 hover:text-slate-900 transition-colors group flex items-start gap-1 w-full"
                     >
                       <span className="flex-1 whitespace-pre-wrap break-words text-[11px]">{r.observacao || <span className="text-slate-300 italic">editar...</span>}</span>
                     </button>
                   )}
                 </td>
+                {/* Resolução */}
+                <td className="px-3 py-2.5 max-w-[200px]">
+                  {editando?.id === r.id ? (
+                    <textarea
+                      value={editando.resolucao}
+                      onChange={e => setEditando(v => ({ ...v, resolucao: e.target.value }))}
+                      className="border border-slate-200 rounded px-2 py-1 text-[11px] w-full resize-y"
+                      placeholder="Desfecho final..."
+                      rows={3}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setEditando({ id: r.id, obs: r.observacao || '', previsao: r.previsao || '', resolucao: r.resolucao || '' })}
+                      className="text-left text-slate-600 hover:text-slate-900 transition-colors w-full"
+                    >
+                      {r.resolucao
+                        ? <span className="text-[11px] whitespace-pre-wrap break-words text-emerald-700 font-medium">{r.resolucao}</span>
+                        : <span className="text-slate-300 italic text-[11px]">editar...</span>
+                      }
+                    </button>
+                  )}
+                </td>
+
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   {editando?.id === r.id ? (
                     <input
@@ -700,10 +725,11 @@ function Consulta() {
                     ['Data', fmt(r.data_contestacao)],
                     ['Previsão', fmt(r.previsao)],
                     ['Observação', r.observacao || '—'],
+                    ...(r.resolucao ? [['Resolução / Desfecho', r.resolucao]] : []),
                   ].map(([label, val]) => (
-                    <div key={label} className={label === 'Observação' ? 'col-span-2' : ''}>
+                    <div key={label} className={label === 'Observação' || label === 'Resolução / Desfecho' ? 'col-span-2' : ''}>
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
-                      <p className="text-[13px] text-slate-800 mt-0.5 font-medium">{val}</p>
+                      <p className={`text-[13px] mt-0.5 font-medium ${label === 'Resolução / Desfecho' ? 'text-emerald-700' : 'text-slate-800'}`}>{val}</p>
                     </div>
                   ))}
                 </div>
