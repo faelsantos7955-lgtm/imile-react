@@ -1,5 +1,5 @@
 /**
- * components/ui.jsx — Design System iMile · Clean & Premium
+ * components/ui.jsx — Design System iMile · Editorial Navy
  */
 import { useState as _useState, useState, useEffect, useRef } from 'react'
 import { toast as _sonner } from 'sonner'
@@ -12,6 +12,25 @@ export const toast = {
   aviso:   (msg) => _sonner.warning(msg),
   info:    (msg) => _sonner.info(msg),
   promise: (p, opts) => _sonner.promise(p, opts),
+}
+
+// ── Chart theme (use in tooltip/grid) ────────────────────────
+export const chartTheme = {
+  tooltip: {
+    contentStyle: {
+      background: '#0a1628',
+      border: '1px solid rgba(255,255,255,.08)',
+      borderRadius: 10,
+      color: '#fff',
+      fontSize: 12,
+      boxShadow: '0 8px 32px rgba(0,0,0,.35)',
+    },
+    labelStyle: { color: 'rgba(255,255,255,.6)', fontSize: 11, marginBottom: 4 },
+    itemStyle:  { color: '#fff' },
+    cursor:     { fill: 'rgba(0,50,160,.06)' },
+  },
+  grid:    { strokeDasharray: '3 3', stroke: '#f1f5f9' },
+  axisStyle: { fontSize: 11, fill: '#94a3b8' },
 }
 
 // ── Counter hook ──────────────────────────────────────────────
@@ -35,11 +54,12 @@ function useCounter(target, duration = 900) {
 
 // ── KPI Card ──────────────────────────────────────────────────
 const KPI_ACCENT = {
-  blue:   { dot: 'bg-imile-500',   bar: '#0032A0' },
-  green:  { dot: 'bg-emerald-500', bar: '#10b981' },
-  red:    { dot: 'bg-red-500',     bar: '#ef4444' },
-  violet: { dot: 'bg-violet-500',  bar: '#8b5cf6' },
-  slate:  { dot: 'bg-slate-400',   bar: '#94a3b8' },
+  blue:   { bar: 'linear-gradient(90deg,#0032A0,#1048c8)', dot: '#0032A0', glow: 'rgba(0,50,160,.25)' },
+  green:  { bar: 'linear-gradient(90deg,#059669,#10b981)', dot: '#10b981', glow: 'rgba(16,185,129,.2)'  },
+  red:    { bar: 'linear-gradient(90deg,#dc2626,#ef4444)', dot: '#ef4444', glow: 'rgba(239,68,68,.2)'   },
+  orange: { bar: 'linear-gradient(90deg,#d97706,#f59e0b)', dot: '#f59e0b', glow: 'rgba(245,158,11,.2)'  },
+  violet: { bar: 'linear-gradient(90deg,#7c3aed,#8b5cf6)', dot: '#8b5cf6', glow: 'rgba(139,92,246,.2)'  },
+  slate:  { bar: 'linear-gradient(90deg,#475569,#64748b)', dot: '#94a3b8', glow: 'rgba(148,163,184,.15)'},
 }
 
 export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, index = 0 }) {
@@ -49,7 +69,6 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, 
   const [hovering, setHovering] = useState(false)
   const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 })
 
-  // Counter: if value is a number, animate it
   const isNum = typeof value === 'number'
   const counted = useCounter(isNum ? value : null, 900)
   const display = isNum ? counted.toLocaleString('pt-BR') : value
@@ -60,7 +79,7 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, 
     const nx = (e.clientX - r.left) / r.width
     const ny = (e.clientY - r.top) / r.height
     setMousePos({ x: nx, y: ny })
-    setTilt({ x: (ny - 0.5) * -14, y: (nx - 0.5) * 14 })
+    setTilt({ x: (ny - 0.5) * -12, y: (nx - 0.5) * 12 })
   }
   const onLeave = () => { setTilt({ x: 0, y: 0 }); setHovering(false) }
 
@@ -70,59 +89,63 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, 
       onMouseMove={onMove}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={onLeave}
-      className="stagger relative bg-white rounded-xl p-5 cursor-default overflow-hidden"
+      className="stagger relative bg-white rounded-2xl cursor-default overflow-hidden"
       style={{
-        border: hovering ? '1px solid rgba(0,50,160,.18)' : '1px solid #f1f5f9',
-        transform: `perspective(700px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateY(${hovering ? -4 : 0}px)`,
+        border: hovering ? `1px solid ${ac.dot}33` : '1px solid #e2e8f0',
+        transform: `perspective(700px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateY(${hovering ? -3 : 0}px)`,
         transition: hovering
           ? 'transform .08s ease-out, box-shadow .2s, border-color .2s'
           : 'transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .3s, border-color .2s',
         boxShadow: hovering
-          ? '0 20px 48px -14px rgba(0,50,160,.22), 0 4px 16px -4px rgba(0,0,0,.08)'
-          : '0 1px 3px rgba(0,0,0,.05)',
-        animationDelay: `${index * 90}ms`,
+          ? `0 16px 40px -12px ${ac.glow}, 0 4px 12px rgba(0,0,0,.06)`
+          : '0 1px 4px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02)',
+        animationDelay: `${index * 80}ms`,
         willChange: 'transform',
         transformStyle: 'preserve-3d',
       }}
     >
-      {/* Shine spotlight seguindo o mouse */}
-      <div className="absolute inset-0 rounded-xl pointer-events-none transition-opacity duration-300"
+      {/* Accent bar topo — visível sempre, brilha no hover */}
+      <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl transition-opacity duration-300"
+        style={{ background: ac.bar, opacity: hovering ? 1 : 0.45 }} />
+
+      {/* Shine spotlight */}
+      <div className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity duration-300"
         style={{
           opacity: hovering ? 1 : 0,
-          background: `radial-gradient(circle at ${mousePos.x * 100}% ${mousePos.y * 100}%, rgba(255,255,255,.18) 0%, transparent 65%)`,
+          background: `radial-gradient(circle at ${mousePos.x * 100}% ${mousePos.y * 100}%, rgba(255,255,255,.15) 0%, transparent 65%)`,
         }} />
 
-      {/* Accent bar no topo */}
-      <div className="absolute top-0 left-0 right-0 h-[2px] rounded-t-xl transition-opacity duration-300"
-        style={{ background: ac.bar, opacity: hovering ? 1 : 0 }} />
-
-      <div className="flex items-start justify-between mb-3 relative">
-        <div className="flex items-center gap-2">
-          <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', ac.dot)} />
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 leading-none">
-            {label}
-          </p>
+      <div className="p-5 pt-6">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full shrink-0 transition-all duration-300"
+              style={{ background: ac.dot, boxShadow: hovering ? `0 0 8px ${ac.dot}` : 'none' }} />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-none">
+              {label}
+            </p>
+          </div>
+          {Icon && <Icon size={15} className="text-slate-300 shrink-0" />}
         </div>
-        {Icon && <Icon size={15} className="text-slate-300 group-hover:text-slate-400 transition-colors shrink-0" />}
+
+        <p className="text-[1.85rem] font-extrabold font-mono leading-none tracking-tight"
+          style={{ color: hovering ? ac.dot : '#0f172a' }}>
+          {display}
+        </p>
+
+        {(sub || trend !== undefined) && (
+          <div className="flex items-center gap-2 mt-2.5">
+            {sub && <p className="text-[11px] text-slate-400 leading-snug">{sub}</p>}
+            {trend !== undefined && (
+              <span className={clsx(
+                'text-[10px] font-bold px-1.5 py-0.5 rounded-md',
+                trend >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'
+              )}>
+                {trend >= 0 ? '+' : ''}{trend}%
+              </span>
+            )}
+          </div>
+        )}
       </div>
-
-      <p className="text-[1.75rem] font-bold font-mono leading-none tracking-tight text-slate-900 relative">
-        {display}
-      </p>
-
-      {(sub || trend !== undefined) && (
-        <div className="flex items-center gap-2 mt-2 relative">
-          {sub && <p className="text-[11px] text-slate-400">{sub}</p>}
-          {trend !== undefined && (
-            <span className={clsx(
-              'text-[10px] font-semibold px-1.5 py-0.5 rounded-md',
-              trend >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'
-            )}>
-              {trend >= 0 ? '+' : ''}{trend}%
-            </span>
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -154,16 +177,23 @@ export function ParticleField({ count = 22, className = '' }) {
 }
 
 // ── Page Header ───────────────────────────────────────────────
-export function PageHeader({ title, subtitle, action }) {
+export function PageHeader({ title, subtitle, action, tag }) {
   return (
     <div className="flex items-start justify-between mb-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">
+        {/* Tag opcional acima do título */}
+        {(tag || subtitle) && (
+          <div className="inline-flex items-center gap-2 mb-2 px-2.5 py-1 rounded-full"
+            style={{ background: 'rgba(0,50,160,.08)', border: '1px solid rgba(0,50,160,.12)' }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span style={{ color: '#0032A0', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+              {tag || subtitle}
+            </span>
+          </div>
+        )}
+        <h1 className="text-[22px] font-extrabold text-slate-900 tracking-tight leading-tight">
           {title}
         </h1>
-        {subtitle && (
-          <p className="text-sm text-slate-500 mt-1 leading-snug">{subtitle}</p>
-        )}
       </div>
       {action && <div className="shrink-0 ml-4">{action}</div>}
     </div>
@@ -174,9 +204,13 @@ export function PageHeader({ title, subtitle, action }) {
 export function SectionHeader({ title, action }) {
   return (
     <div className="flex items-center justify-between mt-8 mb-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-        {title}
-      </p>
+      <div className="flex items-center gap-3">
+        <div className="w-1 h-4 rounded-full shrink-0"
+          style={{ background: 'linear-gradient(180deg,#0032A0,#1048c8)' }} />
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+          {title}
+        </p>
+      </div>
       {action && <div>{action}</div>}
     </div>
   )
@@ -186,14 +220,16 @@ export function SectionHeader({ title, action }) {
 export function Card({ children, className = '', title, subtitle, action, padding = true }) {
   return (
     <div className={clsx(
-      'bg-white rounded-xl border border-slate-100 animate-in',
+      'bg-white rounded-2xl border border-slate-200 animate-in',
+      'shadow-[0_1px_4px_rgba(0,0,0,.04)]',
       className
     )}>
       {title && (
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 rounded-t-2xl"
+          style={{ background: 'linear-gradient(135deg,#0a1628 0%,#1e3a5f 100%)' }}>
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 leading-tight">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+            <h3 className="text-[13px] font-bold text-white leading-tight">{title}</h3>
+            {subtitle && <p className="text-[11px] text-white/50 mt-0.5">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0 ml-4">{action}</div>}
         </div>
@@ -227,9 +263,7 @@ export function RankingRow({ pos, ds, taxa, meta, atingiu }) {
         </span>
         <span className={clsx(
           'px-2 py-0.5 rounded-md text-[10px] font-semibold',
-          atingiu
-            ? 'bg-emerald-50 text-emerald-700'
-            : 'bg-red-50 text-red-600'
+          atingiu ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
         )}>
           {atingiu ? 'OK' : 'NOK'}
         </span>
@@ -241,34 +275,27 @@ export function RankingRow({ pos, ds, taxa, meta, atingiu }) {
 // ── Skeleton ──────────────────────────────────────────────────
 export function Skeleton({ className = 'h-4 w-full' }) {
   return (
-    <div className={clsx(
-      'animate-pulse rounded-lg bg-slate-100',
-      className
-    )} />
+    <div className={clsx('animate-pulse rounded-lg bg-slate-100', className)} />
   )
 }
 
 // ── Table Skeleton ────────────────────────────────────────────
 export function TableSkeleton({ rows = 6, cols = 5 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-100 overflow-hidden animate-in">
-      {/* Header */}
-      <div className="grid gap-3 px-4 py-3 bg-slate-800" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden animate-in">
+      <div className="grid gap-3 px-4 py-3 rounded-t-2xl"
+        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
         {Array.from({ length: cols }).map((_, i) => (
           <div key={i} className="h-3 rounded bg-white/10 animate-pulse" />
         ))}
       </div>
-      {/* Rows */}
       {Array.from({ length: rows }).map((_, ri) => (
-        <div
-          key={ri}
+        <div key={ri}
           className={clsx('grid gap-3 px-4 py-3 border-t border-slate-50', ri % 2 === 1 && 'bg-slate-50/40')}
           style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
         >
           {Array.from({ length: cols }).map((_, ci) => (
-            <div
-              key={ci}
-              className="h-3 rounded bg-slate-200 animate-pulse"
+            <div key={ci} className="h-3 rounded bg-slate-200 animate-pulse"
               style={{ width: `${60 + Math.random() * 40}%`, animationDelay: `${(ri * cols + ci) * 30}ms` }}
             />
           ))}
@@ -283,7 +310,7 @@ export function KpiSkeleton({ count = 4 }) {
   return (
     <div className={`grid gap-3 grid-cols-2 sm:grid-cols-${count}`}>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-white rounded-xl border border-slate-100 p-5 animate-pulse">
+        <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 animate-pulse">
           <div className="h-2.5 w-20 bg-slate-100 rounded mb-4" />
           <div className="h-8 w-24 bg-slate-200 rounded mb-2" />
           <div className="h-2 w-16 bg-slate-100 rounded" />
@@ -299,23 +326,23 @@ export function Alert({ type = 'warning', children, onClose }) {
     warning: 'bg-amber-50  border-amber-200  text-amber-800',
     error:   'bg-red-50    border-red-200    text-red-700',
     success: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-    info:    'bg-imile-50  border-imile-200  text-imile-800',
+    info:    'bg-blue-50   border-blue-200   text-blue-800',
   }
-  const icons = {
-    warning: '⚠',
-    error:   '✕',
-    success: '✓',
-    info:    'ℹ',
+  const dots = {
+    warning: 'bg-amber-500',
+    error:   'bg-red-500',
+    success: 'bg-emerald-500',
+    info:    'bg-blue-500',
   }
   return (
     <div className={clsx(
       'flex items-start gap-3 px-4 py-3 rounded-xl border text-sm animate-fade',
       styles[type]
     )}>
-      <span className="text-xs font-bold mt-0.5 shrink-0 opacity-70">{icons[type]}</span>
+      <span className={clsx('w-1.5 h-1.5 rounded-full mt-1.5 shrink-0', dots[type])} />
       <span className="flex-1 leading-snug">{children}</span>
       {onClose && (
-        <button onClick={onClose} className="shrink-0 opacity-50 hover:opacity-80 text-xs ml-1">✕</button>
+        <button onClick={onClose} className="shrink-0 opacity-40 hover:opacity-70 text-xs ml-1">✕</button>
       )}
     </div>
   )
@@ -324,7 +351,7 @@ export function Alert({ type = 'warning', children, onClose }) {
 // ── Badge ─────────────────────────────────────────────────────
 export function Badge({ children, color = 'blue' }) {
   const styles = {
-    blue:   'bg-imile-50   text-imile-700   border-imile-100',
+    blue:   'bg-blue-50   text-blue-700   border-blue-100',
     green:  'bg-emerald-50 text-emerald-700 border-emerald-100',
     red:    'bg-red-50     text-red-700     border-red-100',
     orange: 'bg-orange-50  text-orange-700  border-orange-100',
@@ -343,14 +370,14 @@ export function Badge({ children, color = 'blue' }) {
 // ── Button ────────────────────────────────────────────────────
 export function Button({ children, variant = 'primary', size = 'md', className = '', ...props }) {
   const variants = {
-    primary:   'bg-imile-500 text-white hover:bg-imile-600 shadow-imile-sm active:scale-[0.98]',
+    primary:   'text-white active:scale-[0.98]',
     secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 active:scale-[0.98]',
     danger:    'bg-red-500 text-white hover:bg-red-600 active:scale-[0.98]',
     ghost:     'text-slate-600 hover:bg-slate-100',
   }
   const sizes = {
     sm: 'px-3 py-1.5 text-xs rounded-lg gap-1.5',
-    md: 'px-4 py-2 text-sm rounded-lg gap-2',
+    md: 'px-4 py-2 text-sm rounded-xl gap-2',
     lg: 'px-5 py-2.5 text-sm rounded-xl gap-2',
   }
   return (
@@ -362,6 +389,10 @@ export function Button({ children, variant = 'primary', size = 'md', className =
         sizes[size] || sizes.md,
         className
       )}
+      style={variant === 'primary' ? {
+        background: 'linear-gradient(135deg,#0032A0,#1048c8)',
+        boxShadow: '0 4px 14px rgba(0,50,160,.3)',
+      } : undefined}
       {...props}
     >
       {children}
@@ -372,34 +403,25 @@ export function Button({ children, variant = 'primary', size = 'md', className =
 // ── Upload Guide ──────────────────────────────────────────────
 export function UploadGuide({ title, items = [], accent = 'blue' }) {
   const [open, setOpen] = _useState(false)
-  const colors = {
-    blue:   { btn: 'text-slate-400 hover:text-imile-500 border-slate-200 hover:border-imile-300', box: 'bg-white border-slate-200 text-slate-800' },
-    orange: { btn: 'text-slate-400 hover:text-orange-500 border-slate-200 hover:border-orange-300', box: 'bg-white border-slate-200 text-slate-800' },
-  }
-  const c = colors[accent] || colors.blue
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className={clsx(
-          'w-7 h-7 rounded-full text-[11px] font-bold border flex items-center justify-center transition-all',
-          c.btn
-        )}
+        className="w-7 h-7 rounded-full text-[11px] font-bold border border-slate-200 text-slate-400
+          hover:text-blue-600 hover:border-blue-300 flex items-center justify-center transition-all"
         title="O que devo subir?"
       >
         ?
       </button>
       {open && (
-        <div className={clsx(
-          'absolute right-0 top-9 z-50 w-80 rounded-xl border p-4 shadow-popover text-sm animate-scale',
-          c.box
-        )}>
-          <p className="font-semibold text-slate-900 mb-3 text-sm">{title}</p>
+        <div className="absolute right-0 top-9 z-50 w-80 rounded-2xl border border-slate-200 p-4 shadow-xl
+          bg-white text-sm animate-scale">
+          <p className="font-bold text-slate-900 mb-3 text-sm">{title}</p>
           <ul className="space-y-2">
             {items.map((item, i) => (
               <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-slate-600">
-                <span className="mt-1 w-1 h-1 rounded-full bg-slate-400 shrink-0" />
+                <span className="mt-1.5 w-1 h-1 rounded-full bg-blue-400 shrink-0" />
                 <span>{item}</span>
               </li>
             ))}
@@ -415,11 +437,12 @@ export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center animate-in">
       {Icon && (
-        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-          <Icon size={22} className="text-slate-400" />
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+          style={{ background: 'linear-gradient(135deg,rgba(0,50,160,.08),rgba(16,72,200,.08))', border: '1px solid rgba(0,50,160,.1)' }}>
+          <Icon size={24} style={{ color: '#0032A0', opacity: .5 }} />
         </div>
       )}
-      <p className="text-sm font-semibold text-slate-700 mb-1">{title}</p>
+      <p className="text-sm font-bold text-slate-700 mb-1">{title}</p>
       {description && (
         <p className="text-xs text-slate-400 max-w-xs leading-relaxed">{description}</p>
       )}
@@ -431,16 +454,20 @@ export function EmptyState({ icon: Icon, title, description, action }) {
 export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = 'Confirmar', danger = true }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4 animate-in">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
         <p className="text-sm text-slate-700 leading-relaxed mb-5">{message}</p>
         <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-xs rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-          >Cancelar</button>
+          <button onClick={onCancel}
+            className="px-4 py-2 text-xs rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            Cancelar
+          </button>
           <button
             onClick={() => { onConfirm(); onCancel(); }}
-            className={`px-4 py-2 text-xs rounded-lg text-white transition-colors ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-4 py-2 text-xs rounded-xl text-white font-semibold transition-colors ${
+              danger
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >{confirmLabel}</button>
         </div>
       </div>

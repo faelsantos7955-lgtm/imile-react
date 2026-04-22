@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert, toast } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, toast, chartTheme } from '../components/ui'
 import {
   ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
@@ -611,22 +611,64 @@ export default function Triagem() {
 
           {loading && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-48 bg-slate-100 rounded-xl animate-pulse" />)}
+              {[...Array(4)].map((_, i) => <div key={i} className="h-48 bg-slate-100 rounded-2xl animate-pulse" />)}
             </div>
           )}
 
-          {/* Triagem Errada — Histórico por dia (independente do detail) */}
+          {/* ── Top 5 logo após os KPIs ─────────────────────── */}
+          {!loading && detail?.top5?.length > 0 && (
+            <>
+              <SectionHeader title="Top 5 DS com mais erros" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <Card>
+                  {detail.top5.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between py-3 px-2 border-b border-slate-100 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
+                          style={{
+                            background: i === 0 ? 'rgba(220,38,38,.12)' : i === 1 ? 'rgba(239,68,68,.1)' : 'rgba(248,113,113,.08)',
+                            color: i === 0 ? '#dc2626' : i === 1 ? '#ef4444' : '#f87171',
+                          }}>
+                          {i + 1}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-800">{r.ds}</span>
+                      </div>
+                      <span className="text-sm font-mono font-bold text-red-600">{F(r.total_erros)}</span>
+                    </div>
+                  ))}
+                </Card>
+                <Card>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={detail.top5.slice().reverse()} layout="vertical" margin={{ left: 100, right: 50 }}>
+                      <CartesianGrid {...chartTheme.grid} />
+                      <XAxis type="number" tick={chartTheme.axisStyle} />
+                      <YAxis type="category" dataKey="ds" tick={chartTheme.axisStyle} width={95} />
+                      <Tooltip {...chartTheme.tooltip} />
+                      <Bar dataKey="total_erros" name="Erros" radius={[0, 4, 4, 0]}
+                        label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#dc2626' }}>
+                        {detail.top5.slice().reverse().map((_, i) => (
+                          <Cell key={i} fill={COLOR_TOP[COLOR_TOP.length - 1 - i]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              </div>
+            </>
+          )}
+
+          {/* ── Histórico por dia ────────────────────────────── */}
           {!loading && erradaPorDia.length > 0 && (
             <>
               <SectionHeader title="Triagem Errada — Histórico por Dia" />
               <Card className="mb-4">
                 <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={erradaPorDia} margin={{ top: 22, right: 50, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={{ fontSize: 11 }} domain={[0, 100]} />
-                    <Tooltip
+                    <CartesianGrid {...chartTheme.grid} />
+                    <XAxis dataKey="dia" tick={chartTheme.axisStyle} />
+                    <YAxis yAxisId="left" tick={chartTheme.axisStyle} allowDecimals={false} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={v => `${v}%`} tick={chartTheme.axisStyle} domain={[0, 100]} />
+                    <Tooltip {...chartTheme.tooltip}
                       formatter={(value, name) =>
                         name === '% Erro' ? [`${value}%`, name] : [value.toLocaleString('pt-BR'), name]
                       }
@@ -642,7 +684,6 @@ export default function Triagem() {
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>
-
             </>
           )}
 
@@ -658,7 +699,7 @@ export default function Triagem() {
               {temArrival && dsChegouErrado.length > 0 && (
                 <>
                   <SectionHeader title="DSes que receberam pacotes errados (NOK confirmado no Arrival)" />
-                  <div className="mb-6 bg-red-50 border border-red-200 rounded-xl overflow-hidden">
+                  <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl overflow-hidden">
                     <div className="px-4 py-3 border-b border-red-200 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <PackageCheck size={15} className="text-red-500" />
@@ -670,7 +711,7 @@ export default function Triagem() {
                         {u?.qtd_erro ? `${(totalChegouErrado / u.qtd_erro * 100).toFixed(1)}% dos erros foram confirmados recebidos` : ''}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-px bg-red-200">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-px bg-red-100">
                       {dsChegouErrado.map(r => (
                         <div key={r.ds} className="bg-white px-4 py-3">
                           <p className="text-xs font-bold text-slate-700 mb-1">{r.ds}</p>
@@ -700,51 +741,15 @@ export default function Triagem() {
                   <Card className="mb-6">
                     <ResponsiveContainer width="100%" height={Math.max(300, dsChartData.length * 34 + 60)}>
                       <BarChart data={dsChartData} layout="vertical" margin={{ left: 90, right: 70 }} barCategoryGap="30%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 11 }} />
-                        <YAxis type="category" dataKey="ds" tick={{ fontSize: 11 }} width={85} />
-                        <Tooltip contentStyle={{ fontSize: 12 }} />
+                        <CartesianGrid {...chartTheme.grid} horizontal={false} />
+                        <XAxis type="number" tick={chartTheme.axisStyle} />
+                        <YAxis type="category" dataKey="ds" tick={chartTheme.axisStyle} width={85} />
+                        <Tooltip {...chartTheme.tooltip} />
                         <Bar dataKey="ok"  name="OK"  stackId="a" fill={COLOR_OK} />
                         <Bar dataKey="nok" name="NOK" stackId="a" fill={COLOR_NOK} radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Card>
-                </>
-              )}
-
-              {/* Top 5 */}
-              {detail.top5?.length > 0 && (
-                <>
-                  <SectionHeader title="Top 5 DS com mais erros" />
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                    <Card>
-                      {detail.top5.map((r, i) => (
-                        <div key={i} className="flex items-center justify-between py-3 px-2 border-b border-slate-100 last:border-0">
-                          <div className="flex items-center gap-3">
-                            <span className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                            <span className="text-sm font-medium text-slate-800">{r.ds}</span>
-                          </div>
-                          <span className="text-sm font-mono font-bold text-red-600">{F(r.total_erros)}</span>
-                        </div>
-                      ))}
-                    </Card>
-                    <Card>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={detail.top5.slice().reverse()} layout="vertical" margin={{ left: 100, right: 50 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                          <XAxis type="number" tick={{ fontSize: 11 }} />
-                          <YAxis type="category" dataKey="ds" tick={{ fontSize: 11 }} width={95} />
-                          <Tooltip />
-                          <Bar dataKey="total_erros" name="Erros" radius={[0, 4, 4, 0]}
-                            label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#dc2626' }}>
-                            {detail.top5.slice().reverse().map((_, i) => (
-                              <Cell key={i} fill={COLOR_TOP[COLOR_TOP.length - 1 - i]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  </div>
                 </>
               )}
 
@@ -758,7 +763,8 @@ export default function Triagem() {
                     <Card padding={false} className="overflow-hidden">
                       <div className="max-h-[560px] overflow-y-auto">
                         <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-slate-800 z-10">
+                          <thead className="sticky top-0 z-10"
+                            style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
                             <tr className="text-[10px] uppercase text-white/70">
                               <th className="px-3 py-2.5 w-8" />
                               <th className="px-3 py-2.5 text-left">DS</th>
@@ -859,7 +865,8 @@ export default function Triagem() {
                     <Card padding={false} className="overflow-hidden">
                       <div className="max-h-[480px] overflow-y-auto">
                         <table className="w-full text-sm">
-                          <thead className="sticky top-0 bg-slate-800">
+                          <thead className="sticky top-0"
+                            style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
                             <tr className="text-[10px] uppercase text-white/70">
                               <th className="px-3 py-2.5 text-left">Supervisor</th>
                               <th className="px-3 py-2.5 text-right">Total</th>
