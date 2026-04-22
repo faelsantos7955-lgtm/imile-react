@@ -2,6 +2,7 @@
 api/routes/not_arrived_upload.py — Upload e processamento do relatório
 "Not Arrived com movimentação" (有发未到问题件后又有其他操作)
 """
+import gc
 import io
 from datetime import date
 
@@ -103,8 +104,7 @@ def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
     return registros
 
 
-def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
-    xl = pd.ExcelFile(io.BytesIO(conteudo))
+def _processar(xl: pd.ExcelFile) -> tuple[dict, list[dict]]:
     tendencia = _ler_sumario(xl)
 
     if "数据源" not in xl.sheet_names:
@@ -233,10 +233,9 @@ def _processar(conteudo: bytes) -> tuple[dict, list[dict]]:
     return resultado, tendencia
 
 
-def _peek_data_ref_not_arrived(conteudo: bytes) -> str | None:
-    """Extrai data_ref lendo apenas a coluna 日期 das abas 数据源 + Planilha1."""
+def _peek_data_ref_from_xl(xl: pd.ExcelFile) -> str | None:
+    """Extrai data_ref lendo apenas a coluna 日期 do ExcelFile já aberto."""
     try:
-        xl = pd.ExcelFile(io.BytesIO(conteudo))
         frames = []
         for aba in ("数据源", "Planilha1"):
             if aba in xl.sheet_names:
@@ -265,22 +264,29 @@ async def processar_not_arrived(
     db: Session = Depends(get_db),
 ):
     conteudo = await validar_arquivo(file)
+    xl = pd.ExcelFile(io.BytesIO(conteudo))
+    del conteudo   # libera os bytes brutos antes do parse pesado
+    gc.collect()
 
     if skip_if_exists:
-        data_ref_peek = _peek_data_ref_not_arrived(conteudo)
+        data_ref_peek = _peek_data_ref_from_xl(xl)
         if data_ref_peek:
             existing = db.execute(
                 text("SELECT id FROM not_arrived_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
             ).mappings().first()
             if existing:
+                xl.close()
                 return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
 
     try:
-        resultado, tendencia = _processar(conteudo)
+        resultado, tendencia = _processar(xl)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(400, f"Erro ao processar arquivo: {e}")
+    finally:
+        xl.close()
+        gc.collect()
 
     try:
         data_ref = resultado["data_ref"]
