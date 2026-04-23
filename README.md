@@ -62,6 +62,18 @@ A full-stack internal operations portal built for a last-mile logistics company,
 
 ---
 
+## Screenshots
+
+| Dashboard | Sorting (Triagem) |
+|-----------|------------------|
+| ![Dashboard](docs/dashboard.png) | ![Triagem](docs/triagem.png) |
+
+| Complaints (Reclamações) | No Tracking |
+|--------------------------|-------------|
+| ![Reclamacoes](docs/reclamacoes.png) | ![NoTracking](docs/notracking.png) |
+
+---
+
 ## Architecture
 
 ```
@@ -181,4 +193,4 @@ Vite proxies `/api/*` to `localhost:8000` automatically in dev mode.
 
 Built and maintained as a solo full-stack project — from database schema design to UI/UX, API architecture, and deployment pipeline.
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=flat&logo=linkedin)](https://linkedin.com/in/seu-perfil)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-raffafernandess-0A66C2?style=flat&logo=linkedin)](https://www.linkedin.com/in/raffafernandess/)
