@@ -69,7 +69,7 @@ def _mapear_colunas(df: pd.DataFrame) -> dict:
             mapa[c] = 'supervisor'
         elif cs in ('Regional', 'Região', 'Regiao') and 'regional' not in mapa.values():
             mapa[c] = 'regional'
-        elif cs in ('AGING', 'Aging', 'No Tracking Time (D)', 'Age', 'Dias sem tracking'):
+        elif cs in ('AGING', 'Aging', 'No Tracking Time (D)', 'Age', 'Dias sem tracking', '大于10D', '大于10d'):
             mapa[c] = 'aging'
         elif cs in ('DIAS EM ABERTO', 'RangeSemMovimentação', 'Range', 'Faixa'):
             mapa[c] = 'faixa'
@@ -126,6 +126,12 @@ def _processar(conteudo: bytes) -> dict:
         raise HTTPException(400, "Nenhum waybill válido encontrado.")
 
     df['station']  = df['station'].fillna('').astype(str).str.strip().str.upper()
+
+    # Mantém apenas stations de São Paulo (prefixo SP)
+    df = df[df['station'].str.startswith('SP')].copy()
+    if df.empty:
+        raise HTTPException(400, "Nenhum pacote de São Paulo encontrado. Verifique se as stations começam com 'SP'.")
+
     df['status']   = df['status'].fillna('').astype(str).str.strip() \
                      if 'status' in df.columns else pd.Series('', index=df.index)
     df['supervisor'] = df['supervisor'].fillna('').astype(str).str.strip().str.upper() \
