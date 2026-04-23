@@ -324,12 +324,14 @@ async def upload_supervisores(
     except Exception:
         raise HTTPException(400, "Arquivo inválido. Envie um .xlsx.")
 
-    aba = next((s for s in xl.sheet_names if 'BASE ATUAL' in s.upper() or 'ATUALIZADO' in s.upper()), xl.sheet_names[0])
+    aba = next((s for s in xl.sheet_names if 'ATUALIZADO' in s.upper()), None) \
+       or next((s for s in xl.sheet_names if 'BASE ATUAL' in s.upper()), xl.sheet_names[0])
     df = xl.parse(aba)
     df.columns = df.columns.str.strip()
 
-    col_sigla = next((c for c in df.columns if str(c).strip().upper() in ('SIGLA', 'DS', 'DS SIGLA')), None)
-    col_sup   = next((c for c in df.columns if 'SUPERVISOR' in str(c).strip().upper()), None)
+    df.columns = df.columns.str.strip()
+    col_sigla = next((c for c in df.columns if c.upper() in ('SIGLA', 'DS', 'DS SIGLA')), None)
+    col_sup   = next((c for c in df.columns if 'SUPERVISOR' in c.upper()), None)
 
     if not col_sigla or not col_sup:
         raise HTTPException(400, f"Colunas SIGLA e SUPERVISOR não encontradas. Encontradas: {list(df.columns)}")
