@@ -63,7 +63,7 @@ const MODULES = [
     label: 'Reclamações',
     endpoint: '/api/reclamacoes/processar',
     uploadsUrl: '/api/reclamacoes/uploads',
-    field: 'file',
+    field: 'files',
     hint: 'Bilhete de reclamações — colunas Create Time, Station, SUPERVISOR…',
     color: 'purple',
   },
