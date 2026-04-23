@@ -21,56 +21,113 @@ from api.lark_utils import notify_reclamacoes
 router = APIRouter()
 
 
+_STA_COLS = ['Inventory Station', 'inventory_station', 'InventoryStation',
+             'Station', 'station_code', 'DS', 'DS²', 'Base',
+             'Estação', 'Estacao', 'Branch', 'Sigla']
+_MOT_COLS = ['DA Name', 'da_name', 'DAName', 'Motorista',
+             'Driver Name', 'Driver', 'driver_name',
+             'Entregador', 'Nome DA', 'courier', 'Courier Name']
+_SUP_COLS = ['SUPERVISOR', 'Supervisor', 'supervisor',
+             'Regional', 'Região', 'Regiao', 'region']
+
+
+def _is_rec_sheet(cols: list) -> bool:
+    """Retorna True se as colunas parecem ser de uma aba de reclamações."""
+    cl = [str(c).lower() for c in cols]
+    has_mot = any(k in c for c in cl for k in ['da name', 'motorista', 'driver', 'entregador', 'courier'])
+    has_sta = any(k in c for c in cl for k in ['station', 'inventory', 'estação', 'estacao', 'base'])
+    return (has_mot or has_sta) and len(cols) >= 3
+
+
 def _ler_bilhete(buf):
-    """Lê arquivo de bilhete de reclamações."""
-    df = pd.read_excel(buf, dtype=str)
-    df.columns = df.columns.str.strip()
-    return df
+    """Lê todas as abas com estrutura de reclamações e concatena — igual ao carga em lote."""
+    all_sheets = pd.read_excel(buf, sheet_name=None, dtype=str)
+    frames = []
+    for sheet_name, df in all_sheets.items():
+        if df.empty:
+            continue
+        df.columns = df.columns.str.strip()
+        if _is_rec_sheet(list(df.columns)):
+            frames.append(df)
+    if not frames:
+        # Fallback: usa a primeira aba independentemente da estrutura
+        first_name = next(iter(all_sheets))
+        df = all_sheets[first_name]
+        df.columns = df.columns.str.strip()
+        return df
+    return pd.concat(frames, ignore_index=True)
 
 
 def _extrair_data_ref(df):
-    """Extrai data de referência do campo Create Time."""
-    if 'Create Time' in df.columns:
-        datas = pd.to_datetime(df['Create Time'], dayfirst=False, errors='coerce').dropna()
+    """Extrai data de referência do campo de data (Create Time ou similar)."""
+    col = next(
+        (c for c in df.columns if any(k in c.lower() for k in ['create time', 'create_time', 'data criação', 'data de criação', 'criado em', 'date'])),
+        None,
+    )
+    if col:
+        datas = pd.to_datetime(df[col], dayfirst=False, errors='coerce').dropna()
         if not datas.empty:
             return datas.dt.date.mode().iloc[0]
     return date.today()
 
 
+def _find_col(df, candidates):
+    """Retorna o nome da primeira coluna encontrada (case-insensitive substring)."""
+    cols_lower = {c.lower(): c for c in df.columns}
+    for cand in candidates:
+        cl = cand.lower()
+        if cl in cols_lower:
+            return cols_lower[cl]
+        match = next((orig for low, orig in cols_lower.items() if cl in low), None)
+        if match:
+            return match
+    return None
+
+
+def _sup_col(df):
+    return _find_col(df, _SUP_COLS)
+
+
+def _sta_col(df):
+    return _find_col(df, _STA_COLS)
+
+
+def _mot_col(df):
+    return _find_col(df, _MOT_COLS)
+
+
 def _agregar_por_supervisor(df):
     """Agrega reclamações por supervisor."""
-    if 'SUPERVISOR' not in df.columns:
+    col = _sup_col(df)
+    if not col:
         return []
-    grp = df.groupby('SUPERVISOR').size().reset_index(name='dia_total')
+    grp = df[df[col].notna()].groupby(col).size().reset_index(name='dia_total')
     grp = grp.sort_values('dia_total', ascending=False)
-    return [{'supervisor': r['SUPERVISOR'], 'dia_total': int(r['dia_total']), 'mes_total': int(r['dia_total'])}
+    return [{'supervisor': str(r[col]), 'dia_total': int(r['dia_total']), 'mes_total': int(r['dia_total'])}
             for _, r in grp.iterrows()]
 
 
 def _agregar_por_station(df):
     """Agrega reclamações por station."""
-    col = None
-    for c in ['Inventory Station', 'inventory_station', 'Station']:
-        if c in df.columns:
-            col = c
-            break
+    col = _sta_col(df)
     if not col:
         return []
-    grp = df.groupby(col).size().reset_index(name='dia_total')
+    df2 = df[df[col].notna()].copy()
+    grp = df2.groupby(col).size().reset_index(name='dia_total')
     grp = grp.sort_values('dia_total', ascending=False)
-    if 'SUPERVISOR' in df.columns:
+    col_sup = _sup_col(df)
+    sup_map = {}
+    if col_sup:
         sup_map = (
-            df[df['SUPERVISOR'].notna()]
-            .groupby(col)['SUPERVISOR']
+            df2[df2[col_sup].notna()]
+            .groupby(col)[col_sup]
             .agg(lambda s: s.mode().iloc[0])
             .to_dict()
         )
-    else:
-        sup_map = {}
     return [
         {
             'station': str(r[col]),
-            'supervisor': sup_map.get(r[col], ''),
+            'supervisor': str(sup_map.get(r[col], '')),
             'dia_total': int(r['dia_total']),
             'mes_total': int(r['dia_total']),
         }
@@ -81,11 +138,7 @@ def _agregar_por_station(df):
 def _top5_motoristas(df, inativos=None):
     """Top 5 motoristas com mais reclamações."""
     inativos = inativos or set()
-    col_mot = None
-    for c in ['Motorista', 'DA Name', 'da_name', 'Driver Name']:
-        if c in df.columns:
-            col_mot = c
-            break
+    col_mot = _mot_col(df)
     if not col_mot:
         return []
 
@@ -93,9 +146,9 @@ def _top5_motoristas(df, inativos=None):
     grp = df_filt.groupby(col_mot).size().reset_index(name='total')
     grp = grp.sort_values('total', ascending=False).head(5)
 
-    col_ds = next((c for c in ['Inventory Station', 'Station', 'DS'] if c in df.columns), None)
+    col_ds  = _sta_col(df)
+    col_sup = _sup_col(df)
 
-    # Monta os mapas uma vez para todos os motoristas (evita filtrar o DF inteiro por linha)
     ds_map: dict = {}
     if col_ds:
         ds_map = (
@@ -106,10 +159,10 @@ def _top5_motoristas(df, inativos=None):
         )
 
     sup_map: dict = {}
-    if 'SUPERVISOR' in df.columns:
+    if col_sup:
         sup_map = (
-            df_filt[df_filt['SUPERVISOR'].notna()]
-            .groupby(col_mot)['SUPERVISOR']
+            df_filt[df_filt[col_sup].notna()]
+            .groupby(col_mot)[col_sup]
             .agg(lambda s: s.mode().iloc[0])
             .to_dict()
         )
@@ -126,23 +179,35 @@ def _top5_motoristas(df, inativos=None):
     ]
 
 
+def _norm_key(s: str) -> str:
+    """Normaliza chave removendo hífens, espaços e underscores."""
+    import re
+    return re.sub(r'[-_\s]', '', str(s)).upper()
+
+
 def _adicionar_supervisor(df, db: Session):
-    """Adiciona coluna SUPERVISOR via tabela config_supervisores."""
-    if 'SUPERVISOR' in df.columns:
+    """Adiciona coluna SUPERVISOR via tabela config_supervisores (se não existir)."""
+    if _sup_col(df):
+        col = _sup_col(df)
+        if col != 'SUPERVISOR':
+            df = df.rename(columns={col: 'SUPERVISOR'})
         return df
     rows = db.execute(text("SELECT sigla, region FROM config_supervisores")).mappings().all()
     if not rows:
         df['SUPERVISOR'] = 'Sem Região'
         return df
-    sup_map = {r['sigla'].strip().upper(): r['region'] for r in rows if r.get('sigla')}
+    # Mapa direto e mapa normalizado (ignora hífens/espaços)
+    sup_map      = {r['sigla'].strip().upper(): r['region'] for r in rows if r.get('sigla')}
+    sup_map_norm = {_norm_key(k): v for k, v in sup_map.items()}
 
-    col_sta = None
-    for c in ['Inventory Station', 'inventory_station', 'Station']:
-        if c in df.columns:
-            col_sta = c
-            break
+    col_sta = _sta_col(df)
     if col_sta:
-        df['SUPERVISOR'] = df[col_sta].fillna('').str.strip().str.upper().map(sup_map).fillna('Sem Supervisor')
+        def _lookup(val):
+            v = str(val).strip().upper() if val and str(val).strip() else ''
+            if not v:
+                return 'Sem Supervisor'
+            return sup_map.get(v) or sup_map_norm.get(_norm_key(v)) or 'Sem Supervisor'
+        df['SUPERVISOR'] = df[col_sta].apply(_lookup)
     else:
         df['SUPERVISOR'] = 'Sem Supervisor'
     return df
@@ -270,8 +335,9 @@ async def processar_reclamacoes(
     top5 = _top5_motoristas(df, inativos)
 
     semana_ref = 0
-    if 'Create Time' in df.columns:
-        datas = pd.to_datetime(df['Create Time'], dayfirst=False, errors='coerce')
+    col_time = next((c for c in df.columns if 'create time' in c.lower() or 'create_time' in c.lower()), None)
+    if col_time:
+        datas = pd.to_datetime(df[col_time], dayfirst=False, errors='coerce')
         if not datas.dropna().empty:
             semana_ref = int(datas.dropna().dt.isocalendar().week.mode().iloc[0])
 
@@ -286,14 +352,12 @@ async def processar_reclamacoes(
         db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
         db.commit()
 
-    n_mot = 0
-    for c in ['Motorista', 'DA Name', 'da_name', 'Driver Name']:
-        if c in df.columns:
-            n_mot = int(df[c].notna().sum())
-            break
+    col_mot_name = _mot_col(df)
+    n_mot = int(df[col_mot_name].notna().sum()) if col_mot_name else 0
 
-    col_sta = next((c for c in ['Inventory Station', 'inventory_station', 'Station'] if c in df.columns), None)
-    n_sta = int(df[col_sta].nunique()) if col_sta else 0
+    col_sta_name = _sta_col(df)
+    n_sta = int(df[col_sta_name].nunique()) if col_sta_name else 0
+    col_sup_name = _sup_col(df) or 'SUPERVISOR'
 
     row = db.execute(
         text("""
@@ -304,7 +368,7 @@ async def processar_reclamacoes(
         {
             "data_ref":    data_ref.isoformat(),
             "n_registros": len(df),
-            "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
+            "n_sup":       int(df[col_sup_name].nunique()) if col_sup_name in df.columns else 0,
             "n_sta":       n_sta,
             "n_mot":       n_mot,
             "semana_ref":  semana_ref,

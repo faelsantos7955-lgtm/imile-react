@@ -542,31 +542,83 @@ function isoWeek(dateStr) {
   return 1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getUTCDay() + 6) % 7) / 7)
 }
 
+// Retorna true se os headers parecem ser de uma aba de reclamações
+function _isRecSheet(headers) {
+  if (!headers.length) return false
+  const h = headers.map(x => String(x).toLowerCase())
+  const hasMot = h.some(x => ['da name','motorista','driver name','driver','entregador','courier','nome da'].some(k => x.includes(k)))
+  const hasSta = h.some(x => ['station','inventory','estação','estacao','base','ds'].some(k => x.includes(k)))
+  return (hasMot || hasSta) && headers.length >= 3
+}
+
+// Normaliza chave para lookup fuzzy (remove hífens, espaços, underscores)
+function _normKey(s) { return String(s).replace(/[-_\s]/g, '').toUpperCase() }
+
 export async function processReclamacoes(files, supervisorMap = {}) {
-  // Aceita File único ou array de File
   const fileList = Array.isArray(files) ? files : [files]
   const buffers = await Promise.all(fileList.map(f => f.arrayBuffer()))
 
-  // Lê e concatena todas as planilhas
+  // Lê TODAS as abas de TODOS os arquivos — igual ao carga em lote
   let headers = [], rows = []
   for (const buf of buffers) {
     const wb = readWb(new Uint8Array(buf))
-    const parsed = parseSheet(wb, wb.SheetNames[0])
-    if (!headers.length) headers = parsed.headers
-    rows = rows.concat(parsed.rows)
+    let achouAba = false
+    for (const sheetName of wb.SheetNames) {
+      const parsed = parseSheet(wb, sheetName)
+      if (!parsed.rows.length) continue
+      if (!_isRecSheet(parsed.headers)) continue
+      if (!headers.length) headers = parsed.headers
+      rows = rows.concat(parsed.rows)
+      achouAba = true
+    }
+    // Fallback: se nenhuma aba passou no filtro, usa a primeira
+    if (!achouAba) {
+      const parsed = parseSheet(wb, wb.SheetNames[0])
+      if (!headers.length) headers = parsed.headers
+      rows = rows.concat(parsed.rows)
+    }
   }
 
-  const iSup  = findIdx(headers, 'SUPERVISOR')
-  const iSta  = findIdx(headers, 'Inventory Station', 'inventory_station', 'Station')
-  const iMot  = findIdx(headers, 'DA Name', 'da_name', 'Motorista', 'Driver Name')
-  const iTime = findIdx(headers, 'Create Time')
+  // Aliases expandidos para detecção de colunas
+  const iSup  = findIdx(headers,
+    'SUPERVISOR', 'Supervisor', 'supervisor',
+    'Regional', 'Região', 'Regiao', 'region')
+  const iSta  = findIdx(headers,
+    'Inventory Station', 'inventory_station', 'InventoryStation',
+    'Station', 'station_code', 'DS', 'DS²', 'Base',
+    'Estação', 'Estacao', 'Branch', 'Sigla', 'sigla')
+  const iMot  = findIdx(headers,
+    'DA Name', 'da_name', 'DAName',
+    'Motorista', 'Driver Name', 'Driver', 'driver_name',
+    'Entregador', 'Nome DA', 'Nome do Entregador', 'courier', 'Courier Name')
+  const iId   = findIdx(headers,
+    'DA ID', 'da_id', 'DAID', 'ID Motorista', 'Driver ID', 'courier_id')
+  const iTime = findIdx(headers,
+    'Create Time', 'create_time', 'CreateTime',
+    'Data', 'Date', 'Data Criação', 'Data de Criação', 'Criado Em')
 
   const validRows = rows.filter(r => r.some(c => c != null))
 
+  if (!validRows.length)
+    throw new Error(`Nenhum dado encontrado. Colunas detectadas: ${headers.join(', ')}`)
+
+  // Lookup de supervisor com fallback fuzzy (ignora hífens/espaços)
+  const normSupMap = {}
+  Object.entries(supervisorMap).forEach(([k, v]) => { normSupMap[_normKey(k)] = v })
+
   const getSup = r => {
-    if (iSup >= 0) return g(r, iSup)
-    if (iSta >= 0 && Object.keys(supervisorMap).length) {
-      return supervisorMap[g(r, iSta).toUpperCase()] || 'Sem Supervisor'
+    if (iSup >= 0) {
+      const s = g(r, iSup)
+      if (s && s.toLowerCase() !== 'sem supervisor') return s
+    }
+    if (iSta >= 0) {
+      const sta = g(r, iSta)
+      if (sta) {
+        const direct = supervisorMap[sta.toUpperCase()]
+        if (direct) return direct
+        const fuzzy = normSupMap[_normKey(sta)]
+        if (fuzzy) return fuzzy
+      }
     }
     return 'Sem Supervisor'
   }
@@ -582,12 +634,9 @@ export async function processReclamacoes(files, supervisorMap = {}) {
   }
 
   const n_registros = validRows.length
-  const supervisors = validRows.map(r => getSup(r))
-  const n_sup = new Set(supervisors.filter(Boolean)).size
-  const stations = iSta >= 0 ? validRows.map(r => g(r, iSta)).filter(Boolean) : []
-  const n_sta = new Set(stations).size
-  const motoristas = iMot >= 0 ? validRows.map(r => g(r, iMot)).filter(Boolean) : []
-  const n_mot = motoristas.length
+  const n_sup = new Set(validRows.map(r => getSup(r)).filter(Boolean)).size
+  const n_sta = iSta >= 0 ? new Set(validRows.map(r => g(r, iSta)).filter(Boolean)).size : 0
+  const n_mot = iMot >= 0 ? validRows.map(r => g(r, iMot)).filter(Boolean).length : 0
 
   const supAgg = new Map()
   validRows.forEach(r => {
@@ -615,7 +664,8 @@ export async function processReclamacoes(files, supervisorMap = {}) {
     if (iMot < 0) return
     const mot = g(r, iMot)
     if (!mot) return
-    const e = motAgg.get(mot) || { motorista: mot, id_motorista: mot, ds: '', supervisor: '', total: 0 }
+    const idMot = iId >= 0 ? (g(r, iId) || mot) : mot
+    const e = motAgg.get(mot) || { motorista: mot, id_motorista: idMot, ds: '', supervisor: '', total: 0 }
     e.total++
     if (iSta >= 0) e.ds = g(r, iSta) || e.ds
     e.supervisor = getSup(r) || e.supervisor
