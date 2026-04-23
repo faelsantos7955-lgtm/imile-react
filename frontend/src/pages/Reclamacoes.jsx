@@ -1,18 +1,148 @@
 /**
  * pages/Reclamacoes.jsx — Reclamações + bloqueio de motorista + upload
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { PageHeader, KpiCard, SectionHeader, Card, Alert, UploadGuide, toast, ConfirmDialog, chartTheme } from '../components/ui'
+import { PageHeader, KpiCard, SectionHeader, Card, Alert, toast, ConfirmDialog, chartTheme } from '../components/ui'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
 } from 'recharts'
-import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader } from 'lucide-react'
+import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader, X, FileSpreadsheet } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 import { processReclamacoes } from '../lib/processarLocal'
+
+const FASE_LABELS = {
+  supervisores: 'Buscando mapa de supervisores...',
+  lendo:        'Lendo arquivo Excel...',
+  salvando:     'Salvando no banco...',
+}
+
+function UploadPanel({ onClose, onSuccess }) {
+  const [files, setFiles] = useState([])
+  const [fase, setFase]   = useState('')
+  const [progresso, setProgresso] = useState('')
+  const [erro, setErro]   = useState('')
+  const inputRef = useRef()
+
+  const uploading = fase !== ''
+
+  const addFiles = (incoming) => {
+    const err = validarArquivos(Array.from(incoming))
+    if (err) { setErro(err); return }
+    setErro('')
+    setFiles(prev => {
+      const names = new Set(prev.map(f => f.name))
+      const novos = Array.from(incoming).filter(f => !names.has(f.name))
+      return [...prev, ...novos]
+    })
+  }
+
+  const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx))
+
+  const totalMB = files.reduce((s, f) => s + f.size, 0) / 1024 / 1024
+
+  const handleSubmit = async () => {
+    if (!files.length) return
+    setFase('processando'); setProgresso('supervisores'); setErro('')
+    try {
+      const { data: supMap } = await api.get('/api/triagem/supervisores', { timeout: 120_000 })
+      setProgresso('lendo')
+      const resultado = await processReclamacoes(files, supMap)
+      setProgresso('salvando')
+      const res = await api.post('/api/reclamacoes/salvar', resultado, { timeout: 120_000 })
+      setFase(''); setProgresso('')
+      onSuccess(res.data.upload_id)
+    } catch (e) {
+      setErro(e.response?.data?.detail || e.message || 'Erro ao processar arquivo.')
+      setFase(''); setProgresso('')
+    }
+  }
+
+  return (
+    <div className="mb-6 bg-white border border-slate-200 rounded-xl p-5 animate-scale">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-semibold text-slate-800">Novo Upload de Reclamações</p>
+        <button onClick={onClose} disabled={uploading} className="text-slate-400 hover:text-slate-600 disabled:opacity-30"><X size={16} /></button>
+      </div>
+
+      <div
+        onClick={() => !uploading && inputRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); if (!uploading) addFiles(e.dataTransfer.files) }}
+        className={`border-2 border-dashed rounded-xl p-5 text-center transition-all mb-4 ${
+          uploading
+            ? 'border-slate-100 bg-slate-50 cursor-default'
+            : 'border-slate-200 hover:border-imile-300 hover:bg-imile-50/10 cursor-pointer'
+        }`}
+      >
+        <Upload size={22} className="mx-auto mb-1.5 text-slate-300" />
+        <p className="text-xs font-semibold text-slate-600">Clique ou arraste os arquivos aqui</p>
+        <p className="text-[10px] text-slate-400 mt-0.5">Bilhete de Reclamações (.xlsx) — múltiplos arquivos permitidos</p>
+        <input
+          ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden"
+          onChange={e => { addFiles(e.target.files); e.target.value = '' }}
+        />
+      </div>
+
+      {files.length > 0 && !uploading && (
+        <div className="space-y-1.5 mb-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Arquivos selecionados
+          </p>
+          {files.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+              <FileSpreadsheet size={13} className="text-imile-400 shrink-0" />
+              <span className="flex-1 text-xs text-slate-700 truncate min-w-0">{f.name}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
+              <button onClick={() => removeFile(i)} className="text-slate-300 hover:text-red-400 transition-colors ml-1">
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-3 text-[11px] pt-1">
+            <span className="px-2 py-0.5 bg-imile-50 text-imile-700 rounded-full font-medium">
+              {files.length} arquivo{files.length > 1 ? 's' : ''}
+            </span>
+            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">
+              {totalMB.toFixed(1)} MB total
+            </span>
+          </div>
+        </div>
+      )}
+
+      {uploading && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-slate-600">
+              {FASE_LABELS[progresso] || 'Processando...'}
+            </span>
+            <Loader size={12} className="animate-spin text-imile-500" />
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div className="h-2 rounded-full bg-imile-400 animate-pulse w-full" />
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">Processamento local — sem upload de arquivo</p>
+        </div>
+      )}
+
+      {erro && <p className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{erro}</p>}
+
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+        <button onClick={onClose} disabled={uploading} className="text-sm text-slate-500 hover:text-slate-700 disabled:opacity-40">Cancelar</button>
+        <button onClick={handleSubmit} disabled={uploading || !files.length}
+          className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 transition-colors">
+          {uploading
+            ? <><Loader size={14} className="animate-spin" /> Processando...</>
+            : <><Upload size={14} /> Processar</>
+          }
+        </button>
+      </div>
+    </div>
+  )
+}
 
 const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 const COLORS_WEEK = ['#095EF7', '#f97316', '#10b981', '#06b6d4']
@@ -22,10 +152,9 @@ export default function Reclamacoes() {
   const queryClient               = useQueryClient()
   const [sel, setSel]             = useState(null)
   const [blocking, setBlocking]   = useState({})
-  const [uploading, setUploading] = useState(false)
+  const [showPanel, setShowPanel] = useState(false)
   const [erroUpload, setErroUpload] = useState('')
   const [confirmDlg, setConfirmDlg] = useState(null)
-  const inputRef = useRef()
 
   const { data: uploads = [] } = useQuery({
     queryKey: ['reclamacoes-uploads'],
@@ -52,25 +181,6 @@ export default function Reclamacoes() {
     queryClient.invalidateQueries({ queryKey: ['reclamacoes-uploads'] })
     queryClient.invalidateQueries({ queryKey: ['reclamacoes-detail', sel] })
     queryClient.invalidateQueries({ queryKey: ['reclamacoes-semanas'] })
-  }
-
-  const handleUpload = async (e) => {
-    const selected = Array.from(e.target.files || [])
-    if (!selected.length) return
-    const erroVal = validarArquivos(selected)
-    if (erroVal) { setErroUpload(erroVal); return }
-    setUploading(true); setErroUpload('')
-    try {
-      // Busca mapa de supervisores e processa localmente (timeout maior cobre cold start)
-      const { data: supMap } = await api.get('/api/triagem/supervisores', { timeout: 120_000 })
-      const resultado = await processReclamacoes(selected, supMap)
-      const res = await api.post('/api/reclamacoes/salvar', resultado, { timeout: 120_000 })
-      invalidateAll()
-      setSel(res.data.upload_id)
-      toast.ok(`${selected.length > 1 ? 'Arquivos processados' : 'Arquivo processado'} com sucesso!`)
-    } catch (e) {
-      setErroUpload(e.response?.data?.detail || e.message || 'Erro ao processar arquivo.')
-    } finally { setUploading(false) }
   }
 
   const handleDelete = () => {
@@ -147,34 +257,35 @@ export default function Reclamacoes() {
               <Download size={14} /> Excel
             </button>
           )}
-          <UploadGuide
-            title="Arquivo de Reclamações"
-            items={[
-              'Relatório de Fake Delivery / Reclamações — arquivo único (.xlsx)',
-              'Coluna de motorista: nome completo do entregador',
-              'Coluna de reclamações: quantidade de tickets no período',
-              'Colunas adicionais: Supervisor e Station (base DS)',
-              'Não misture semanas diferentes no mesmo arquivo',
-            ]}
-          />
-          <button onClick={() => inputRef.current?.click()} disabled={uploading}
-            className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50">
-            {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploading ? 'Processando...' : 'Novo Upload'}
+          <button onClick={() => setShowPanel(p => !p)}
+            className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 transition-colors">
+            {showPanel ? <X size={14} /> : <Upload size={14} />}
+            {showPanel ? 'Fechar' : 'Novo Upload'}
           </button>
-          <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleUpload} />
         </div>
       </div>
 
       {erroUpload && <Alert type="warning" className="mb-4">{erroUpload}</Alert>}
 
-      {!uploads.length && !uploading ? (
+      {showPanel && (
+        <UploadPanel
+          onClose={() => setShowPanel(false)}
+          onSuccess={(id) => {
+            setShowPanel(false)
+            invalidateAll()
+            setSel(id)
+            toast.ok('Arquivo processado com sucesso!')
+          }}
+        />
+      )}
+
+      {!uploads.length && !showPanel ? (
         <Card className="text-center py-12">
           <Upload size={40} className="text-slate-300 mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Nenhum upload ainda</p>
           <p className="text-slate-400 text-sm mt-1">Clique em "Novo Upload" para enviar o bilhete de reclamações</p>
         </Card>
-      ) : (
+      ) : uploads.length > 0 && (
         <>
           <div className="flex items-center gap-2 mb-6">
             <select
