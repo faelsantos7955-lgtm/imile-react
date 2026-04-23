@@ -1,16 +1,19 @@
 """
 api/routes/admin.py — Rotas administrativas
 """
+import io
 import uuid
 import secrets
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Request
 from pydantic import BaseModel, field_validator
 from typing import Literal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, require_admin, audit_log
 from api.email_utils import email_boas_vindas
+from api.limiter import limiter
+import pandas as pd
 
 PAGINAS_VALIDAS = {'dashboard','historico','comparativos','triagem','reclamacoes','backlog','monitoramento','admin'}
 ACOES_VALIDAS   = {'excel','bloquear_motorista','aprovar_acesso'}
@@ -293,3 +296,70 @@ def deletar_meta(ds: str, user: dict = Depends(require_admin), db: Session = Dep
     )
     db.commit()
     return {"ok": True}
+
+
+# ── Supervisores ──────────────────────────────────────────────
+
+@router.get("/supervisores")
+def listar_supervisores(user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+    rows = db.execute(
+        text("SELECT sigla, region, atualizado_por FROM config_supervisores ORDER BY sigla")
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@router.post("/supervisores/upload")
+@limiter.limit("10/minute")
+async def upload_supervisores(
+    request: Request,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    conteudo = await file.read()
+    if len(conteudo) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Arquivo muito grande (máx 10 MB).")
+    try:
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
+    except Exception:
+        raise HTTPException(400, "Arquivo inválido. Envie um .xlsx.")
+
+    aba = next((s for s in xl.sheet_names if 'BASE ATUAL' in s.upper() or 'ATUALIZADO' in s.upper()), xl.sheet_names[0])
+    df = xl.parse(aba)
+    df.columns = df.columns.str.strip()
+
+    col_sigla = next((c for c in df.columns if str(c).strip().upper() in ('SIGLA', 'DS', 'DS SIGLA')), None)
+    col_sup   = next((c for c in df.columns if 'SUPERVISOR' in str(c).strip().upper()), None)
+
+    if not col_sigla or not col_sup:
+        raise HTTPException(400, f"Colunas SIGLA e SUPERVISOR não encontradas. Encontradas: {list(df.columns)}")
+
+    df = df[[col_sigla, col_sup]].copy()
+    df.columns = ['sigla', 'supervisor']
+    df = df.dropna(subset=['sigla', 'supervisor'])
+    df['sigla']      = df['sigla'].astype(str).str.strip().str.upper()
+    df['supervisor'] = df['supervisor'].astype(str).str.strip().str.upper()
+    df = df[df['sigla'].str.startswith('DS') | df['sigla'].str.startswith('DC')]
+    df = df[df['sigla'].str.len() >= 4]
+
+    if df.empty:
+        raise HTTPException(400, "Nenhuma DS válida encontrada no arquivo.")
+
+    rows = [
+        {"sigla": r.sigla, "region": r.supervisor, "atualizado_por": user["email"]}
+        for r in df.itertuples()
+    ]
+
+    db.execute(
+        text("""
+            INSERT INTO config_supervisores (sigla, region, atualizado_por)
+            VALUES (:sigla, :region, :atualizado_por)
+            ON CONFLICT (sigla) DO UPDATE
+            SET region = EXCLUDED.region,
+                atualizado_por = EXCLUDED.atualizado_por
+        """),
+        rows
+    )
+    db.commit()
+    audit_log("supervisores_atualizados", "config_supervisores", {"total": len(rows), "aba": aba}, user)
+    return {"ok": True, "total": len(rows), "aba": aba}

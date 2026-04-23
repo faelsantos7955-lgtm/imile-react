@@ -831,6 +831,97 @@ function AuditLogPage() {
   )
 }
 
+// ── Supervisores ──────────────────────────────────────────────
+function SupervisoresPage() {
+  const qc = useQueryClient()
+  const [uploading, setUploading] = useState(false)
+  const [busca, setBusca]         = useState('')
+
+  const { data: lista = [], isLoading } = useQuery({
+    queryKey: ['admin-supervisores'],
+    queryFn: () => api.get('/api/admin/supervisores').then(r => r.data),
+  })
+
+  const handleFile = async (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      const r = await api.post('/api/admin/supervisores/upload', fd)
+      toast.ok(`${r.data.total} DS atualizadas com sucesso (aba: ${r.data.aba})`)
+      qc.invalidateQueries({ queryKey: ['admin-supervisores'] })
+    } catch (err) {
+      toast.erro(err?.response?.data?.detail || 'Erro ao processar arquivo.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const filtradas = lista.filter(r =>
+    !busca || r.sigla.includes(busca.toUpperCase()) || r.region.toUpperCase().includes(busca.toUpperCase())
+  )
+
+  return (
+    <div>
+      <PageHeader icon="🗺️" title="Mapa de Supervisores" subtitle="Vincula cada DS ao supervisor responsável" />
+
+      <Card className="mb-6">
+        <p className="text-sm text-slate-600 mb-3">
+          Faça upload do arquivo <strong>Gestão Operacional Supervisores.xlsx</strong> (aba <code className="bg-slate-100 px-1 rounded">BASE ATUAL</code>).
+          O sistema lerá as colunas <strong>SIGLA</strong> e <strong>SUPERVISOR</strong> e atualizará o banco automaticamente.
+        </p>
+        <div className="flex items-center gap-3">
+          <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${
+            uploading ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-imile-500 text-white hover:bg-imile-600'
+          }`}>
+            {uploading ? <><Loader size={14} className="animate-spin" /> Processando...</> : <><Upload size={14} /> Atualizar Base de Supervisores</>}
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} disabled={uploading} />
+          </label>
+          {lista.length > 0 && (
+            <span className="text-sm text-slate-500">{lista.length} DS no banco</span>
+          )}
+        </div>
+      </Card>
+
+      {isLoading ? (
+        <Card><p className="text-slate-400 text-sm">Carregando...</p></Card>
+      ) : lista.length > 0 && (
+        <>
+          <div className="mb-3">
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar DS ou supervisor..."
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-64" />
+          </div>
+          <Card className="p-0 overflow-hidden">
+            <div className="max-h-[500px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0" style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
+                  <tr className="text-[10px] uppercase text-white/70">
+                    <th className="px-4 py-3 text-left">Sigla</th>
+                    <th className="px-4 py-3 text-left">Supervisor</th>
+                    <th className="px-4 py-3 text-left">Atualizado por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtradas.map((r, i) => (
+                    <tr key={r.sigla} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-2 font-mono text-xs font-semibold">{r.sigla}</td>
+                      <td className="px-4 py-2 font-medium">{r.region}</td>
+                      <td className="px-4 py-2 text-xs text-slate-400">{r.atualizado_por || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Metas por DS ──────────────────────────────────────────────
 function MetasPage() {
   const qc = useQueryClient()
@@ -1042,6 +1133,9 @@ export default function Admin() {
         <NavLink to="/admin/monitoramento" className={({ isActive }) => tabClass(isActive)}>
           <Upload size={15} /> Monitoramento
         </NavLink>
+        <NavLink to="/admin/supervisores" className={({ isActive }) => tabClass(isActive)}>
+          <Users size={15} /> Supervisores
+        </NavLink>
       </div>
 
       <Routes>
@@ -1053,6 +1147,7 @@ export default function Admin() {
         <Route path="lote" element={<BulkUpload />} />
         <Route path="avisos" element={<AdminAvisos />} />
         <Route path="monitoramento" element={<MonitoramentoFontes />} />
+        <Route path="supervisores" element={<SupervisoresPage />} />
       </Routes>
     </div>
   )
