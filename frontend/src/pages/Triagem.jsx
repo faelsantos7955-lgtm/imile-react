@@ -24,6 +24,54 @@ const COLOR_NOK = '#ef4444'
 const COLOR_REC = '#095EF7'
 const COLOR_TOP = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
 
+// ── Hero Triagem ──────────────────────────────────────────────
+function HeroTriagem() {
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 380, height: 380, top: -160, left: -80, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.55 }} />
+      <div className="blob blob-b" style={{ width: 280, height: 280, top: -80, right: -30, background: 'radial-gradient(circle,#059669 0%,transparent 70%)', opacity: 0.28 }} />
+      <div className="blob blob-c" style={{ width: 220, height: 220, bottom: -80, left: '45%', background: 'radial-gradient(circle,#ef4444 0%,transparent 70%)', opacity: 0.18 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+      {[
+        { dur: '9s', delay: '0s',   color: '#10b981' },
+        { dur: '9s', delay: '3s',   color: '#ef4444' },
+        { dur: '9s', delay: '6s',   color: '#10b981' },
+      ].map((p, i) => (
+        <div key={i} className="absolute pointer-events-none"
+          style={{ bottom: 28, left: 0, animation: `truck-move ${p.dur} linear infinite`, animationDelay: p.delay }}>
+          <svg width={24} height={18} viewBox="0 0 24 18" fill="none">
+            <rect x={1} y={1} width={22} height={14} rx={3} fill={p.color} fillOpacity={0.8}/>
+            <rect x={4} y={4} width={7} height={5} rx={1} fill="white" fillOpacity={0.25}/>
+            <rect x={10} y={1} width={3} height={14} rx={0} fill="white" fillOpacity={0.08}/>
+            <circle cx={5.5} cy={15.5} r={2.5} fill="#0d1020" stroke="white" strokeWidth={0.8} strokeOpacity={0.5}/>
+            <circle cx={18.5} cy={15.5} r={2.5} fill="#0d1020" stroke="white" strokeWidth={0.8} strokeOpacity={0.5}/>
+          </svg>
+        </div>
+      ))}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 168" preserveAspectRatio="xMidYMid slice">
+        <path d="M-50,130 L610,130" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" strokeDasharray="8 8" className="route-flow"/>
+        <path d="M610,130 Q680,130 740,85"  stroke="rgba(16,185,129,0.45)" strokeWidth="1.5" strokeDasharray="6 6" className="route-flow" style={{ animationDelay: '0.6s' }}/>
+        <path d="M610,130 Q680,130 740,158" stroke="rgba(239,68,68,0.45)"  strokeWidth="1.5" strokeDasharray="6 6" className="route-flow" style={{ animationDelay: '0.3s' }}/>
+        <circle cx={610} cy={130} r={5} fill="white" fillOpacity={0.85} className="signal-blink"/>
+        <circle cx={610} cy={130} r={13} fill="none" stroke="white" strokeWidth={0.8} strokeOpacity={0.2} className="signal-blink" style={{ animationDelay: '0.4s' }}/>
+        <circle cx={740} cy={85}  r={4} fill="rgba(16,185,129,0.85)"/>
+        <circle cx={740} cy={158} r={4} fill="rgba(239,68,68,0.85)"/>
+        <text x={752} y={89}  fill="rgba(16,185,129,0.9)" fontSize={10} fontWeight="bold" fontFamily="monospace">OK ✓</text>
+        <text x={750} y={163} fill="rgba(239,68,68,0.9)"  fontSize={10} fontWeight="bold" fontFamily="monospace">NOK ✗</text>
+      </svg>
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,.85)' }}>
+          TRIAGEM DC×DS
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Análise de Expedição</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>LoadingScan × Arrival — erros de roteamento por DS</p>
+      </div>
+    </div>
+  )
+}
+
 // ── Painel de upload com LoadingScan + Arrival ────────────────
 function UploadPanel({ onClose, onSuccess }) {
   // Cada arquivo tem: { file: File, isArrival: boolean }
@@ -524,9 +572,9 @@ export default function Triagem() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <PageHeader title="Triagem DC×DS" subtitle="Análise de erros de expedição — LoadingScan × Arrival" />
+      <HeroTriagem />
+      <div className="flex items-start justify-between mb-4">
+        <div />
         <div className="flex gap-2 shrink-0">
           {sel && (
             <button onClick={handleExcel}

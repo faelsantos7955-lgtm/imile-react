@@ -17,6 +17,74 @@ const F   = n  => n?.toLocaleString('pt-BR') ?? '0'
 const pct = n  => `${((n || 0) * 100).toFixed(1)}%`
 const dec = n  => (n || 0).toFixed(1)
 
+// ── Hero Monitoramento ────────────────────────────────────────
+function HeroMonitoramento() {
+  const pings = [
+    { cx: 200, cy: 80,  delay: '0s'   },
+    { cx: 260, cy: 120, delay: '0.8s' },
+    { cx: 150, cy: 130, delay: '1.6s' },
+    { cx: 230, cy: 55,  delay: '2.4s' },
+    { cx: 170, cy: 100, delay: '3.2s' },
+  ]
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 360, height: 360, top: -140, left: -80,  background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
+      <div className="blob blob-b" style={{ width: 280, height: 280, top: -60,  right: -40, background: 'radial-gradient(circle,#10b981 0%,transparent 70%)', opacity: 0.2 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+
+      {/* Radar SVG */}
+      <svg className="absolute pointer-events-none" style={{ right: 20, top: '50%', transform: 'translateY(-50%)', opacity: 0.85 }}
+        width={200} height={160} viewBox="0 0 200 160">
+        {/* Círculos concêntricos */}
+        {[70, 50, 30, 12].map((r, i) => (
+          <circle key={i} cx={100} cy={80} r={r} fill="none"
+            stroke="rgba(0,180,120,0.2)" strokeWidth={i === 0 ? 1.5 : 0.8}/>
+        ))}
+        {/* Cruz */}
+        <line x1={100} y1={12} x2={100} y2={148} stroke="rgba(0,180,120,0.15)" strokeWidth={0.8}/>
+        <line x1={32}  y1={80} x2={168} y2={80}  stroke="rgba(0,180,120,0.15)" strokeWidth={0.8}/>
+        {/* Varredura (rotaciona com radar-rotate) */}
+        <g className="radar-rotate" style={{ transformOrigin: '100px 80px' }}>
+          <path d="M100,80 L100,12 A68,68 0 0,1 148,37 Z"
+            fill="url(#radar-sweep)" opacity={0.7}/>
+        </g>
+        {/* Pings de entregas */}
+        {pings.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.cx} cy={p.cy} r={3} fill="rgba(16,185,129,0.9)"/>
+            <circle cx={p.cx} cy={p.cy} r={8} fill="none"
+              stroke="rgba(16,185,129,0.5)" strokeWidth={0.8}
+              className="hub-ring" style={{ animationDelay: p.delay }}/>
+          </g>
+        ))}
+        <defs>
+          <radialGradient id="radar-sweep" cx="100" cy="80" r="68" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(0,200,120,0)" />
+            <stop offset="60%" stopColor="rgba(0,200,120,0.15)" />
+            <stop offset="100%" stopColor="rgba(0,200,120,0.5)" />
+          </radialGradient>
+        </defs>
+      </svg>
+
+      {/* Indicador LIVE */}
+      <div className="absolute right-6 bottom-7 flex items-center gap-1.5 hidden sm:flex">
+        <div className="w-2 h-2 rounded-full bg-emerald-400 signal-blink"/>
+        <span className="text-[10px] font-bold text-emerald-400/80 tracking-widest">LIVE</span>
+      </div>
+
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,.85)' }}>
+          MONITORAMENTO
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Painel Diário de Entregas</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Controle operacional em tempo real — estoque, expedição e entrega</p>
+      </div>
+    </div>
+  )
+}
+
 // ── KPI simples ────────────────────────────────────────────────
 function KPI({ label, value, icon: Icon, color = '#334155', suffix = '' }) {
   return (
@@ -357,8 +425,9 @@ export default function Monitoramento() {
         </div>
       )}
 
-      <div className="flex items-start justify-between">
-        <PageHeader icon="📊" title="Monitoramento Diário" subtitle="Controle operacional diário por DS — estoque, expedição, entrega" />
+      <HeroMonitoramento />
+      <div className="flex items-start justify-between mb-4">
+        <div />
         <div className="flex gap-2">
           <UploadGuide
             title="Arquivo de Monitoramento Diário"

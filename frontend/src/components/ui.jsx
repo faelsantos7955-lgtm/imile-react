@@ -451,6 +451,52 @@ export function EmptyState({ icon: Icon, title, description, action }) {
   )
 }
 
+// ── Animated Logistics Empty State ───────────────────────────
+export function LogisticsEmptyState({ title = 'Nenhum dado disponível', description, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 text-center animate-in select-none">
+      {/* Animated SVG package */}
+      <div className="relative mb-5" style={{ width: 80, height: 80 }}>
+        {/* Glow ring */}
+        <div className="absolute inset-0 rounded-full" style={{
+          background: 'radial-gradient(circle, rgba(0,50,160,0.12) 0%, transparent 70%)',
+          animation: 'pulse-ring 2.4s ease-out infinite',
+        }} />
+        {/* Box float */}
+        <div className="box-float absolute inset-0 flex items-center justify-center">
+          <svg width={48} height={44} viewBox="0 0 48 44" fill="none">
+            {/* Box body */}
+            <rect x={4} y={14} width={40} height={26} rx={4} fill="url(#box-grad)" stroke="rgba(0,50,160,0.2)" strokeWidth={1}/>
+            {/* Box top flaps */}
+            <path d="M4 20 L24 14 L44 20" stroke="rgba(0,50,160,0.25)" strokeWidth={1} fill="none"/>
+            {/* Center tape */}
+            <rect x={21} y={14} width={6} height={26} rx={1} fill="rgba(0,50,160,0.12)"/>
+            {/* Shine */}
+            <rect x={7} y={17} width={10} height={5} rx={2} fill="white" fillOpacity={0.3}/>
+            {/* Lock dots */}
+            <circle cx={24} cy={27} r={2.5} fill="rgba(0,50,160,0.3)"/>
+            <defs>
+              <linearGradient id="box-grad" x1="4" y1="14" x2="44" y2="40" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#E8EAF3"/>
+                <stop offset="100%" stopColor="#d0d5e8"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        {/* Scan line */}
+        <div className="absolute left-0 right-0 h-px pointer-events-none scanline"
+          style={{ background: 'linear-gradient(to right, transparent 10%, rgba(0,50,160,0.3) 50%, transparent 90%)' }} />
+      </div>
+
+      <p className="text-sm font-bold text-slate-600 mb-1">{title}</p>
+      {description && (
+        <p className="text-xs text-slate-400 max-w-[260px] leading-relaxed">{description}</p>
+      )}
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  )
+}
+
 export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = 'Confirmar', danger = true }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

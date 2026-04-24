@@ -9,6 +9,91 @@ import { Upload, Download, Loader, RefreshCw, Trash2, Filter, X, ChevronDown, Ch
 import { validarArquivos } from '../lib/validarArquivo'
 import { useAuth } from '../lib/AuthContext'
 
+// ── Hero Backlog ──────────────────────────────────────────────
+function HeroBacklog() {
+  const bars = [
+    { w: '18%', color: '#475569', label: '1-3D' },
+    { w: '14%', color: '#64748b', label: '3-5D' },
+    { w: '12%', color: '#f59e0b', label: '5-7D' },
+    { w: '20%', color: '#f97316', label: '7-10D' },
+    { w: '16%', color: '#ef4444', label: '10-15D' },
+    { w: '12%', color: '#dc2626', label: '15-20D' },
+    { w: '8%',  color: '#991b1b', label: '>20D' },
+  ]
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 400, height: 400, top: -160, left: -100, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
+      <div className="blob blob-b" style={{ width: 300, height: 300, top: -60, right: -50, background: 'radial-gradient(circle,#dc2626 0%,transparent 70%)', opacity: 0.22 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+
+      {/* Caminhão com carga */}
+      <div className="truck-anim absolute pointer-events-none" style={{ bottom: 26, left: 0 }}>
+        <svg width={260} height={50} viewBox="0 0 260 50" fill="none">
+          <rect x={2} y={8} width={148} height={32} rx={3} fill="white" fillOpacity={0.88}/>
+          <rect x={2} y={32} width={148} height={8} rx={2} fill="#0032A0"/>
+          <text x={40} y={27} fontFamily="Arial,sans-serif" fontSize={7} fontWeight="bold" fill="#0032A0" fillOpacity={0.7} letterSpacing={3}>iMile</text>
+          <rect x={148} y={26} width={6} height={6} rx={1} fill="#aab8cc"/>
+          <path d="M154 8 L154 42 L252 42 L252 22 L246 8 Z" fill="#0032A0"/>
+          <path d="M163 8 Q167 3 192 3 L246 3 L252 12 L246 8 L163 8 Z" fill="#0028a0"/>
+          <path d="M220 5 L248 5 L252 16 L220 16 Z" fill="white" fillOpacity={0.12}/>
+          <rect x={156} y={10} width={24} height={14} rx={2} fill="white" fillOpacity={0.15}/>
+          <rect x={249} y={22} width={4} height={9} rx={1} fill="#001d6e"/>
+          <rect x={245} y={35} width={7} height={7} rx={2} fill="white" fillOpacity={0.85} stroke="#0032A0" strokeWidth={0.5}/>
+          <rect x={249} y={12} width={5} height={7} rx={1} fill="white" fillOpacity={0.9}/>
+          {[22,37].map(cx => (
+            <g key={cx}>
+              <circle cx={cx} cy={46} r={7} fill="#1a1a2e" stroke="white" strokeWidth={1} strokeOpacity={0.5}/>
+              <circle cx={cx} cy={46} r={4} fill="#111122" stroke="#0032A0" strokeWidth={0.8}/>
+              <circle cx={cx} cy={46} r={1.5} fill="white" fillOpacity={0.7}/>
+            </g>
+          ))}
+          {[190,232].map(cx => (
+            <g key={cx}>
+              <circle cx={cx} cy={46} r={8} fill="#1a1a2e" stroke="white" strokeWidth={1.2} strokeOpacity={0.5}/>
+              <circle cx={cx} cy={46} r={5} fill="#111122" stroke="#0032A0" strokeWidth={1}/>
+              <circle cx={cx} cy={46} r={2} fill="white" fillOpacity={0.7}/>
+            </g>
+          ))}
+        </svg>
+      </div>
+
+      {/* Barras de faixa SLA (decorativas) */}
+      <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-60 hidden md:flex">
+        {bars.map((b, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="text-[9px] font-mono text-white/40 w-8 text-right">{b.label}</span>
+            <div className="h-2.5 rounded-full transition-all" style={{ width: b.w, minWidth: 18, background: b.color, boxShadow: `0 0 6px ${b.color}55` }} />
+          </div>
+        ))}
+      </div>
+
+      {/* Alerta pulsando */}
+      <div className="absolute right-72 top-5 hidden md:block">
+        <div className="relative">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center signal-blink" style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)' }}>
+            <svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+              <path d="M8 2L14 13H2L8 2Z" fill="#ef4444" fillOpacity={0.9}/>
+              <rect x={7.2} y={6} width={1.6} height={4} rx={0.5} fill="white"/>
+              <rect x={7.2} y={11} width={1.6} height={1.6} rx={0.8} fill="white"/>
+            </svg>
+          </div>
+          <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 signal-blink" style={{ animationDelay: '0.5s' }} />
+        </div>
+      </div>
+
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,.85)' }}>
+          SLA BACKLOG
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Monitor de Prazo</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Pedidos acima do SLA por RDC, Supervisor e DS</p>
+      </div>
+    </div>
+  )
+}
+
 const FAIXAS = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
 const FAIXAS_LABELS = ['1D<3D', '3D<5D', '5D<7D', '7D<10D', '10D<15D', '15D<20D', '≥20D']
 const DB_FAIXAS = ['f_1_3', 'f_3_5', 'f_5_7', 'f_7_10', 'f_10_15', 'f_15_20', 'f_20_mais']
@@ -210,8 +295,9 @@ export default function Backlog() {
 
   return (
     <div>
-      <div className="flex items-start justify-between">
-        <PageHeader icon="📦" title="Backlog SLA" subtitle="Pedidos acima do SLA por RDC, Supervisor, DS e Motivo" />
+      <HeroBacklog />
+      <div className="flex items-start justify-between mb-4">
+        <div />
         <div className="flex gap-2">
           {dados && (
             <button onClick={baixarExcel} disabled={downloading}

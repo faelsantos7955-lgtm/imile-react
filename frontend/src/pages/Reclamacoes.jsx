@@ -14,6 +14,96 @@ import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader, 
 import { validarArquivos } from '../lib/validarArquivo'
 import { processReclamacoes } from '../lib/processarLocal'
 
+// ── Hero Reclamações ─────────────────────────────────────────
+function HeroReclamacoes() {
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 380, height: 380, top: -150, left: -100, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
+      <div className="blob blob-b" style={{ width: 300, height: 300, top: -80, right: -60, background: 'radial-gradient(circle,#f59e0b 0%,transparent 70%)', opacity: 0.22 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+
+      {/* Scanline */}
+      <div className="absolute left-0 right-0 h-px pointer-events-none scanline"
+        style={{ background: 'linear-gradient(to right, transparent 5%, rgba(255,255,255,0.15) 50%, transparent 95%)' }} />
+
+      {/* Caminhão principal */}
+      <div className="truck-anim absolute pointer-events-none" style={{ bottom: 26, left: 0 }}>
+        <svg width={260} height={72} viewBox="0 0 260 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="12" width="148" height="44" rx="3" fill="white" fillOpacity="0.92"/>
+          <rect x="2" y="44" width="148" height="12" rx="3" fill="#0032A0"/>
+          <rect x="2" y="42" width="148" height="3" fill="white" fillOpacity="0.55"/>
+          <text x="46" y="40" fontFamily="Arial,sans-serif" fontSize="9" fontWeight="bold" fill="#0032A0" fillOpacity="0.7" letterSpacing="3">iMile</text>
+          <path d="M156 16 L156 56 L255 56 L255 32 L248 16 Z" fill="#0032A0"/>
+          <path d="M165 9 Q172 4 202 4 L248 4 L255 13 L248 9 L165 9 Z" fill="#0028a0"/>
+          <path d="M222 11 L250 11 L255 30 L222 30 Z" fill="white" fillOpacity="0.15"/>
+          <rect x="160" y="18" width="28" height="16" rx="2" fill="white" fillOpacity="0.18"/>
+          <rect x="249" y="33" width="6" height="12" rx="1" fill="#001d6e"/>
+          <rect x="247" y="47" width="8" height="9" rx="2" fill="white" fillOpacity="0.85"/>
+          <rect x="251" y="19" width="6" height="9" rx="2" fill="white" fillOpacity="0.95"/>
+          {[30,45].map(cx => (
+            <g key={cx}>
+              <circle cx={cx} cy={64} r="10" fill="#1a1a2e" stroke="white" strokeWidth="1.2" strokeOpacity="0.6"/>
+              <circle cx={cx} cy={64} r="6"  fill="#111122" stroke="#0032A0" strokeWidth="1"/>
+              <circle cx={cx} cy={64} r="2.5" fill="white" fillOpacity="0.7"/>
+            </g>
+          ))}
+          {[190,235].map(cx => (
+            <g key={cx}>
+              <circle cx={cx} cy={64} r="11" fill="#1a1a2e" stroke="white" strokeWidth="1.5" strokeOpacity="0.6"/>
+              <circle cx={cx} cy={64} r="7"  fill="#111122" stroke="#0032A0" strokeWidth="1.2"/>
+              <circle cx={cx} cy={64} r="3"  fill="white" fillOpacity="0.75"/>
+            </g>
+          ))}
+        </svg>
+      </div>
+
+      {/* Tickets voando */}
+      {[
+        { right: '28%', bottom: '55%', delay: '0s',   rot: '-8deg' },
+        { right: '24%', bottom: '65%', delay: '1.4s', rot: '4deg'  },
+        { right: '32%', bottom: '60%', delay: '2.8s', rot: '-3deg' },
+      ].map((t, i) => (
+        <div key={i} className="absolute pointer-events-none box-float"
+          style={{ right: t.right, bottom: t.bottom, animationDelay: t.delay, animationDuration: `${3 + i * 0.6}s` }}>
+          <svg width={32} height={22} viewBox="0 0 32 22" fill="none" style={{ transform: `rotate(${t.rot})` }}>
+            <rect x={1} y={1} width={30} height={20} rx={3} fill="white" fillOpacity={0.09} stroke="rgba(255,255,255,0.2)" strokeWidth={0.8}/>
+            <rect x={5} y={5} width={14} height={1.5} rx={0.75} fill="rgba(255,255,255,0.3)"/>
+            <rect x={5} y={9} width={10} height={1.5} rx={0.75} fill="rgba(255,255,255,0.2)"/>
+            <rect x={5} y={13} width={12} height={1.5} rx={0.75} fill="rgba(255,255,255,0.2)"/>
+            <rect x={21} y={4} width={6} height={6} rx={1} fill="rgba(239,68,68,0.6)"/>
+            <text x={22} y={9.5} fontSize={5} fill="white" fontWeight="bold">!</text>
+          </svg>
+        </div>
+      ))}
+
+      {/* Alerta pulsando */}
+      <div className="absolute right-8 top-6 hidden sm:block">
+        <div className="relative">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', animation: 'signal-blink 2s ease-in-out infinite' }}>
+            <svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+              <path d="M10 2L18 16H2L10 2Z" fill="#f59e0b" fillOpacity={0.9}/>
+              <rect x={9} y={7} width={2} height={5} rx={0.5} fill="white"/>
+              <rect x={9} y={13} width={2} height={2} rx={1} fill="white"/>
+            </svg>
+          </div>
+          <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 signal-blink"/>
+        </div>
+      </div>
+
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,.85)' }}>
+          RECLAMAÇÕES
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Central de Ocorrências</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Análise de tickets de Fake Delivery por motorista e DS</p>
+      </div>
+    </div>
+  )
+}
+
 const FASE_LABELS = {
   supervisores: 'Buscando mapa de supervisores...',
   lendo:        'Lendo arquivo Excel...',
@@ -249,8 +339,9 @@ export default function Reclamacoes() {
 
   return (
     <div>
-      <div className="flex items-start justify-between">
-        <PageHeader icon="📋" title="Reclamações" subtitle="Análise de Tickets de Fake Delivery" />
+      <HeroReclamacoes />
+      <div className="flex items-start justify-between mb-4">
+        <div />
         <div className="flex gap-2">
           {sel && (
             <button onClick={handleExcel} className="flex items-center gap-2 px-4 py-2 bg-navy-900 text-white rounded-lg text-sm font-medium hover:bg-navy-800">
