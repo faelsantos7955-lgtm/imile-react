@@ -9,31 +9,16 @@ import axios from 'axios'
 import {
   Search, Plus, Loader2, FileText, Image, AlertCircle,
   CheckCircle2, ScanSearch, ClipboardList, X,
-  Check, ChevronLeft, ChevronRight, Info,
+  Check, ChevronLeft, ChevronRight, Info, Calendar,
 } from 'lucide-react'
+import { MOTIVOS, DS_LIST } from '../lib/constants'
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const pub = axios.create({ baseURL: BASE })
-const DRAFT_KEY = 'contestacao_rascunho'
+const DRAFT_KEY       = 'contestacao_rascunho'
+const DRAFT_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000 // 7 dias
 
-// ── Constantes ────────────────────────────────────────────────
-const MOTIVOS = ['Avaria', 'Extravio', 'Fake Delivery', 'Fake POD']
 const STEP_LABELS = ['Identificação', 'Desconto', 'Justificativa', 'Documentos']
-
-const DS_LIST = [
-  'DS BJP','DS SJC','DS CTT','DS UBT','DS GRT','DS SCP','DS TBT','DS NOV','DS PIX','DS PIB',
-  'DS CPQ','DS CPX','DS IND','DS IDT','DS MCC','DS MGN','DS VLM','DS AAC','DS JDP','DS BLV',
-  'DS PSC','DS LBD','DS MBI','DS GRUI','DS GUL','DS IPR','DS CBL','DS GJU','DS GAU','DS PAR',
-  'DS SBB','DS GTS','DS JIR','DS VRE','DS FRZ','DS MOG','DS ARJ','DS RCA','DS GNZ','DS SPO',
-  'DS BAR','DS CTI','DS ITE','DS SRQ','DS VAR','DS CPB','DS BIU','DS JDA','DS GUA','DS STL',
-  'DS SAM','DS MTS','DS VLB','DS TAMI','DS JMC','DS JSL','DS PRP','DS EBG','DS ITC','DS PQR',
-  'DS EAR','DS JER','DS CRP','DS JMI','DS PQP','DS WSC','DS ELM','DS VGI','DS CDR','DS BCC',
-  'DS TAS','DS MRA','DS OUR','DS SJP','DS ARU','DS AIF','DS JAU','DS PSD','DS BUR','DS BUXI',
-  'DS CTD','DS BRU','DS AVR','DS VOT','DS BRT','DS UAJ','DS JAL','DS ADD','DS JBC','DS FRC',
-  'DS RPT','DS PSS','DS SCL','DS AQR','DS VGL','DS RRA','DS BAT','DS MAT','DS SCO','DS SVT',
-  'DS LSV','DS VDR','DS SBC','DS SBA','DS DDM','DS STD','DS AET','DS MAU','DS JUD','DS MAI',
-  'DS ING','DS SRO','DS SCB','DS TAI','DS VTT',
-]
 
 const STATUS_STYLE = {
   'Pendente':              'bg-slate-100 text-slate-600 border-slate-200',
@@ -78,6 +63,15 @@ function fmtBytes(b) {
   if (!b) return ''
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`
   return `${(b / (1024 * 1024)).toFixed(1)} MB`
+}
+function addBusinessDays(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00')
+  let added = 0
+  while (added < days) {
+    d.setDate(d.getDate() + 1)
+    if (d.getDay() !== 0 && d.getDay() !== 6) added++
+  }
+  return d.toISOString().slice(0, 10)
 }
 function fileToB64(file) {
   return new Promise((res, rej) => {
@@ -443,7 +437,11 @@ function Formulario({ onGoToStatus }) {
     try {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (!raw) return
-      const { faturamento_b64, faturamento_nome, evidencias, ...rest } = JSON.parse(raw)
+      const { faturamento_b64, faturamento_nome, evidencias, _savedAt, ...rest } = JSON.parse(raw)
+      if (_savedAt && Date.now() - _savedAt > DRAFT_EXPIRY_MS) {
+        localStorage.removeItem(DRAFT_KEY)
+        return
+      }
       const hasData = Object.entries(rest).some(([k, v]) => v && v !== EMPTY[k])
       if (!hasData) return
       setForm(f => ({ ...f, ...rest }))
@@ -457,7 +455,7 @@ function Formulario({ onGoToStatus }) {
   useEffect(() => {
     const t = setTimeout(() => {
       const { faturamento_b64, evidencias, ...toSave } = form
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(toSave))
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...toSave, _savedAt: Date.now() }))
     }, 800)
     return () => clearTimeout(t)
   }, [form])
@@ -596,9 +594,8 @@ function Formulario({ onGoToStatus }) {
         </div>
       )}
 
-      {/* ── Step 1: Identificação ── */}
       {step === 1 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div key="step1" className="grid grid-cols-1 sm:grid-cols-2 gap-5 animate-in">
           <F label="Data" required error={errors.data_contestacao}>
             <input type="date" value={form.data_contestacao}
               onChange={e => set('data_contestacao', e.target.value)}
@@ -639,7 +636,7 @@ function Formulario({ onGoToStatus }) {
 
       {/* ── Step 2: Desconto ── */}
       {step === 2 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div key="step2" className="grid grid-cols-1 sm:grid-cols-2 gap-5 animate-in">
           <F label="Motivo do Desconto" required error={errors.motivo_desconto}>
             <select value={form.motivo_desconto}
               onChange={e => set('motivo_desconto', e.target.value)}
@@ -659,23 +656,35 @@ function Formulario({ onGoToStatus }) {
                 className={inputCls(errors.valor_desconto) + ' pl-10'} />
             </div>
           </F>
+          {form.data_contestacao && (
+            <div className="sm:col-span-2 flex items-center gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-[12px] text-blue-700">
+              <Calendar size={13} className="shrink-0" />
+              <span>Previsão estimada de retorno: <strong>{fmt(addBusinessDays(form.data_contestacao, 3))}</strong> — 3 dias úteis após a data da contestação.</span>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Step 3: Justificativa ── */}
       {step === 3 && (
-        <F label="Observação" required error={errors.observacao}>
-          <textarea value={form.observacao}
-            onChange={e => set('observacao', e.target.value)}
-            rows={7}
-            placeholder="Descreva detalhadamente o motivo pelo qual o desconto não procede..."
-            className={inputCls(errors.observacao) + ' resize-y'} />
-        </F>
+        <div key="step3" className="animate-in">
+          <F label="Observação" required error={errors.observacao}>
+            <textarea value={form.observacao}
+              onChange={e => set('observacao', e.target.value)}
+              rows={7}
+              maxLength={1000}
+              placeholder="Descreva detalhadamente o motivo pelo qual o desconto não procede..."
+              className={inputCls(errors.observacao) + ' resize-y'} />
+            <p className={`text-right text-[11px] mt-1 ${form.observacao.length > 900 ? 'text-orange-500' : 'text-slate-400'}`}>
+              {form.observacao.length}/1000
+            </p>
+          </F>
+        </div>
       )}
 
       {/* ── Step 4: Documentos ── */}
       {step === 4 && (
-        <div className="flex flex-col gap-5">
+        <div key="step4" className="flex flex-col gap-5 animate-in">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Faturamento */}
             <F label="Faturamento com Desconto" required error={errors.faturamento}>
@@ -814,7 +823,7 @@ function Formulario({ onGoToStatus }) {
 // ════════════════════════════════════════════════════════════════
 // CONSULTA
 // ════════════════════════════════════════════════════════════════
-function Consulta({ initialWaybill = '' }) {
+function Consulta({ initialWaybill = '', onGoToForm }) {
   const [waybill, setWaybill] = useState(initialWaybill)
   const [buscado, setBuscado] = useState(initialWaybill)
 
@@ -854,6 +863,11 @@ function Consulta({ initialWaybill = '' }) {
             <p className="text-[15px]">Nenhuma contestação para</p>
             <p className="font-mono font-bold text-slate-700 text-[18px] mt-1">{buscado}</p>
             <p className="text-[12px] mt-2">Verifique o número do waybill e tente novamente.</p>
+            <button onClick={onGoToForm}
+              className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 text-white text-[13px] font-semibold rounded-xl transition-colors"
+              style={{ background: '#0032A0', boxShadow: '0 2px 10px rgba(0,50,160,0.25)' }}>
+              <Plus size={14} /> Registrar Contestação
+            </button>
           </div>
         ) : (
           <div className="space-y-5">
@@ -948,7 +962,7 @@ export default function ContestacoesPublico() {
 
           <div className="p-8 md:p-10">
             {aba === 'form'     && <Formulario onGoToStatus={goToStatus} />}
-            {aba === 'consulta' && <Consulta initialWaybill={initialWb} />}
+            {aba === 'consulta' && <Consulta initialWaybill={initialWb} onGoToForm={() => setAba('form')} />}
           </div>
         </div>
       </main>
