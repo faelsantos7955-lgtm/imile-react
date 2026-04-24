@@ -158,6 +158,84 @@ function StatusSelect({ id, current, onSaved }) {
   )
 }
 
+// ── Modal de edição de obs/resolução ─────────────────────────
+function EditModal({ row, onClose, onSave, isPending }) {
+  const [obs,      setObs]      = useState(row.observacao  || '')
+  const [resolucao,setResolucao] = useState(row.resolucao  || '')
+  const [previsao, setPrevisao]  = useState(row.previsao   || '')
+  const [status,   setStatus]    = useState(row.status_analise)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl animate-scale">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Editar Contestação</p>
+            <p className="font-mono font-bold text-[16px] text-slate-800 mt-0.5">{row.waybill}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 transition-colors rounded-lg hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 flex flex-col gap-4">
+          {/* Status + Previsão */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white">
+                {STATUS_LIST.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Previsão</label>
+              <input type="date" value={previsao} onChange={e => setPrevisao(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white" />
+            </div>
+          </div>
+
+          {/* Observação */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Observação</label>
+            <textarea value={obs} onChange={e => setObs(e.target.value)} rows={5}
+              placeholder="Observações internas sobre esta contestação..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[14px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-200 resize-y bg-white" />
+          </div>
+
+          {/* Resolução */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Resolução <span className="normal-case font-normal text-slate-400">(retorno ao cliente)</span>
+            </label>
+            <textarea value={resolucao} onChange={e => setResolucao(e.target.value)} rows={4}
+              placeholder="Desfecho final — será exibido ao cliente na consulta pública..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[14px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-200 resize-y bg-white" />
+            <p className="text-[11px] text-slate-400 mt-1">Este campo aparece para o cliente na aba Consultar Status.</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose}
+            className="px-5 py-2 text-[13px] font-semibold text-slate-600 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            Cancelar
+          </button>
+          <button onClick={() => onSave({ obs, resolucao, previsao, status })} disabled={isPending}
+            className="flex items-center gap-2 px-6 py-2 text-[13px] font-semibold text-white rounded-lg disabled:opacity-60 transition-colors"
+            style={{ background: '#0032A0' }}>
+            {isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            {isPending ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════════════════════
 // ABA 1 — BASE DE DADOS
 // ══════════════════════════════════════════════════════════════
@@ -166,7 +244,7 @@ function BaseDados() {
   const qc = useQueryClient()
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('Todos')
-  const [editando, setEditando] = useState(null) // { id, obs, previsao, resolucao }
+  const [editando, setEditando] = useState(null) // row completo
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm }
 
   const { data = [], isLoading, isFetching, refetch } = useQuery({
@@ -182,8 +260,13 @@ function BaseDados() {
   })
 
   const mutObs = useMutation({
-    mutationFn: ({ id, observacao, previsao, status_analise, resolucao }) =>
-      api.patch(`/api/contestacoes/${id}/status`, { status_analise, observacao, previsao, resolucao }),
+    mutationFn: ({ id, obs, resolucao, previsao, status }) =>
+      api.patch(`/api/contestacoes/${id}/status`, {
+        status_analise: status,
+        observacao: obs,
+        previsao: previsao || null,
+        resolucao: resolucao || null,
+      }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['contestacoes'] }); setEditando(null) },
   })
 
@@ -297,77 +380,25 @@ function BaseDados() {
                 <td className="px-3 py-2.5">
                   <StatusSelect id={r.id} current={r.status_analise} />
                 </td>
-                <td className="px-3 py-2.5 max-w-[220px]">
-                  {editando?.id === r.id ? (
-                    <div className="flex flex-col gap-1">
-                      <textarea
-                        value={editando.obs}
-                        onChange={e => setEditando(v => ({ ...v, obs: e.target.value }))}
-                        className="border border-slate-200 rounded px-2 py-1 text-[11px] w-full resize-y"
-                        placeholder="Observação..."
-                        rows={3}
-                      />
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => mutObs.mutate({
-                            id: r.id,
-                            observacao: editando.obs,
-                            previsao: editando.previsao || null,
-                            status_analise: r.status_analise,
-                            resolucao: editando.resolucao || null,
-                          })}
-                          className="flex-1 bg-blue-600 text-white text-[10px] rounded px-2 py-0.5 hover:bg-blue-700"
-                        >Salvar</button>
-                        <button
-                          onClick={() => setEditando(null)}
-                          className="text-slate-400 hover:text-slate-600"
-                        ><X size={12} /></button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setEditando({ id: r.id, obs: r.observacao || '', previsao: r.previsao || '', resolucao: r.resolucao || '' })}
-                      className="text-left text-slate-600 hover:text-slate-900 transition-colors group flex items-start gap-1 w-full"
-                    >
-                      <span className="flex-1 whitespace-pre-wrap break-words text-[11px]">{r.observacao || <span className="text-slate-300 italic">editar...</span>}</span>
-                    </button>
-                  )}
-                </td>
-                {/* Resolução */}
+                {/* Observação — preview + abre modal */}
                 <td className="px-3 py-2.5 max-w-[200px]">
-                  {editando?.id === r.id ? (
-                    <textarea
-                      value={editando.resolucao}
-                      onChange={e => setEditando(v => ({ ...v, resolucao: e.target.value }))}
-                      className="border border-slate-200 rounded px-2 py-1 text-[11px] w-full resize-y"
-                      placeholder="Desfecho final..."
-                      rows={3}
-                    />
-                  ) : (
-                    <button
-                      onClick={() => setEditando({ id: r.id, obs: r.observacao || '', previsao: r.previsao || '', resolucao: r.resolucao || '' })}
-                      className="text-left text-slate-600 hover:text-slate-900 transition-colors w-full"
-                    >
-                      {r.resolucao
-                        ? <span className="text-[11px] whitespace-pre-wrap break-words text-emerald-700 font-medium">{r.resolucao}</span>
-                        : <span className="text-slate-300 italic text-[11px]">editar...</span>
-                      }
-                    </button>
-                  )}
+                  <button onClick={() => setEditando(r)}
+                    className="text-left w-full hover:bg-blue-50 rounded-lg px-2 py-1.5 transition-colors group">
+                    {r.observacao
+                      ? <span className="text-[12px] text-slate-700 line-clamp-2 leading-relaxed">{r.observacao}</span>
+                      : <span className="text-[11px] text-slate-300 italic">clique para editar</span>}
+                  </button>
                 </td>
-
-                <td className="px-3 py-2.5 whitespace-nowrap">
-                  {editando?.id === r.id ? (
-                    <input
-                      type="date"
-                      value={editando.previsao || ''}
-                      onChange={e => setEditando(v => ({ ...v, previsao: e.target.value }))}
-                      className="border border-slate-200 rounded px-2 py-1 text-[11px] w-32"
-                    />
-                  ) : (
-                    <span className="text-slate-500">{fmt(r.previsao)}</span>
-                  )}
+                {/* Resolução — preview + abre modal */}
+                <td className="px-3 py-2.5 max-w-[200px]">
+                  <button onClick={() => setEditando(r)}
+                    className="text-left w-full hover:bg-emerald-50 rounded-lg px-2 py-1.5 transition-colors">
+                    {r.resolucao
+                      ? <span className="text-[12px] text-emerald-700 font-medium line-clamp-2 leading-relaxed">{r.resolucao}</span>
+                      : <span className="text-[11px] text-slate-300 italic">clique para editar</span>}
+                  </button>
                 </td>
+                <td className="px-3 py-2.5 whitespace-nowrap text-[12px] text-slate-500">{fmt(r.previsao)}</td>
                 <td className="px-3 py-2.5">
                   {isAdmin && (
                     <button
@@ -388,6 +419,16 @@ function BaseDados() {
           message={confirmDlg.message}
           onConfirm={confirmDlg.onConfirm}
           onCancel={() => setConfirmDlg(null)}
+        />
+      )}
+      {editando && (
+        <EditModal
+          row={editando}
+          isPending={mutObs.isPending}
+          onClose={() => setEditando(null)}
+          onSave={({ obs, resolucao, previsao, status }) =>
+            mutObs.mutate({ id: editando.id, obs, resolucao, previsao, status })
+          }
         />
       )}
     </div>
