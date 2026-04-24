@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 from api.deps import get_current_user, get_db
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import validar_arquivo, detectar_aba
 
 router = APIRouter()
 
@@ -56,6 +56,52 @@ def _norm_regiao(s) -> str:
 
 _KEEP = {"waybill_no", "oc_name", "oc_code", "站点类型", "区域",
          "last_operate", "日期", "Supervisor", "Process"}
+
+_NA_MOV_COLS_KEY = {"waybill_no", "oc_name", "区域", "last_operate"}
+_NA_MOV_SKIP = {"汇总", "DS"}  # abas de suporte, não de dados
+
+
+def _encontrar_abas_not_arrived(xl: pd.ExcelFile) -> tuple[str, str]:
+    """
+    Retorna (dc_aba, ds_aba). Tenta nomes exatos primeiro;
+    se não encontrar, detecta pelas colunas de dados.
+    """
+    dc = "数据源"   if "数据源"    in xl.sheet_names else None
+    ds = "Planilha1" if "Planilha1" in xl.sheet_names else None
+
+    if dc is None or ds is None:
+        candidatas: list[tuple[str, int]] = []
+        for nome in xl.sheet_names:
+            if nome in _NA_MOV_SKIP:
+                continue
+            if nome in (dc, ds):   # já achado por nome exato
+                continue
+            try:
+                header = xl.parse(nome, nrows=0)
+                cols = {str(c).strip() for c in header.columns}
+                score = len(_NA_MOV_COLS_KEY & cols)
+                if score >= 2:
+                    candidatas.append((nome, score))
+            except Exception:
+                continue
+        candidatas.sort(key=lambda x: x[1], reverse=True)
+
+        if dc is None:
+            if not candidatas:
+                raise HTTPException(
+                    400,
+                    f"Aba '数据源' (DC) não encontrada e nenhuma alternativa detectada. "
+                    f"Abas presentes: {xl.sheet_names}"
+                )
+            dc = candidatas.pop(0)[0]
+
+        if ds is None:
+            if not candidatas:
+                ds = dc  # arquivo com só uma aba de dados — tenta processar mesmo assim
+            else:
+                ds = candidatas[0][0]
+
+    return dc, ds
 
 
 def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
@@ -107,13 +153,10 @@ def _ler_sumario(xl: pd.ExcelFile) -> list[dict]:
 def _processar(xl: pd.ExcelFile) -> tuple[dict, list[dict]]:
     tendencia = _ler_sumario(xl)
 
-    if "数据源" not in xl.sheet_names:
-        raise HTTPException(400, "Aba '数据源' (DC) não encontrada no arquivo.")
-    if "Planilha1" not in xl.sheet_names:
-        raise HTTPException(400, "Aba 'Planilha1' (DS) não encontrada no arquivo.")
+    dc_aba, ds_aba = _encontrar_abas_not_arrived(xl)
 
-    dc = xl.parse("数据源",   usecols=lambda c: str(c).strip() in _KEEP)
-    ds_raw = xl.parse("Planilha1", usecols=lambda c: str(c).strip() in _KEEP)
+    dc     = xl.parse(dc_aba, usecols=lambda c: str(c).strip() in _KEEP)
+    ds_raw = xl.parse(ds_aba, usecols=lambda c: str(c).strip() in _KEEP)
 
     sup_map: dict[str, str] = {}
     if "DS" in xl.sheet_names:

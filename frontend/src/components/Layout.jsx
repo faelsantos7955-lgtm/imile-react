@@ -11,23 +11,41 @@ import {
   BarChart2, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
   GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale, Megaphone,
-  Search, RefreshCw,
+  RefreshCw,
 } from 'lucide-react'
 import clsx from 'clsx'
 
-const NAV_ITEMS = [
-  { to: '/',            icon: BarChart2,   label: 'Análise' },
-  { to: '/operacional', icon: Wrench,      label: 'Operacional' },
-  { to: '/reclamacoes', icon: FileWarning, label: 'Reclamações' },
-  { to: '/backlog',     icon: Package,     label: 'Backlog SLA' },
-  { to: '/correlacao',  icon: GitMerge,    label: 'Correlação' },
-  { to: '/extravios',   icon: ShieldAlert, label: 'Extravios' },
-  { to: '/notracking',  icon: Clock,       label: 'No Tracking' },
-  { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
-  { to: '/not-arrived',   icon: AlertCircle,  label: 'Not Arrived Mov.' },
-  { to: '/contestacoes', icon: Scale,        label: 'Contestações' },
-  { to: '/avisos',       icon: Megaphone,   label: 'Avisos' },
+const NAV_GROUPS = [
+  {
+    label: 'Painel',
+    items: [
+      { to: '/',            icon: BarChart2,   label: 'Análise' },
+    ],
+  },
+  {
+    label: 'Operações',
+    items: [
+      { to: '/operacional', icon: Wrench,      label: 'Operacional' },
+      { to: '/backlog',     icon: Package,     label: 'Backlog SLA' },
+      { to: '/correlacao',  icon: GitMerge,    label: 'Correlação' },
+      { to: '/notracking',  icon: Clock,       label: 'No Tracking' },
+      { to: '/not-arrived', icon: AlertCircle, label: 'Not Arrived Mov.' },
+      { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
+    ],
+  },
+  {
+    label: 'Ocorrências',
+    items: [
+      { to: '/reclamacoes', icon: FileWarning, label: 'Reclamações' },
+      { to: '/extravios',   icon: ShieldAlert, label: 'Extravios' },
+      { to: '/contestacoes', icon: Scale,      label: 'Contestações' },
+      { to: '/avisos',       icon: Megaphone,  label: 'Avisos' },
+    ],
+  },
 ]
+
+// Flat list para compatibilidade com PAGE_TITLES
+const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items)
 
 const ADMIN_ITEMS = [
   { to: '/admin',          icon: Upload,        label: 'Upload / Processar' },
@@ -141,14 +159,16 @@ function Sidebar({ onClose }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-2.5 overflow-y-auto sidebar-scroll py-1">
-        <NavGroup label="Menu">
-          {NAV_ITEMS.map(item => (
-            <SideLink
-              key={item.to} {...item} onClick={onClose}
-              badge={item.to === '/avisos' ? (naoLidos || 0) : 0}
-            />
-          ))}
-        </NavGroup>
+        {NAV_GROUPS.map(group => (
+          <NavGroup key={group.label} label={group.label}>
+            {group.items.map(item => (
+              <SideLink
+                key={item.to} {...item} onClick={onClose}
+                badge={item.to === '/avisos' ? (naoLidos || 0) : 0}
+              />
+            ))}
+          </NavGroup>
+        ))}
         {isAdmin && (
           <NavGroup label="Admin">
             {ADMIN_ITEMS.map(item => (
@@ -304,13 +324,6 @@ export default function Layout() {
                 iMile Brasil · Portal Operacional
               </p>
             </div>
-          </div>
-
-          {/* Centro: barra de busca */}
-          <div className="hidden md:flex flex-1 max-w-[320px] items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-[7px] text-slate-400 text-[12.5px] cursor-pointer hover:border-slate-200 hover:bg-white transition-all select-none">
-            <Search size={13} className="shrink-0" />
-            <span className="flex-1">Buscar pedido, cliente, DS…</span>
-            <kbd className="ml-auto font-mono text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500">⌘K</kbd>
           </div>
 
           {/* Direita: refresh + bell + user */}

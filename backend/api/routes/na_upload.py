@@ -12,19 +12,31 @@ from sqlalchemy import text
 
 from api.deps import get_current_user, get_db
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import validar_arquivo, detectar_aba
 
 router = APIRouter()
 
 
+_NA_COLS_KEY = {"Destination Station", "Supervisor", "日期"}
+
+
 def _processar_export(xl: pd.ExcelFile) -> dict:
     """
-    Lê aba Export e deriva todos os dados a partir dela.
+    Lê aba Export (ou aba detectada automaticamente) e deriva todos os dados.
     """
-    if "Export" not in xl.sheet_names:
-        raise HTTPException(400, "Aba 'Export' não encontrada no arquivo.")
+    if "Export" in xl.sheet_names:
+        aba = "Export"
+    else:
+        aba = detectar_aba(xl, _NA_COLS_KEY)
+        if aba is None:
+            raise HTTPException(
+                400,
+                f"Aba 'Export' não encontrada e nenhuma aba alternativa foi detectada. "
+                f"Abas presentes: {xl.sheet_names}. "
+                f"Esperado colunas: {sorted(_NA_COLS_KEY)}"
+            )
 
-    df = xl.parse("Export")
+    df = xl.parse(aba)
     df.columns = df.columns.str.strip()
 
     for col in ("Destination Station", "Supervisor", "日期"):

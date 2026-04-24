@@ -7,6 +7,31 @@ EXTENSOES_PERMITIDAS = {".xlsx", ".xls", ".xlsm"}
 TAMANHO_MAX_BYTES    = 150 * 1024 * 1024  # 150 MB
 
 
+def detectar_aba(xl, colunas: set[str], threshold: float = 0.4) -> str | None:
+    """
+    Varre todas as abas do ExcelFile e retorna a que tem maior sobreposição
+    com `colunas`. Retorna None se nenhuma atingir o threshold.
+    Caso de empate: usa a primeira na ordem do arquivo.
+    """
+    import pandas as pd  # import local — módulo nem sempre está disponível
+
+    melhor_aba: str | None = None
+    melhor_score: float = threshold - 0.001
+
+    for nome in xl.sheet_names:
+        try:
+            header = xl.parse(nome, nrows=0)
+            cols = {str(c).strip() for c in header.columns}
+            score = len(colunas & cols) / len(colunas) if colunas else 0
+            if score > melhor_score:
+                melhor_score = score
+                melhor_aba = nome
+        except Exception:
+            continue
+
+    return melhor_aba
+
+
 async def validar_arquivo(arquivo: UploadFile, obrigatorio: bool = True) -> bytes | None:
     """
     Valida extensão e tamanho de um UploadFile.

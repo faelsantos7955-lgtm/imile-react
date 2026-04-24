@@ -573,7 +573,7 @@ function NovoRegistro({ onSaved }) {
             <DSCombobox value={form.ds} onChange={v => set('ds', v)} error={errors.ds} />
           </F>
 
-          <F label="WAIBILL" required error={errors.waybill}>
+          <F label="WAYBILL" required error={errors.waybill}>
             <input
               value={form.waybill}
               onChange={e => {

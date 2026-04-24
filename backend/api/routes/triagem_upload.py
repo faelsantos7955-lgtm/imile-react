@@ -29,7 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 from api.deps import get_current_user, _engine
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import validar_arquivo, detectar_aba
 from api.lark_utils import notify_triagem
 
 def _make_db() -> Session:
@@ -87,14 +87,24 @@ def _lc(s: pd.Series) -> pd.Series:
 _LS_COLS = ["Waybill No.", "Destination Statio", "Delivery Station", "Consignee City", "Scan Time"]
 
 
+_LS_COLS_KEY = {"Waybill No.", "Destination Statio"}
+
+
 def _ler_loading_scans(conteudos: list[bytes]) -> pd.DataFrame:
     frames = []
     for c in conteudos:
         try:
-            df = pd.read_excel(io.BytesIO(c), engine=_ENGINE)
+            xl = pd.ExcelFile(io.BytesIO(c))
+            # Tenta detectar a aba com as colunas do LoadingScan
+            aba = detectar_aba(xl, _LS_COLS_KEY)
+            if aba is None:
+                aba = xl.sheet_names[0]
+            df = xl.parse(aba, engine=_ENGINE) if _ENGINE == "calamine" else xl.parse(aba)
             df.columns = df.columns.str.strip()
             presentes = [col for col in _LS_COLS if col in df.columns]
             frames.append(df[presentes])
+        except HTTPException:
+            raise
         except Exception:
             continue
     if not frames:

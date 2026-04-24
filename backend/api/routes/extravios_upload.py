@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import validar_arquivo, detectar_aba
 import pandas as pd
 import io
 
@@ -18,6 +18,9 @@ COLS_OBRIGATORIAS = [
 ]
 
 
+_EXT_COLS_KEY = {"Waybill", "Reason", "Resp", "Date", "Motivo PT"}
+
+
 def _processar(conteudo: bytes) -> dict:
     buf = io.BytesIO(conteudo)
     try:
@@ -25,11 +28,20 @@ def _processar(conteudo: bytes) -> dict:
     except Exception:
         raise HTTPException(400, "Arquivo inválido. Envie o Excel de Controle de Extravios.")
 
-    if 'BD' not in xl.sheet_names:
-        raise HTTPException(400, f"Aba 'BD' não encontrada. Abas presentes: {xl.sheet_names}")
+    # Tenta 'BD' por nome, depois detecta pela melhor aba
+    if 'BD' in xl.sheet_names:
+        aba = 'BD'
+    else:
+        aba = detectar_aba(xl, _EXT_COLS_KEY)
+        if aba is None:
+            raise HTTPException(
+                400,
+                f"Aba com dados de extravios não encontrada. "
+                f"Abas presentes: {xl.sheet_names}. "
+                f"Esperado aba 'BD' ou aba com colunas: {sorted(_EXT_COLS_KEY)}"
+            )
 
-    buf.seek(0)
-    df = xl.parse('BD')
+    df = xl.parse(aba)
     df.columns = df.columns.str.strip()
 
     faltando = [c for c in COLS_OBRIGATORIAS if c not in df.columns]
