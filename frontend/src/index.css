@@ -135,7 +135,7 @@ table { border-collapse: collapse; }
   0%,100% { transform: translate(0,0) scale(1); }
   50%     { transform: translate(40px,80px) scale(1.08); }
 }
-.blob   { position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none; will-change:transform; }
+.blob   { position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none; will-change:transform; backface-visibility:hidden; }
 .blob-a { animation: blob-a 22s ease-in-out infinite; }
 .blob-b { animation: blob-b 28s ease-in-out infinite; }
 .blob-c { animation: blob-c 18s ease-in-out infinite; }
