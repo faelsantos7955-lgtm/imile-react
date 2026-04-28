@@ -11,13 +11,79 @@ import {
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
-  KpiCard, Card, SectionHeader, EmptyState, Alert, Badge, Button, toast,
+  KpiCard, Card, SectionHeader, EmptyState, LogisticsEmptyState, Alert, Badge, Button, toast,
 } from '../components/ui'
 import clsx from 'clsx'
 
 // ── helpers ───────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString('pt-BR')
 const pct = (n) => `${(n ?? 0).toFixed(1)}%`
+
+// ── Hero Not Arrived Movimentação ─────────────────────────────
+function HeroNotArrived() {
+  const checkpoints = [
+    { cx: 580, cy: 80,  label: 'Saída',      color: 'rgba(16,185,129,0.85)',  delay: '0s'   },
+    { cx: 650, cy: 55,  label: 'Chegada',    color: 'rgba(14,165,233,0.85)',  delay: '0.6s' },
+    { cx: 720, cy: 95,  label: 'Entregador', color: 'rgba(245,158,11,0.85)',  delay: '1.2s' },
+    { cx: 790, cy: 65,  label: 'Entregue?',  color: 'rgba(239,68,68,0.85)',   delay: '1.8s' },
+  ]
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 380, height: 380, top: -150, left: -90, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
+      <div className="blob blob-b" style={{ width: 280, height: 280, top: -60, right: -40, background: 'radial-gradient(circle,#16a34a 0%,transparent 70%)', opacity: 0.2 }} />
+      <div className="blob blob-c" style={{ width: 200, height: 200, bottom: -60, left: '40%', background: 'radial-gradient(circle,#dc2626 0%,transparent 70%)', opacity: 0.15 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+
+      {/* Caminhão em trânsito */}
+      <div className="truck-anim absolute pointer-events-none" style={{ bottom: 26, left: 0 }}>
+        <svg width={220} height={50} viewBox="0 0 220 50" fill="none">
+          <rect x={2} y={8} width={120} height={30} rx={3} fill="white" fillOpacity={0.88}/>
+          <rect x={2} y={30} width={120} height={8} rx={2} fill="#0032A0"/>
+          <text x={28} y={24} fontFamily="Arial,sans-serif" fontSize={7} fontWeight="bold" fill="#0032A0" fillOpacity={0.7} letterSpacing={3}>iMile</text>
+          <path d="M122 8 L122 38 L218 38 L218 22 L212 8 Z" fill="#0032A0"/>
+          <path d="M130 8 Q135 3 162 3 L212 3 L218 10 L212 8 L130 8 Z" fill="#0028a0"/>
+          <path d="M186 4 L213 4 L218 12 L186 12 Z" fill="white" fillOpacity={0.12}/>
+          <rect x={248} y={27} width={4} height={8} rx={1} fill="white" fillOpacity={0.9}/>
+          {[19,32].map(cx => (
+            <g key={cx}><circle cx={cx} cy={44} r={6} fill="#1a1a2e" stroke="white" strokeWidth={1} strokeOpacity={0.5}/><circle cx={cx} cy={44} r={3.5} fill="#111122" stroke="#0032A0" strokeWidth={0.8}/><circle cx={cx} cy={44} r={1.5} fill="white" fillOpacity={0.7}/></g>
+          ))}
+          {[153,195].map(cx => (
+            <g key={cx}><circle cx={cx} cy={44} r={7} fill="#1a1a2e" stroke="white" strokeWidth={1.2} strokeOpacity={0.5}/><circle cx={cx} cy={44} r={4} fill="#111122" stroke="#0032A0" strokeWidth={1}/><circle cx={cx} cy={44} r={1.8} fill="white" fillOpacity={0.7}/></g>
+          ))}
+        </svg>
+      </div>
+
+      {/* Checkpoints de operação */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 168" preserveAspectRatio="xMidYMid slice">
+        {/* Rota principal */}
+        <path d="M-50,130 L570,130 Q575,130 580,80" stroke="rgba(255,255,255,0.08)" strokeWidth="1.5" strokeDasharray="8 8" className="route-flow"/>
+        {/* Conexões entre checkpoints */}
+        {checkpoints.slice(0,-1).map((p, i) => {
+          const next = checkpoints[i+1]
+          return <path key={i} d={`M${p.cx},${p.cy} L${next.cx},${next.cy}`} stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeDasharray="5 5" className="route-flow" style={{ animationDelay: `${i*0.4}s` }}/>
+        })}
+        {/* Nós */}
+        {checkpoints.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.cx} cy={p.cy} r={6}  fill={p.color} className="signal-blink" style={{ animationDelay: p.delay }}/>
+            <circle cx={p.cx} cy={p.cy} r={12} fill="none" stroke={p.color} strokeWidth={0.8} className="hub-ring" style={{ animationDelay: p.delay, animationDuration: '2.5s' }}/>
+            <text x={p.cx} y={p.cy + 20} fill="rgba(255,255,255,0.35)" fontSize={7} textAnchor="middle" fontFamily="monospace">{p.label}</text>
+          </g>
+        ))}
+      </svg>
+
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: 'rgba(130,240,200,.9)' }}>
+          NOT ARRIVED · MOVIMENTAÇÃO
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Rastreamento de Exceções</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Pacotes com problemas que ainda tiveram movimentação registrada</p>
+      </div>
+    </div>
+  )
+}
 
 function colorRegiao(regiao) {
   const map = {
@@ -625,7 +691,7 @@ export default function NotArrived() {
 
   return (
     <div className="space-y-6 max-w-7xl">
-
+      <HeroNotArrived />
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -653,8 +719,7 @@ export default function NotArrived() {
 
       {/* Sem uploads */}
       {uploads.length === 0 ? (
-        <EmptyState
-          icon={AlertCircle}
+        <LogisticsEmptyState
           title="Nenhum upload encontrado"
           description="Faça o upload do arquivo Problem Registration (.xlsx) para visualizar os dados."
           action={<Button onClick={() => setShowPanel(true)}>Fazer upload</Button>}

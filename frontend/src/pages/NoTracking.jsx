@@ -8,9 +8,87 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts'
 import { Upload, Loader, Trash2, AlertCircle, Clock, Download } from 'lucide-react'
-import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme } from '../components/ui'
+import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme, LogisticsEmptyState } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
+
+// ── Hero No Tracking ─────────────────────────────────────────
+function HeroNoTracking() {
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 360, height: 360, top: -140, left: -80, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
+      <div className="blob blob-b" style={{ width: 280, height: 280, top: -60, right: -40, background: 'radial-gradient(circle,#f59e0b 0%,transparent 70%)', opacity: 0.25 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+
+      {/* Radar "sem sinal" — rotaciona mas pings fracos */}
+      <svg className="absolute pointer-events-none" style={{ right: 24, top: '50%', transform: 'translateY(-50%)', opacity: 0.7 }}
+        width={180} height={160} viewBox="0 0 180 160">
+        {[65, 45, 28, 12].map((r, i) => (
+          <circle key={i} cx={90} cy={80} r={r} fill="none"
+            stroke={i === 0 ? 'rgba(245,158,11,0.25)' : 'rgba(245,158,11,0.12)'}
+            strokeWidth={i === 0 ? 1.5 : 0.8} strokeDasharray={i === 0 ? '4 4' : undefined}/>
+        ))}
+        <line x1={90} y1={16} x2={90} y2={144} stroke="rgba(245,158,11,0.1)" strokeWidth={0.8}/>
+        <line x1={26} y1={80} x2={154} y2={80}  stroke="rgba(245,158,11,0.1)" strokeWidth={0.8}/>
+        {/* Varredura — radar-rotate */}
+        <g className="radar-rotate" style={{ transformOrigin: '90px 80px' }}>
+          <path d="M90,80 L90,16 A64,64 0 0,1 133,58 Z" fill="url(#nt-sweep)" opacity={0.5}/>
+        </g>
+        {/* Sem sinal — cruzes nos pontos */}
+        {[[65,55],[110,90],[75,110]].map(([cx,cy],i) => (
+          <g key={i} opacity={0.5} className="signal-blink" style={{ animationDelay: `${i*0.8}s`, animationDuration: '2.5s' }}>
+            <line x1={cx-4} y1={cy-4} x2={cx+4} y2={cy+4} stroke="rgba(245,158,11,0.6)" strokeWidth={1.2} strokeLinecap="round"/>
+            <line x1={cx+4} y1={cy-4} x2={cx-4} y2={cy+4} stroke="rgba(245,158,11,0.6)" strokeWidth={1.2} strokeLinecap="round"/>
+          </g>
+        ))}
+        <defs>
+          <radialGradient id="nt-sweep" cx="90" cy="80" r="64" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(245,158,11,0)"/>
+            <stop offset="60%" stopColor="rgba(245,158,11,0.12)"/>
+            <stop offset="100%" stopColor="rgba(245,158,11,0.4)"/>
+          </radialGradient>
+        </defs>
+      </svg>
+
+      {/* Relógio / aging */}
+      <div className="absolute right-52 top-1/2 -translate-y-1/2 hidden md:block">
+        <svg width={52} height={52} viewBox="0 0 52 52" fill="none" opacity={0.6}>
+          <circle cx={26} cy={26} r={22} stroke="rgba(245,158,11,0.4)" strokeWidth={1.5}/>
+          <circle cx={26} cy={26} r={3}  fill="rgba(245,158,11,0.8)"/>
+          {/* Ponteiros */}
+          <line x1={26} y1={26} x2={26} y2={10} stroke="rgba(245,158,11,0.8)" strokeWidth={2} strokeLinecap="round"/>
+          <line x1={26} y1={26} x2={38} y2={30} stroke="rgba(245,158,11,0.6)" strokeWidth={1.5} strokeLinecap="round"/>
+          {/* Marcas */}
+          {[0,30,60,90,120,150,180,210,240,270,300,330].map((a,i) => {
+            const r1 = 18, r2 = i%3===0?14:17
+            const rad = a * Math.PI / 180
+            return <line key={i} x1={26+r1*Math.sin(rad)} y1={26-r1*Math.cos(rad)} x2={26+r2*Math.sin(rad)} y2={26-r2*Math.cos(rad)} stroke="rgba(245,158,11,0.3)" strokeWidth={i%3===0?1.5:0.8}/>
+          })}
+        </svg>
+      </div>
+
+      {/* Indicador sem sinal */}
+      <div className="absolute right-6 bottom-7 flex items-center gap-1.5 hidden sm:flex">
+        <div className="flex items-end gap-0.5">
+          {[4,7,10,13].map((h,i) => (
+            <div key={i} className="w-1.5 rounded-sm" style={{ height: h, background: i < 2 ? 'rgba(245,158,11,0.7)' : 'rgba(255,255,255,0.15)' }}/>
+          ))}
+        </div>
+        <span className="text-[10px] font-bold text-amber-400/70 tracking-widest">SEM SCAN</span>
+      </div>
+
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: 'rgba(255,220,100,.9)' }}>
+          NO TRACKING 断更
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Pacotes Sem Atualização</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Monitoramento de aging por DS e supervisor</p>
+      </div>
+    </div>
+  )
+}
 
 const BRL = (v) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
@@ -147,7 +225,7 @@ export default function NoTracking() {
 
   return (
     <div>
-      <PageHeader icon="🕐" title="No Tracking (断更)" subtitle="Pacotes sem atualização de scan — monitoramento de aging por DS e supervisor" />
+      <HeroNoTracking />
 
       {/* Seletor + upload */}
       <div className="flex flex-wrap gap-3 items-center mb-6">
@@ -324,9 +402,10 @@ export default function NoTracking() {
       )}
 
       {!loading && !uploadSel && uploads.length === 0 && (
-        <div className="flex items-center gap-2 text-slate-500 mt-6 bg-white border border-slate-200 rounded-xl p-6">
-          <AlertCircle size={16} /> Nenhum dado carregado. Envie o arquivo de No Tracking acima.
-        </div>
+        <LogisticsEmptyState
+          title="Nenhum dado carregado"
+          description="Envie o arquivo de No Tracking acima para visualizar os dados."
+        />
       )}
     </div>
   )

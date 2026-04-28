@@ -8,9 +8,72 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts'
 import { Upload, Loader, Trash2, AlertCircle, TrendingDown, Download } from 'lucide-react'
-import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme } from '../components/ui'
+import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme, LogisticsEmptyState } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
 import api from '../lib/api'
+
+// ── Hero Extravios ────────────────────────────────────────────
+function HeroExtravios() {
+  return (
+    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
+      style={{ background: '#0a0d2e', minHeight: 168 }}>
+      <div className="blob blob-a" style={{ width: 380, height: 380, top: -150, left: -90, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
+      <div className="blob blob-b" style={{ width: 300, height: 300, top: -70, right: -50, background: 'radial-gradient(circle,#dc2626 0%,transparent 70%)', opacity: 0.28 }} />
+      <div className="blob blob-c" style={{ width: 200, height: 200, bottom: -60, left: '50%', background: 'radial-gradient(circle,#f97316 0%,transparent 70%)', opacity: 0.18 }} />
+      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
+
+      {/* Caixas danificadas flutuando */}
+      {[
+        { right: '32%', bottom: '52%', delay: '0s',   dur: '3.2s' },
+        { right: '26%', bottom: '62%', delay: '1.1s', dur: '4s'   },
+        { right: '38%', bottom: '44%', delay: '2.2s', dur: '3.6s' },
+      ].map((b, i) => (
+        <div key={i} className="absolute pointer-events-none box-float"
+          style={{ right: b.right, bottom: b.bottom, animationDelay: b.delay, animationDuration: b.dur }}>
+          <svg width={28} height={26} viewBox="0 0 28 26" fill="none">
+            <rect x={1} y={5} width={26} height={20} rx={3} fill="rgba(239,68,68,0.25)" stroke="rgba(239,68,68,0.5)" strokeWidth={0.8}/>
+            <path d="M1 11 L27 11" stroke="rgba(239,68,68,0.3)" strokeWidth={0.6}/>
+            <path d="M11 5 L11 11" stroke="rgba(239,68,68,0.3)" strokeWidth={0.6}/>
+            {/* X mark */}
+            <path d="M8 14 L14 20 M14 14 L8 20" stroke="rgba(239,68,68,0.85)" strokeWidth={1.5} strokeLinecap="round"/>
+            {/* Crack */}
+            <path d="M20 6 L22 9 L19 11 L21 15" stroke="rgba(239,68,68,0.5)" strokeWidth={0.8} strokeLinecap="round"/>
+          </svg>
+        </div>
+      ))}
+
+      {/* Lupa de investigação */}
+      <div className="absolute right-16 top-1/2 -translate-y-1/2 hidden md:block signal-blink" style={{ animationDuration: '3s' }}>
+        <svg width={64} height={64} viewBox="0 0 64 64" fill="none" opacity={0.55}>
+          <circle cx={26} cy={26} r={18} stroke="rgba(255,255,255,0.4)" strokeWidth={2.5}/>
+          <circle cx={26} cy={26} r={18} stroke="rgba(239,68,68,0.3)" strokeWidth={5} strokeDasharray="8 4"/>
+          <line x1={40} y1={40} x2={58} y2={58} stroke="rgba(255,255,255,0.4)" strokeWidth={3} strokeLinecap="round"/>
+          <circle cx={26} cy={26} r={10} fill="rgba(239,68,68,0.08)" stroke="rgba(239,68,68,0.25)" strokeWidth={0.8}/>
+        </svg>
+      </div>
+
+      {/* Rotas vermelhas */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 168" preserveAspectRatio="xMidYMid slice">
+        <path d="M-50,140 L400,140" stroke="rgba(239,68,68,0.2)" strokeWidth="1.5" strokeDasharray="8 8" className="route-flow"/>
+        <path d="M400,140 Q500,140 560,100" stroke="rgba(239,68,68,0.35)" strokeWidth="1.5" strokeDasharray="6 6" className="route-flow" style={{ animationDelay: '0.5s' }}/>
+        {[120, 250, 380].map((cx, i) => (
+          <g key={i}>
+            <circle cx={cx} cy={140} r={3} fill="rgba(239,68,68,0.7)" className="signal-blink" style={{ animationDelay: `${i * 0.6}s` }}/>
+          </g>
+        ))}
+      </svg>
+
+      <div className="relative z-10 px-6 py-5">
+        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
+          style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: 'rgba(255,180,180,.9)' }}>
+          EXTRAVIOS & AVARIAS
+        </div>
+        <h2 className="text-white font-bold text-[20px] leading-tight">Controle de Extravios</h2>
+        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Perdas e avarias por DS, motivo e período</p>
+      </div>
+    </div>
+  )
+}
 
 const CORES_MOTIVO = [
   '#ef4444', '#f97316', '#eab308', '#84cc16',
@@ -129,7 +192,7 @@ export default function Extravios() {
 
   return (
     <div>
-      <PageHeader icon="⚠️" title="Controle de Extravios" subtitle="Análise de perdas e avarias por DS, motivo e período" />
+      <HeroExtravios />
 
       {/* Upload + seletor */}
       <div className="flex flex-wrap gap-3 items-center mb-6">
@@ -297,9 +360,10 @@ export default function Extravios() {
       )}
 
       {!loading && !uploadSel && uploads.length === 0 && (
-        <div className="flex items-center gap-2 text-slate-500 mt-6 bg-white border border-slate-200 rounded-xl p-6">
-          <AlertCircle size={16} /> Nenhum dado carregado. Envie o arquivo de Controle de Extravios acima.
-        </div>
+        <LogisticsEmptyState
+          title="Nenhum dado carregado"
+          description="Envie o arquivo de Controle de Extravios acima para visualizar os dados."
+        />
       )}
     </div>
   )
