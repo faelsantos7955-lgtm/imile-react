@@ -10,7 +10,7 @@ import {
 import { Upload, Loader, Trash2, AlertCircle, TrendingDown, Download } from 'lucide-react'
 import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme, LogisticsEmptyState } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
-import api from '../lib/api'
+import api, { pollJob } from '../lib/api'
 
 // ── Hero Extravios ────────────────────────────────────────────
 function HeroExtravios() {
@@ -93,6 +93,7 @@ function KPI({ label, value, sub, cls = '' }) {
 
 function UploadZone({ onSuccess }) {
   const [uploading, setUploading] = useState(false)
+  const [fase, setFase]           = useState('')
   const [erro, setErro]           = useState('')
   const inputRef = useRef(null)
   const qc = useQueryClient()
@@ -100,17 +101,21 @@ function UploadZone({ onSuccess }) {
   const handleFile = async (e) => {
     const f = e.target.files?.[0]
     if (!f) return
-    setErro(''); setUploading(true)
+    setErro(''); setFase(''); setUploading(true)
     try {
       const fd = new FormData()
       fd.append('file', f)
-      const r = await api.post('/api/extravios/processar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const { data } = await api.post('/api/extravios/processar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const job = data.job_id
+        ? await pollJob(`/api/extravios/job/${data.job_id}`, setFase)
+        : data
       qc.invalidateQueries({ queryKey: ['extravios-uploads'] })
-      onSuccess?.(r.data.upload_id)
+      onSuccess?.(job.upload_id)
     } catch (err) {
-      setErro(err?.response?.data?.detail || 'Erro ao processar o arquivo.')
+      setErro(err?.response?.data?.detail || err.message || 'Erro ao processar o arquivo.')
     } finally {
       setUploading(false)
+      setFase('')
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -127,7 +132,7 @@ function UploadZone({ onSuccess }) {
         <label htmlFor="ext-upload"
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all
             ${uploading ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}>
-          {uploading ? <><Loader size={14} className="animate-spin" /> Processando...</> : <><Upload size={14} /> Enviar arquivo</>}
+          {uploading ? <><Loader size={14} className="animate-spin" /> {fase || 'Processando...'}</> : <><Upload size={14} /> Enviar arquivo</>}
         </label>
         {erro && <p className="text-xs text-red-600 text-center max-w-sm">{erro}</p>}
       </div>

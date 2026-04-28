@@ -3,27 +3,43 @@ api/routes/na_upload.py — Upload e processamento do relatório 有发未到 (N
 Fonte de dados: aba Export (colunas Destination Station, Supervisor, 日期, Process, Situation)
 """
 import io
+import uuid
+import logging
+import threading
 from datetime import date
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db
+from api.deps import get_current_user, get_db, _engine
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, detectar_aba
 
+log = logging.getLogger("na")
+
 router = APIRouter()
+
+_ENGINE = "openpyxl"
+try:
+    import python_calamine  # noqa: F401
+    _ENGINE = "calamine"
+except ImportError:
+    pass
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _make_db() -> Session:
+    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
 
 
 _NA_COLS_KEY = {"Destination Station", "Supervisor", "日期"}
 
 
 def _processar_export(xl: pd.ExcelFile) -> dict:
-    """
-    Lê aba Export (ou aba detectada automaticamente) e deriva todos os dados.
-    """
     if "Export" in xl.sheet_names:
         aba = "Export"
     else:
@@ -88,9 +104,7 @@ def _processar_export(xl: pd.ExcelFile) -> dict:
         ((data_ref_dt - df["_data_parsed"]).dt.days >= 10)
     )
     df["_is_thr"] = _text_thr | _date_thr
-    total_grd_pre = int(df["_is_thr"].sum())
 
-    # Renomeia colunas com prefixo _ para evitar bug do itertuples
     df = df.rename(columns={"_sup": "supervisor", "_ds": "ds",
                              "_data_str": "data_str", "_is_thr": "is_thr",
                              "_data_parsed": "data_parsed"})
@@ -169,18 +183,19 @@ def _processar_export(xl: pd.ExcelFile) -> dict:
 
 
 def _processar(conteudo: bytes) -> dict:
-    xl = pd.ExcelFile(io.BytesIO(conteudo))
+    try:
+        xl = pd.ExcelFile(io.BytesIO(conteudo), engine=_ENGINE)
+    except Exception:
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
     return _processar_export(xl)
 
 
 def _peek_data_ref_na(conteudo: bytes) -> str | None:
-    """Extrai data_ref lendo apenas a coluna 日期 da aba Export."""
     try:
-        import io as _io
-        xl = pd.ExcelFile(_io.BytesIO(conteudo))
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
         if "Export" not in xl.sheet_names:
             return None
-        df = pd.read_excel(_io.BytesIO(conteudo), sheet_name="Export", usecols=["日期"])
+        df = pd.read_excel(io.BytesIO(conteudo), sheet_name="Export", usecols=["日期"])
         datas = pd.to_datetime(df["日期"], errors="coerce").dropna()
         if not datas.empty:
             return datas.dt.date.max().isoformat()
@@ -189,37 +204,20 @@ def _peek_data_ref_na(conteudo: bytes) -> str | None:
     return None
 
 
-@router.post("/processar")
-@limiter.limit("5/minute")
-async def processar_na(
-    request: Request,
-    file:        UploadFile = File(..., description="Arquivo 有发未到 (.xlsx)"),
-    skip_if_exists: bool    = False,
-    user:        dict       = Depends(get_current_user),
-    db:          Session    = Depends(get_db),
-):
-    conteudo = await validar_arquivo(file)
+def _run_job(job_id: str, conteudo: bytes, user: dict):
+    db = _make_db()
 
-    if skip_if_exists:
-        data_ref_peek = _peek_data_ref_na(conteudo)
-        if data_ref_peek:
-            existing = db.execute(
-                text("SELECT id FROM na_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
-            ).mappings().first()
-            if existing:
-                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
+    def _set(update: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(update)
 
     try:
+        _set({"fase": "processando"})
         resultado = _processar(conteudo)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, f"Erro ao processar arquivo: {e}")
 
-    try:
+        _set({"fase": "salvando"})
         data_ref = resultado["data_ref"]
 
-        # Remove upload anterior da mesma data
         existing = db.execute(
             text("SELECT id FROM na_uploads WHERE data_ref = :dr"), {"dr": data_ref}
         ).mappings().first()
@@ -263,7 +261,7 @@ async def processar_na(
         for i in range(0, len(por_ds), 500):
             db.execute(
                 text("INSERT INTO na_por_ds (upload_id, supervisor, ds, total, grd10d) VALUES (:upload_id, :supervisor, :ds, :total, :grd10d)"),
-                por_ds[i:i+1000]
+                por_ds[i:i+500]
             )
         db.commit()
 
@@ -278,22 +276,61 @@ async def processar_na(
         for i in range(0, len(tend), 500):
             db.execute(
                 text("INSERT INTO na_tendencia (upload_id, supervisor, ds, data, total) VALUES (:upload_id, :supervisor, :ds, :data, :total)"),
-                tend[i:i+1000]
+                tend[i:i+500]
             )
         db.commit()
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(400, f"Erro ao salvar no banco: {e}")
+        log.info("[job:%s] na concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
+        _set({
+            "status":        "done",
+            "upload_id":     uid,
+            "data_ref":      data_ref,
+            "total":         resultado["total"],
+            "total_offload": resultado["total_offload"],
+            "total_arrive":  resultado["total_arrive"],
+            "grd10d":        resultado["grd10d"],
+            "threshold_col": resultado["threshold_col"],
+        })
 
-    return {
-        "upload_id":     uid,
-        "data_ref":      data_ref,
-        "total":         resultado["total"],
-        "total_offload": resultado["total_offload"],
-        "total_arrive":  resultado["total_arrive"],
-        "grd10d":        resultado["grd10d"],
-        "threshold_col": resultado["threshold_col"],
-    }
+    except Exception as e:
+        log.error("[job:%s] ERRO: %s", job_id, e, exc_info=True)
+        db.rollback()
+        _set({"status": "error", "erro": str(e)})
+    finally:
+        db.close()
+
+
+@router.post("/processar")
+@limiter.limit("5/minute")
+async def processar_na(
+    request: Request,
+    file:           UploadFile = File(..., description="Arquivo 有发未到 (.xlsx)"),
+    skip_if_exists: bool       = False,
+    user:           dict       = Depends(get_current_user),
+    db:             Session    = Depends(get_db),
+):
+    conteudo = await validar_arquivo(file)
+
+    if skip_if_exists:
+        data_ref_peek = _peek_data_ref_na(conteudo)
+        if data_ref_peek:
+            existing = db.execute(
+                text("SELECT id FROM na_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
+            ).mappings().first()
+            if existing:
+                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
+
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+    threading.Thread(target=_run_job, args=(job_id, conteudo, user), daemon=True).start()
+    return {"job_id": job_id, "status": "processing"}
+
+
+@router.get("/job/{job_id}")
+def status_job(job_id: str, user: dict = Depends(get_current_user)):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+    return job

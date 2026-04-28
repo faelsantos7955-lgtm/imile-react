@@ -4,18 +4,38 @@ api/routes/not_arrived_upload.py — Upload e processamento do relatório
 """
 import gc
 import io
+import uuid
+import logging
+import threading
 from datetime import date
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db
+from api.deps import get_current_user, get_db, _engine
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, detectar_aba
 
+log = logging.getLogger("not_arrived")
+
 router = APIRouter()
+
+_ENGINE = "openpyxl"
+try:
+    import python_calamine  # noqa: F401
+    _ENGINE = "calamine"
+except ImportError:
+    pass
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _make_db() -> Session:
+    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
+
 
 OPERACAO_MAP = {
     "到件扫描":    "Chegada",
@@ -58,15 +78,11 @@ _KEEP = {"waybill_no", "oc_name", "oc_code", "站点类型", "区域",
          "last_operate", "日期", "Supervisor", "Process"}
 
 _NA_MOV_COLS_KEY = {"waybill_no", "oc_name", "区域", "last_operate"}
-_NA_MOV_SKIP = {"汇总", "DS"}  # abas de suporte, não de dados
+_NA_MOV_SKIP = {"汇总", "DS"}
 
 
 def _encontrar_abas_not_arrived(xl: pd.ExcelFile) -> tuple[str, str]:
-    """
-    Retorna (dc_aba, ds_aba). Tenta nomes exatos primeiro;
-    se não encontrar, detecta pelas colunas de dados.
-    """
-    dc = "数据源"   if "数据源"    in xl.sheet_names else None
+    dc = "数据源"    if "数据源"    in xl.sheet_names else None
     ds = "Planilha1" if "Planilha1" in xl.sheet_names else None
 
     if dc is None or ds is None:
@@ -74,7 +90,7 @@ def _encontrar_abas_not_arrived(xl: pd.ExcelFile) -> tuple[str, str]:
         for nome in xl.sheet_names:
             if nome in _NA_MOV_SKIP:
                 continue
-            if nome in (dc, ds):   # já achado por nome exato
+            if nome in (dc, ds):
                 continue
             try:
                 header = xl.parse(nome, nrows=0)
@@ -96,10 +112,7 @@ def _encontrar_abas_not_arrived(xl: pd.ExcelFile) -> tuple[str, str]:
             dc = candidatas.pop(0)[0]
 
         if ds is None:
-            if not candidatas:
-                ds = dc  # arquivo com só uma aba de dados — tenta processar mesmo assim
-            else:
-                ds = candidatas[0][0]
+            ds = candidatas[0][0] if candidatas else dc
 
     return dc, ds
 
@@ -262,22 +275,21 @@ def _processar(xl: pd.ExcelFile) -> tuple[dict, list[dict]]:
     ]
 
     resultado = {
-        "data_ref":       data_ref,
-        "total":          total,
-        "total_dc":       total_dc,
-        "total_ds":       total_ds,
+        "data_ref":        data_ref,
+        "total":           total,
+        "total_dc":        total_dc,
+        "total_ds":        total_ds,
         "total_entregues": total_entregues,
-        "pct_entregues":  pct_entregues,
-        "por_estacao":    por_estacao,
-        "por_regiao":     por_regiao,
-        "por_operacao":   por_operacao,
-        "por_supervisor": por_supervisor,
+        "pct_entregues":   pct_entregues,
+        "por_estacao":     por_estacao,
+        "por_regiao":      por_regiao,
+        "por_operacao":    por_operacao,
+        "por_supervisor":  por_supervisor,
     }
     return resultado, tendencia
 
 
 def _peek_data_ref_from_xl(xl: pd.ExcelFile) -> str | None:
-    """Extrai data_ref lendo apenas a coluna 日期 do ExcelFile já aberto."""
     try:
         frames = []
         for aba in ("数据源", "Planilha1"):
@@ -297,41 +309,28 @@ def _peek_data_ref_from_xl(xl: pd.ExcelFile) -> str | None:
     return None
 
 
-@router.post("/processar")
-@limiter.limit("5/minute")
-async def processar_not_arrived(
-    request: Request,
-    file: UploadFile = File(..., description="Arquivo Problem Registration (.xlsx)"),
-    skip_if_exists: bool = False,
-    user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    conteudo = await validar_arquivo(file)
-    xl = pd.ExcelFile(io.BytesIO(conteudo))
-    del conteudo   # libera os bytes brutos antes do parse pesado
-    gc.collect()
+def _run_job(job_id: str, conteudo: bytes, user: dict):
+    db = _make_db()
 
-    if skip_if_exists:
-        data_ref_peek = _peek_data_ref_from_xl(xl)
-        if data_ref_peek:
-            existing = db.execute(
-                text("SELECT id FROM not_arrived_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
-            ).mappings().first()
-            if existing:
-                xl.close()
-                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
+    def _set(update: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(update)
 
     try:
+        _set({"fase": "processando"})
+
+        try:
+            xl = pd.ExcelFile(io.BytesIO(conteudo), engine=_ENGINE)
+        except Exception:
+            xl = pd.ExcelFile(io.BytesIO(conteudo))
+        del conteudo
+        gc.collect()
+
         resultado, tendencia = _processar(xl)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(400, f"Erro ao processar arquivo: {e}")
-    finally:
         xl.close()
         gc.collect()
 
-    try:
+        _set({"fase": "salvando"})
         data_ref = resultado["data_ref"]
 
         existing = db.execute(
@@ -372,7 +371,7 @@ async def processar_not_arrived(
         for i in range(0, len(estacoes), 500):
             db.execute(
                 text("INSERT INTO not_arrived_por_estacao (upload_id, oc_name, oc_code, tipo, regiao, supervisor, total, entregues) VALUES (:upload_id, :oc_name, :oc_code, :tipo, :regiao, :supervisor, :total, :entregues)"),
-                estacoes[i:i+1000]
+                estacoes[i:i+500]
             )
         db.commit()
 
@@ -401,22 +400,67 @@ async def processar_not_arrived(
             for i in range(0, len(tendencia), 500):
                 db.execute(
                     text("INSERT INTO not_arrived_tendencia (upload_id, supervisor, data, total) VALUES (:upload_id, :supervisor, :data, :total)"),
-                    [{"upload_id": uid, **r} for r in tendencia[i:i+1000]]
+                    [{"upload_id": uid, **r} for r in tendencia[i:i+500]]
                 )
             db.commit()
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(400, f"Erro ao salvar no banco: {e}")
+        log.info("[job:%s] not_arrived concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
+        _set({
+            "status":          "done",
+            "upload_id":       uid,
+            "data_ref":        data_ref,
+            "total":           resultado["total"],
+            "total_dc":        resultado["total_dc"],
+            "total_ds":        resultado["total_ds"],
+            "total_entregues": resultado["total_entregues"],
+            "pct_entregues":   resultado["pct_entregues"],
+        })
 
-    return {
-        "upload_id":       uid,
-        "data_ref":        data_ref,
-        "total":           resultado["total"],
-        "total_dc":        resultado["total_dc"],
-        "total_ds":        resultado["total_ds"],
-        "total_entregues": resultado["total_entregues"],
-        "pct_entregues":   resultado["pct_entregues"],
-    }
+    except Exception as e:
+        log.error("[job:%s] ERRO: %s", job_id, e, exc_info=True)
+        db.rollback()
+        _set({"status": "error", "erro": str(e)})
+    finally:
+        db.close()
+
+
+@router.post("/processar")
+@limiter.limit("5/minute")
+async def processar_not_arrived(
+    request: Request,
+    file:           UploadFile = File(..., description="Arquivo Problem Registration (.xlsx)"),
+    skip_if_exists: bool       = False,
+    user:           dict       = Depends(get_current_user),
+    db:             Session    = Depends(get_db),
+):
+    conteudo = await validar_arquivo(file)
+
+    if skip_if_exists:
+        try:
+            xl_peek = pd.ExcelFile(io.BytesIO(conteudo))
+            data_ref_peek = _peek_data_ref_from_xl(xl_peek)
+            xl_peek.close()
+        except Exception:
+            data_ref_peek = None
+
+        if data_ref_peek:
+            existing = db.execute(
+                text("SELECT id FROM not_arrived_uploads WHERE data_ref = :dr"), {"dr": data_ref_peek}
+            ).mappings().first()
+            if existing:
+                return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
+
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+    threading.Thread(target=_run_job, args=(job_id, conteudo, user), daemon=True).start()
+    return {"job_id": job_id, "status": "processing"}
+
+
+@router.get("/job/{job_id}")
+def status_job(job_id: str, user: dict = Depends(get_current_user)):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+    return job

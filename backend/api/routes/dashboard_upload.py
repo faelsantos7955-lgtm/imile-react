@@ -4,19 +4,31 @@ Port do processar_dashboard() do processar.py local para FastAPI.
 """
 import io
 import re
+import uuid
+import logging
+import threading
 from datetime import date
 
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db
+from api.deps import get_current_user, get_db, _engine
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, validar_varios
 
+log = logging.getLogger("dashboard")
+
 router = APIRouter()
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _make_db() -> Session:
+    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
 
 _ENGINE = "openpyxl"
 try:
@@ -48,37 +60,31 @@ def _ler(files: list[bytes], cols: set) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-@router.post("/upload")
-@limiter.limit("5/minute")
-async def upload_dashboard(
-    request: Request,
-    data_ref: str = Form(..., description="Data de referência (YYYY-MM-DD)"),
-    recebimento: list[UploadFile] = File(..., description="Arquivos de Recebimento (.xlsx)"),
-    out_delivery: list[UploadFile] = File(..., description="Arquivos de Out of Delivery (.xlsx)"),
-    entregas:    list[UploadFile] = File(None, description="Arquivos de Entregas (.xlsx) — opcional"),
-    supervisores: UploadFile       = File(None, description="Planilha de Supervisores — opcional"),
-    metas:        UploadFile       = File(None, description="Planilha de Metas — opcional"),
-    user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Processa os arquivos Excel de operação diária e salva em expedicao_diaria + expedicao_cidades.
-    Equivalente ao processar_dashboard() do processar.py local.
-    """
-    # ── Valida data ────────────────────────────────────────────
+def _run_job(job_id: str, rec_bytes: list, out_bytes: list, ent_bytes: list,
+             sup_bytes, meta_bytes, data_ref: str, user: dict):
+    db = _make_db()
+
+    def _set(update: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(update)
+
     try:
+        _set({"fase": "processando"})
         data_obj = date.fromisoformat(data_ref)
-    except ValueError:
-        raise HTTPException(400, "data_ref deve estar no formato YYYY-MM-DD")
+        resultado = _processar_dashboard(rec_bytes, out_bytes, ent_bytes, sup_bytes, meta_bytes, data_ref, data_obj, user, db)
+        log.info("[job:%s] dashboard concluído — %s n_stations=%d", job_id, data_ref, resultado["n_stations"])
+        _set({"status": "done", **resultado})
+    except Exception as e:
+        log.error("[job:%s] ERRO: %s", job_id, e, exc_info=True)
+        db.rollback()
+        _set({"status": "error", "erro": str(e) if not isinstance(e, HTTPException) else e.detail})
+    finally:
+        db.close()
 
+
+def _processar_dashboard(rec_bytes, out_bytes, ent_bytes, sup_bytes, meta_bytes,
+                         data_ref: str, data_obj, user: dict, db: Session) -> dict:
     try:
-        # ── Valida e lê bytes ─────────────────────────────────
-        rec_bytes  = await validar_varios(recebimento)
-        out_bytes  = await validar_varios(out_delivery)
-        ent_bytes  = await validar_varios(entregas) if entregas else []
-        sup_bytes  = await validar_arquivo(supervisores, obrigatorio=False)
-        meta_bytes = await validar_arquivo(metas, obrigatorio=False)
-
         # ── Supervisores ──────────────────────────────────────
         mapa = {}
         if sup_bytes:
@@ -367,3 +373,48 @@ async def upload_dashboard(
     except Exception as exc:
         db.rollback()
         raise HTTPException(500, "Erro interno ao processar o arquivo") from exc
+
+
+@router.post("/upload")
+@limiter.limit("5/minute")
+async def upload_dashboard(
+    request: Request,
+    data_ref: str = Form(..., description="Data de referência (YYYY-MM-DD)"),
+    recebimento: list[UploadFile] = File(..., description="Arquivos de Recebimento (.xlsx)"),
+    out_delivery: list[UploadFile] = File(..., description="Arquivos de Out of Delivery (.xlsx)"),
+    entregas:    list[UploadFile] = File(None, description="Arquivos de Entregas (.xlsx) — opcional"),
+    supervisores: UploadFile       = File(None, description="Planilha de Supervisores — opcional"),
+    metas:        UploadFile       = File(None, description="Planilha de Metas — opcional"),
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        date.fromisoformat(data_ref)
+    except ValueError:
+        raise HTTPException(400, "data_ref deve estar no formato YYYY-MM-DD")
+
+    rec_bytes  = await validar_varios(recebimento)
+    out_bytes  = await validar_varios(out_delivery)
+    ent_bytes  = await validar_varios(entregas) if entregas else []
+    sup_bytes  = await validar_arquivo(supervisores, obrigatorio=False)
+    meta_bytes = await validar_arquivo(metas, obrigatorio=False)
+
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+
+    threading.Thread(
+        target=_run_job,
+        args=(job_id, rec_bytes, out_bytes, ent_bytes, sup_bytes, meta_bytes, data_ref, user),
+        daemon=True,
+    ).start()
+    return {"job_id": job_id, "status": "processing"}
+
+
+@router.get("/job/{job_id}")
+def status_job_dashboard(job_id: str, user: dict = Depends(get_current_user)):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+    return job

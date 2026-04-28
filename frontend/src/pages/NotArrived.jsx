@@ -8,7 +8,7 @@ import {
   Upload, X, FileSpreadsheet, AlertCircle, ChevronUp, ChevronDown,
   Package, Truck, CheckCircle, ArrowRightLeft, Download, Loader,
 } from 'lucide-react'
-import api from '../lib/api'
+import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
   KpiCard, Card, SectionHeader, EmptyState, LogisticsEmptyState, Alert, Badge, Button, toast,
@@ -115,22 +115,27 @@ function UploadPanel({ onClose, onSuccess }) {
   const [error, setError] = useState('')
   const inputRef = useRef(null)
 
+  const [fase, setFase] = useState('')
+
   const mutation = useMutation({
     mutationFn: async () => {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await api.post('/api/not-arrived/processar', fd, {
+      const { data } = await api.post('/api/not-arrived/processar', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 600_000, // 10 min — arquivo grande
+        timeout: 60_000,
       })
-      return r.data
+      if (data.job_id) {
+        return await pollJob(`/api/not-arrived/job/${data.job_id}`, setFase)
+      }
+      return data
     },
     onSuccess: (data) => {
       onSuccess(data)
       onClose()
     },
     onError: (err) => {
-      setError(err.response?.data?.detail || 'Erro ao processar arquivo.')
+      setError(err.response?.data?.detail || err.message || 'Erro ao processar arquivo.')
     },
   })
 
@@ -209,7 +214,7 @@ function UploadPanel({ onClose, onSuccess }) {
             {mutation.isPending ? (
               <>
                 <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Processando…
+                {fase || 'Processando…'}
               </>
             ) : 'Processar'}
           </Button>

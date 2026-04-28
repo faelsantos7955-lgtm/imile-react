@@ -85,4 +85,22 @@ api.interceptors.response.use(
   }
 )
 
+/**
+ * Faz polling de um job de background até concluir ou dar erro.
+ * @param {string} jobUrl  — URL do endpoint GET de status (ex: '/api/notracking/job/xxx')
+ * @param {function} onFase — callback opcional com a fase atual
+ * @param {number} maxAttempts — máximo de tentativas (default 120 × 1.5s = 3min)
+ */
+export async function pollJob(jobUrl, onFase, maxAttempts = 120) {
+  let attempts = 0
+  while (attempts++ < maxAttempts) {
+    await new Promise(r => setTimeout(r, 1500))
+    const { data: job } = await api.get(jobUrl)
+    if (job.status === 'done')  return job
+    if (job.status === 'error') throw new Error(job.erro || 'Erro no processamento')
+    onFase?.(job.fase || 'processando')
+  }
+  throw new Error('Timeout: processamento demorou demais. Verifique o histórico de uploads.')
+}
+
 export default api

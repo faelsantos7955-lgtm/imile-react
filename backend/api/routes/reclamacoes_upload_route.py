@@ -3,22 +3,40 @@ api/routes/reclamacoes_upload_route.py — Upload de Reclamações via portal
 Self-contained: não depende de modulos/
 """
 import io
-from collections import defaultdict
+import uuid
+import logging
+import threading
 from datetime import date, datetime
 from typing import List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db
+from api.deps import get_current_user, get_db, _engine
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 from api.lark_utils import notify_reclamacoes
 
+log = logging.getLogger("reclamacoes")
+
 router = APIRouter()
+
+_ENGINE = "openpyxl"
+try:
+    import python_calamine  # noqa: F401
+    _ENGINE = "calamine"
+except ImportError:
+    pass
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _make_db() -> Session:
+    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
 
 
 _STA_COLS = ['Inventory Station', 'inventory_station', 'InventoryStation',
@@ -32,7 +50,6 @@ _SUP_COLS = ['SUPERVISOR', 'Supervisor', 'supervisor',
 
 
 def _is_rec_sheet(cols: list) -> bool:
-    """Retorna True se as colunas parecem ser de uma aba de reclamações."""
     cl = [str(c).lower() for c in cols]
     has_mot = any(k in c for c in cl for k in ['da name', 'motorista', 'driver', 'entregador', 'courier'])
     has_sta = any(k in c for c in cl for k in ['station', 'inventory', 'estação', 'estacao', 'base'])
@@ -40,8 +57,11 @@ def _is_rec_sheet(cols: list) -> bool:
 
 
 def _ler_bilhete(buf):
-    """Lê todas as abas com estrutura de reclamações e concatena — igual ao carga em lote."""
-    all_sheets = pd.read_excel(buf, sheet_name=None, dtype=str)
+    try:
+        all_sheets = pd.read_excel(buf, sheet_name=None, dtype=str, engine=_ENGINE)
+    except Exception:
+        buf.seek(0)
+        all_sheets = pd.read_excel(buf, sheet_name=None, dtype=str)
     frames = []
     for sheet_name, df in all_sheets.items():
         if df.empty:
@@ -50,7 +70,6 @@ def _ler_bilhete(buf):
         if _is_rec_sheet(list(df.columns)):
             frames.append(df)
     if not frames:
-        # Fallback: usa a primeira aba independentemente da estrutura
         first_name = next(iter(all_sheets))
         df = all_sheets[first_name]
         df.columns = df.columns.str.strip()
@@ -59,7 +78,6 @@ def _ler_bilhete(buf):
 
 
 def _extrair_data_ref(df):
-    """Extrai data de referência do campo de data (Create Time ou similar)."""
     col = next(
         (c for c in df.columns if any(k in c.lower() for k in ['create time', 'create_time', 'data criação', 'data de criação', 'criado em', 'date'])),
         None,
@@ -72,7 +90,6 @@ def _extrair_data_ref(df):
 
 
 def _find_col(df, candidates):
-    """Retorna o nome da primeira coluna encontrada (case-insensitive substring)."""
     cols_lower = {c.lower(): c for c in df.columns}
     for cand in candidates:
         cl = cand.lower()
@@ -84,20 +101,12 @@ def _find_col(df, candidates):
     return None
 
 
-def _sup_col(df):
-    return _find_col(df, _SUP_COLS)
-
-
-def _sta_col(df):
-    return _find_col(df, _STA_COLS)
-
-
-def _mot_col(df):
-    return _find_col(df, _MOT_COLS)
+def _sup_col(df): return _find_col(df, _SUP_COLS)
+def _sta_col(df): return _find_col(df, _STA_COLS)
+def _mot_col(df): return _find_col(df, _MOT_COLS)
 
 
 def _agregar_por_supervisor(df):
-    """Agrega reclamações por supervisor."""
     col = _sup_col(df)
     if not col:
         return []
@@ -108,7 +117,6 @@ def _agregar_por_supervisor(df):
 
 
 def _agregar_por_station(df):
-    """Agrega reclamações por station."""
     col = _sta_col(df)
     if not col:
         return []
@@ -136,7 +144,6 @@ def _agregar_por_station(df):
 
 
 def _top5_motoristas(df, inativos=None):
-    """Top 5 motoristas com mais reclamações."""
     inativos = inativos or set()
     col_mot = _mot_col(df)
     if not col_mot:
@@ -180,13 +187,11 @@ def _top5_motoristas(df, inativos=None):
 
 
 def _norm_key(s: str) -> str:
-    """Normaliza chave removendo hífens, espaços e underscores."""
     import re
     return re.sub(r'[-_\s]', '', str(s)).upper()
 
 
 def _adicionar_supervisor(df, db: Session):
-    """Adiciona coluna SUPERVISOR via tabela config_supervisores (se não existir)."""
     if _sup_col(df):
         col = _sup_col(df)
         if col != 'SUPERVISOR':
@@ -196,7 +201,6 @@ def _adicionar_supervisor(df, db: Session):
     if not rows:
         df['SUPERVISOR'] = 'Sem Região'
         return df
-    # Mapa direto e mapa normalizado (ignora hífens/espaços)
     sup_map      = {r['sigla'].strip().upper(): r['region'] for r in rows if r.get('sigla')}
     sup_map_norm = {_norm_key(k): v for k, v in sup_map.items()}
 
@@ -234,7 +238,6 @@ class SalvarReclamacoesPayload(BaseModel):
 
 @router.post("/salvar")
 def salvar_reclamacoes(payload: SalvarReclamacoesPayload, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Recebe resultado já processado localmente e salva no banco."""
     existing = db.execute(
         text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
         {"dr": payload.data_ref}
@@ -297,6 +300,124 @@ def salvar_reclamacoes(payload: SalvarReclamacoesPayload, user: dict = Depends(g
     }
 
 
+def _run_job(job_id: str, conteudos: list[bytes], user: dict):
+    db = _make_db()
+
+    def _set(update: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(update)
+
+    try:
+        _set({"fase": "lendo"})
+
+        frames = []
+        for c in conteudos:
+            frames.append(_ler_bilhete(io.BytesIO(c)))
+
+        df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
+
+        if df.empty:
+            raise ValueError("Arquivo vazio")
+
+        _set({"fase": "processando"})
+        df = _adicionar_supervisor(df, db)
+        data_ref = _extrair_data_ref(df)
+
+        inativos_rows = db.execute(
+            text("SELECT id_motorista FROM motoristas_status WHERE ativo = false")
+        ).mappings().all()
+        inativos = {r["id_motorista"] for r in inativos_rows}
+
+        por_sup = _agregar_por_supervisor(df)
+        por_sta = _agregar_por_station(df)
+        top5 = _top5_motoristas(df, inativos)
+
+        semana_ref = 0
+        col_time = next((c for c in df.columns if 'create time' in c.lower() or 'create_time' in c.lower()), None)
+        if col_time:
+            datas = pd.to_datetime(df[col_time], dayfirst=False, errors='coerce')
+            if not datas.dropna().empty:
+                semana_ref = int(datas.dropna().dt.isocalendar().week.mode().iloc[0])
+
+        col_mot_name = _mot_col(df)
+        n_mot = int(df[col_mot_name].notna().sum()) if col_mot_name else 0
+        col_sta_name = _sta_col(df)
+        n_sta = int(df[col_sta_name].nunique()) if col_sta_name else 0
+        col_sup_name = _sup_col(df) or 'SUPERVISOR'
+
+        _set({"fase": "salvando"})
+
+        existing = db.execute(
+            text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
+            {"dr": data_ref.isoformat()}
+        ).mappings().first()
+        if existing:
+            old_id = existing["id"]
+            for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
+                db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
+            db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
+            db.commit()
+
+        row = db.execute(
+            text("""
+                INSERT INTO reclamacoes_uploads (data_ref, n_registros, n_sup, n_sta, n_mot, semana_ref)
+                VALUES (:data_ref, :n_registros, :n_sup, :n_sta, :n_mot, :semana_ref)
+                RETURNING id
+            """),
+            {
+                "data_ref":    data_ref.isoformat(),
+                "n_registros": len(df),
+                "n_sup":       int(df[col_sup_name].nunique()) if col_sup_name in df.columns else 0,
+                "n_sta":       n_sta,
+                "n_mot":       n_mot,
+                "semana_ref":  semana_ref,
+            }
+        ).mappings().first()
+        uid = row["id"]
+        db.commit()
+
+        if por_sup:
+            db.execute(
+                text("INSERT INTO reclamacoes_por_supervisor (upload_id, supervisor, dia_total, mes_total) VALUES (:upload_id, :supervisor, :dia_total, :mes_total)"),
+                [{"upload_id": uid, **r} for r in por_sup]
+            )
+            db.commit()
+
+        if por_sta:
+            db.execute(
+                text("INSERT INTO reclamacoes_por_station (upload_id, station, supervisor, dia_total, mes_total) VALUES (:upload_id, :station, :supervisor, :dia_total, :mes_total)"),
+                [{"upload_id": uid, **r} for r in por_sta]
+            )
+            db.commit()
+
+        if top5:
+            db.execute(
+                text("INSERT INTO reclamacoes_top5 (upload_id, motorista, id_motorista, ds, supervisor, total) VALUES (:upload_id, :motorista, :id_motorista, :ds, :supervisor, :total)"),
+                [{"upload_id": uid, **r} for r in top5]
+            )
+            db.commit()
+
+        resultado = {
+            "upload_id":   uid,
+            "data_ref":    data_ref.isoformat(),
+            "n_registros": len(df),
+            "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
+            "n_sta":       n_sta,
+            "n_mot":       n_mot,
+            "top5":        top5,
+        }
+        notify_reclamacoes(resultado, user["email"])
+        log.info("[job:%s] reclamacoes concluído — upload_id=%d n_registros=%d", job_id, uid, len(df))
+        _set({"status": "done", **resultado})
+
+    except Exception as e:
+        log.error("[job:%s] ERRO: %s", job_id, e, exc_info=True)
+        db.rollback()
+        _set({"status": "error", "erro": str(e)})
+    finally:
+        db.close()
+
+
 @router.post("/processar")
 @limiter.limit("5/minute")
 async def processar_reclamacoes(
@@ -308,104 +429,22 @@ async def processar_reclamacoes(
     if not files:
         raise HTTPException(400, "Nenhum arquivo enviado.")
 
-    frames = []
+    conteudos = []
     for f in files:
-        conteudo = await validar_arquivo(f)
-        try:
-            frames.append(_ler_bilhete(io.BytesIO(conteudo)))
-        except Exception as e:
-            raise HTTPException(400, f"Erro ao ler '{f.filename}': {e}")
+        c = await validar_arquivo(f)
+        conteudos.append(c)
 
-    df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+    threading.Thread(target=_run_job, args=(job_id, conteudos, user), daemon=True).start()
+    return {"job_id": job_id, "status": "processing"}
 
-    if df.empty:
-        raise HTTPException(400, "Arquivo vazio")
 
-    df = _adicionar_supervisor(df, db)
-
-    data_ref = _extrair_data_ref(df)
-
-    inativos_rows = db.execute(
-        text("SELECT id_motorista FROM motoristas_status WHERE ativo = false")
-    ).mappings().all()
-    inativos = {r["id_motorista"] for r in inativos_rows}
-
-    por_sup = _agregar_por_supervisor(df)
-    por_sta = _agregar_por_station(df)
-    top5 = _top5_motoristas(df, inativos)
-
-    semana_ref = 0
-    col_time = next((c for c in df.columns if 'create time' in c.lower() or 'create_time' in c.lower()), None)
-    if col_time:
-        datas = pd.to_datetime(df[col_time], dayfirst=False, errors='coerce')
-        if not datas.dropna().empty:
-            semana_ref = int(datas.dropna().dt.isocalendar().week.mode().iloc[0])
-
-    existing = db.execute(
-        text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
-        {"dr": data_ref.isoformat()}
-    ).mappings().first()
-    if existing:
-        old_id = existing["id"]
-        for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-        db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
-        db.commit()
-
-    col_mot_name = _mot_col(df)
-    n_mot = int(df[col_mot_name].notna().sum()) if col_mot_name else 0
-
-    col_sta_name = _sta_col(df)
-    n_sta = int(df[col_sta_name].nunique()) if col_sta_name else 0
-    col_sup_name = _sup_col(df) or 'SUPERVISOR'
-
-    row = db.execute(
-        text("""
-            INSERT INTO reclamacoes_uploads (data_ref, n_registros, n_sup, n_sta, n_mot, semana_ref)
-            VALUES (:data_ref, :n_registros, :n_sup, :n_sta, :n_mot, :semana_ref)
-            RETURNING id
-        """),
-        {
-            "data_ref":    data_ref.isoformat(),
-            "n_registros": len(df),
-            "n_sup":       int(df[col_sup_name].nunique()) if col_sup_name in df.columns else 0,
-            "n_sta":       n_sta,
-            "n_mot":       n_mot,
-            "semana_ref":  semana_ref,
-        }
-    ).mappings().first()
-    uid = row["id"]
-    db.commit()
-
-    if por_sup:
-        db.execute(
-            text("INSERT INTO reclamacoes_por_supervisor (upload_id, supervisor, dia_total, mes_total) VALUES (:upload_id, :supervisor, :dia_total, :mes_total)"),
-            [{"upload_id": uid, **r} for r in por_sup]
-        )
-        db.commit()
-
-    if por_sta:
-        db.execute(
-            text("INSERT INTO reclamacoes_por_station (upload_id, station, supervisor, dia_total, mes_total) VALUES (:upload_id, :station, :supervisor, :dia_total, :mes_total)"),
-            [{"upload_id": uid, **r} for r in por_sta]
-        )
-        db.commit()
-
-    if top5:
-        db.execute(
-            text("INSERT INTO reclamacoes_top5 (upload_id, motorista, id_motorista, ds, supervisor, total) VALUES (:upload_id, :motorista, :id_motorista, :ds, :supervisor, :total)"),
-            [{"upload_id": uid, **r} for r in top5]
-        )
-        db.commit()
-
-    resultado = {
-        "upload_id":   uid,
-        "data_ref":    data_ref.isoformat(),
-        "n_registros": len(df),
-        "n_sup":       int(df['SUPERVISOR'].nunique()) if 'SUPERVISOR' in df.columns else 0,
-        "n_sta":       n_sta,
-        "n_mot":       n_mot,
-        "top5":        top5,
-    }
-    notify_reclamacoes(resultado, user["email"])
-    return resultado
+@router.get("/job/{job_id}")
+def status_job(job_id: str, user: dict = Depends(get_current_user)):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+    return job

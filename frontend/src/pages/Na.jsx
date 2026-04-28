@@ -11,7 +11,7 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import api from '../lib/api'
+import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
   KpiCard, Card, SectionHeader, EmptyState, LogisticsEmptyState, Alert, Button,
@@ -97,12 +97,17 @@ function UploadPanel({ onClose, onSuccess }) {
   const [error, setError] = useState('')
   const inputRef = useRef(null)
 
+  const [fase, setFase] = useState('')
+
   const mutation = useMutation({
     mutationFn: async () => {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await api.post('/api/na/processar', fd, { timeout: 300_000 })
-      return r.data
+      const { data } = await api.post('/api/na/processar', fd, { timeout: 60_000 })
+      if (data.job_id) {
+        return await pollJob(`/api/na/job/${data.job_id}`, setFase)
+      }
+      return data
     },
     onSuccess: (data) => { onSuccess(data); onClose() },
     onError:   (err)  => setError(err.response?.data?.detail || err.message || 'Erro ao processar.'),
@@ -161,7 +166,7 @@ function UploadPanel({ onClose, onSuccess }) {
           <Button variant="secondary" className="flex-1" onClick={onClose} disabled={mutation.isPending}>Cancelar</Button>
           <Button className="flex-1" onClick={() => { setError(''); mutation.mutate() }} disabled={!file || mutation.isPending}>
             {mutation.isPending
-              ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Processando…</>
+              ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />{fase || 'Processando…'}</>
               : 'Processar'}
           </Button>
         </div>

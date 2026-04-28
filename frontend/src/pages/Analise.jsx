@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import api from '../lib/api'
+import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { PageHeader, KpiCard, ParticleField, SectionHeader, Card, RankingRow, Alert, Skeleton, toast } from '../components/ui'
 import Heatmap from '../components/Heatmap'
@@ -77,6 +77,7 @@ function UploadModal({ onClose, onSuccess }) {
   const [supFile, setSupFile]     = useState(null)
   const [metaFile, setMetaFile]   = useState(null)
   const [loading, setLoading]     = useState(false)
+  const [fase, setFase]           = useState('')
   const [erro, setErro]           = useState('')
   const [sucesso, setSucesso]     = useState(null)
 
@@ -87,7 +88,7 @@ function UploadModal({ onClose, onSuccess }) {
     }
     const erroVal = validarArquivos([...recFiles, ...outFiles, ...entFiles, supFile, metaFile].filter(Boolean))
     if (erroVal) { setErro(erroVal); return }
-    setLoading(true); setErro('')
+    setLoading(true); setFase('enviando'); setErro('')
     try {
       const form = new FormData()
       form.append('data_ref', dataRef)
@@ -97,15 +98,19 @@ function UploadModal({ onClose, onSuccess }) {
       if (supFile)  form.append('supervisores', supFile)
       if (metaFile) form.append('metas', metaFile)
 
-      const res = await api.post('/api/dashboard/upload', form, {
+      const { data } = await api.post('/api/dashboard/upload', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setSucesso(res.data)
+      const result = data.job_id
+        ? await pollJob(`/api/dashboard/job/${data.job_id}`, setFase)
+        : data
+      setSucesso(result)
       onSuccess?.()
     } catch (e) {
-      setErro(e.response?.data?.detail || 'Erro ao processar arquivos.')
+      setErro(e.response?.data?.detail || e.message || 'Erro ao processar arquivos.')
     } finally {
       setLoading(false)
+      setFase('')
     }
   }
 
@@ -165,7 +170,7 @@ function UploadModal({ onClose, onSuccess }) {
               {erro && <Alert type="warning">{erro}</Alert>}
               <button onClick={handleSubmit} disabled={loading}
                 className="w-full py-2.5 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 disabled:opacity-50 flex items-center justify-center gap-2">
-                {loading ? <><Loader size={14} className="animate-spin" /> Processando...</> : 'Processar e Salvar'}
+                {loading ? <><Loader size={14} className="animate-spin" /> {fase || 'Processando...'}</> : 'Processar e Salvar'}
               </button>
             </>
           )}

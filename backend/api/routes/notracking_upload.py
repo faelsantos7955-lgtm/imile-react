@@ -1,17 +1,39 @@
 """
 api/routes/notracking_upload.py — Processamento do relatório No Tracking (断更)
 """
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from api.deps import get_db, get_current_user, require_admin, audit_log
-from api.limiter import limiter
-from api.upload_utils import validar_arquivo
-import pandas as pd
 import io
+import uuid
+import logging
+import threading
 from datetime import date
 
+import pandas as pd
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text
+
+from api.deps import get_db, get_current_user, require_admin, audit_log, _engine
+from api.limiter import limiter
+from api.upload_utils import validar_arquivo
+
+log = logging.getLogger("notracking")
+
 router = APIRouter()
+
+_ENGINE = "openpyxl"
+try:
+    import python_calamine  # noqa: F401
+    _ENGINE = "calamine"
+except ImportError:
+    pass
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+def _make_db() -> Session:
+    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
+
 
 FAIXAS_ORDER = ['<1', '1 ≤ X < 3', '3 ≤ X < 5', '5 ≤ X < 7',
                 '7 ≤ X < 10', '10 ≤ X < 16', '16 ≤ X < 20', 'X ≥ 20']
@@ -84,15 +106,14 @@ def _mapear_colunas(df: pd.DataFrame) -> dict:
 def _ler_aba(conteudo: bytes) -> pd.DataFrame:
     buf = io.BytesIO(conteudo)
     try:
-        xl = pd.ExcelFile(buf)
+        xl = pd.ExcelFile(buf, engine=_ENGINE)
     except Exception:
-        raise HTTPException(400, "Arquivo inválido. Envie um arquivo Excel (.xlsx).")
+        xl = pd.ExcelFile(io.BytesIO(conteudo))
 
     aba = next((a for a in _ABAS if a in xl.sheet_names), None)
     if aba is None:
         aba = xl.sheet_names[0]
 
-    buf.seek(0)
     df = xl.parse(aba)
     df.columns = df.columns.str.strip()
     return df
@@ -125,9 +146,7 @@ def _processar(conteudo: bytes) -> dict:
     if df.empty:
         raise HTTPException(400, "Nenhum waybill válido encontrado.")
 
-    df['station']  = df['station'].fillna('').astype(str).str.strip().str.upper()
-
-    # Mantém apenas stations de São Paulo (prefixo SP)
+    df['station'] = df['station'].fillna('').astype(str).str.strip().str.upper()
     df = df[df['station'].str.startswith('SP')].copy()
     if df.empty:
         raise HTTPException(400, "Nenhum pacote de São Paulo encontrado. Verifique se as stations começam com 'SP'.")
@@ -253,6 +272,92 @@ def _processar(conteudo: bytes) -> dict:
     }
 
 
+def _run_job(job_id: str, conteudo: bytes, user: dict):
+    db = _make_db()
+
+    def _set(update: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(update)
+
+    try:
+        _set({"fase": "processando"})
+        resultado = _processar(conteudo)
+
+        _set({"fase": "salvando"})
+
+        existing = db.execute(
+            text("SELECT id FROM notracking_uploads WHERE data_ref = :dr"),
+            {"dr": resultado['data_ref']}
+        ).mappings().first()
+        if existing:
+            old_id = existing["id"]
+            for tbl in ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa"):
+                try:
+                    db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
+                except Exception:
+                    pass
+            db.execute(text("DELETE FROM notracking_uploads WHERE id = :id"), {"id": old_id})
+            db.commit()
+
+        row = db.execute(
+            text("""
+                INSERT INTO notracking_uploads (data_ref, criado_por, total, valor_total, total_7d_mais)
+                VALUES (:data_ref, :criado_por, :total, :valor_total, :total_7d_mais)
+                RETURNING id
+            """),
+            {
+                "data_ref":      resultado['data_ref'],
+                "criado_por":    user["email"],
+                "total":         resultado['total'],
+                "valor_total":   resultado['valor_total'],
+                "total_7d_mais": resultado['total_7d_mais'],
+            }
+        ).mappings().first()
+        uid = row["id"]
+        db.commit()
+
+        if resultado['por_ds']:
+            rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
+            for i in range(0, len(rows), 1000):
+                db.execute(
+                    text("INSERT INTO notracking_por_ds (upload_id, station, supervisor, regional, total, valor_total, total_7d_mais) VALUES (:upload_id, :station, :supervisor, :regional, :total, :valor_total, :total_7d_mais)"),
+                    rows[i:i+1000]
+                )
+            db.commit()
+
+        if resultado['por_sup']:
+            db.execute(
+                text("INSERT INTO notracking_por_sup (upload_id, supervisor, regional, total, valor_total, total_7d_mais) VALUES (:upload_id, :supervisor, :regional, :total, :valor_total, :total_7d_mais)"),
+                [{"upload_id": uid, **r} for r in resultado['por_sup']]
+            )
+            db.commit()
+
+        if resultado['por_status']:
+            db.execute(
+                text("INSERT INTO notracking_por_status (upload_id, status, total, valor_total) VALUES (:upload_id, :status, :total, :valor_total)"),
+                [{"upload_id": uid, **r} for r in resultado['por_status']]
+            )
+            db.commit()
+
+        if resultado['por_faixa']:
+            db.execute(
+                text("INSERT INTO notracking_por_faixa (upload_id, faixa, total, valor_total, pct) VALUES (:upload_id, :faixa, :total, :valor_total, :pct)"),
+                [{"upload_id": uid, **r} for r in resultado['por_faixa']]
+            )
+            db.commit()
+
+        audit_log("upload_processado", f"notracking_uploads:{uid}", {"total": resultado['total']}, user)
+        log.info("[job:%s] notracking concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
+        _set({"status": "done", "upload_id": uid, "total": resultado['total'], "data_ref": resultado['data_ref']})
+
+    except Exception as e:
+        log.error("[job:%s] ERRO: %s", job_id, e, exc_info=True)
+        db.rollback()
+        _set({"status": "error", "erro": str(e)})
+    finally:
+        db.close()
+
+
 @router.post("/processar")
 @limiter.limit("10/minute")
 async def processar_notracking(
@@ -261,72 +366,21 @@ async def processar_notracking(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    conteudo  = await validar_arquivo(file)
-    resultado = _processar(conteudo)
+    conteudo = await validar_arquivo(file)
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+    threading.Thread(target=_run_job, args=(job_id, conteudo, user), daemon=True).start()
+    return {"job_id": job_id, "status": "processing"}
 
-    existing = db.execute(
-        text("SELECT id FROM notracking_uploads WHERE data_ref = :dr"),
-        {"dr": resultado['data_ref']}
-    ).mappings().first()
-    if existing:
-        old_id = existing["id"]
-        for tbl in ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa"):
-            try:
-                db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-            except Exception:
-                pass
-        db.execute(text("DELETE FROM notracking_uploads WHERE id = :id"), {"id": old_id})
-        db.commit()
 
-    row = db.execute(
-        text("""
-            INSERT INTO notracking_uploads (data_ref, criado_por, total, valor_total, total_7d_mais)
-            VALUES (:data_ref, :criado_por, :total, :valor_total, :total_7d_mais)
-            RETURNING id
-        """),
-        {
-            "data_ref":      resultado['data_ref'],
-            "criado_por":    user["email"],
-            "total":         resultado['total'],
-            "valor_total":   resultado['valor_total'],
-            "total_7d_mais": resultado['total_7d_mais'],
-        }
-    ).mappings().first()
-    uid = row["id"]
-    db.commit()
-
-    if resultado['por_ds']:
-        rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
-        for i in range(0, len(rows), 1000):
-            db.execute(
-                text("INSERT INTO notracking_por_ds (upload_id, station, supervisor, regional, total, valor_total, total_7d_mais) VALUES (:upload_id, :station, :supervisor, :regional, :total, :valor_total, :total_7d_mais)"),
-                rows[i:i+1000]
-            )
-        db.commit()
-
-    if resultado['por_sup']:
-        db.execute(
-            text("INSERT INTO notracking_por_sup (upload_id, supervisor, regional, total, valor_total, total_7d_mais) VALUES (:upload_id, :supervisor, :regional, :total, :valor_total, :total_7d_mais)"),
-            [{"upload_id": uid, **r} for r in resultado['por_sup']]
-        )
-        db.commit()
-
-    if resultado['por_status']:
-        db.execute(
-            text("INSERT INTO notracking_por_status (upload_id, status, total, valor_total) VALUES (:upload_id, :status, :total, :valor_total)"),
-            [{"upload_id": uid, **r} for r in resultado['por_status']]
-        )
-        db.commit()
-
-    if resultado['por_faixa']:
-        db.execute(
-            text("INSERT INTO notracking_por_faixa (upload_id, faixa, total, valor_total, pct) VALUES (:upload_id, :faixa, :total, :valor_total, :pct)"),
-            [{"upload_id": uid, **r} for r in resultado['por_faixa']]
-        )
-        db.commit()
-
-    audit_log("upload_processado", f"notracking_uploads:{uid}", {"total": resultado['total']}, user)
-    return {"upload_id": uid, "total": resultado['total'], "data_ref": resultado['data_ref']}
+@router.get("/job/{job_id}")
+def status_job(job_id: str, user: dict = Depends(get_current_user)):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+    return job
 
 
 @router.delete("/upload/{upload_id}")
