@@ -22,11 +22,20 @@ def _engine():
     url = os.getenv("DATABASE_URL", "").strip().lstrip("=").strip()
     if not url:
         raise RuntimeError("DATABASE_URL não configurada")
-    # NullPool: conexão nova por request — sem conexões stale do Neon
+
+    # SQLAlchemy 2.x requer "postgresql://", não "postgres://"
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+
+    # Neon exige SSL; se a URL não tiver sslmode, injeta require
+    if "sslmode=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode=require"
+
     return create_engine(
         url,
         poolclass=NullPool,
-        connect_args={"connect_timeout": 10},
+        connect_args={"connect_timeout": 30},
     )
 
 
