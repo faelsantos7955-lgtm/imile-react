@@ -514,34 +514,39 @@ function Hero3D({ kpis, nBases }) {
 
           {/* Grid lines */}
           <g clipPath="url(#gb-clip)">
-            {/* Latitudes — fixas, servem de referência visual */}
+            {/* Latitudes — estáticas, referência visual */}
             {[-62, -33, 0, 33, 62].map((lat, i) => {
               const y = 132 + lat
-              const rx = Math.sqrt(97 * 97 - lat * lat) * 0.94
-              return <ellipse key={i} cx="132" cy={y} rx={rx} ry="9"
-                fill="none" stroke="rgba(147,197,253,.08)" strokeWidth=".8"/>
+              const rx = Math.sqrt(97 * 97 - lat * lat) * 0.96
+              return <ellipse key={i} cx="132" cy={y} rx={rx} ry="8"
+                fill="none" stroke="rgba(147,197,253,.1)" strokeWidth=".8"/>
             })}
-            {/* Meridianos + massas de terra — grupo rotaciona no eixo Y */}
-            <g className="globe-rotate">
-              {[0, 36, 72, 108, 144].map((angle, i) => (
-                <ellipse key={i} cx="132" cy="132" rx="97" ry="97"
-                  fill="none" stroke="rgba(147,197,253,.13)" strokeWidth=".7"
-                  transform={`rotate(${angle}, 132, 132)`}/>
+
+            {/* Meridianos + massas de terra — deslizam horizontalmente */}
+            <g className="globe-slide">
+              {/* Meridianos verticais — 2 períodos (194px cada) */}
+              {Array.from({length: 9}, (_, i) => 35 + i * 49).map((x, i) => (
+                <line key={i} x1={x} y1={35} x2={x} y2={229}
+                  stroke="rgba(147,197,253,.1)" strokeWidth=".8"/>
               ))}
-              {/* Massas de terra */}
-              <path d="M 120 75 Q 142 68 158 78 Q 170 92 164 110 Q 150 118 128 115 Q 110 110 106 92 Z"
-                fill="rgba(37,99,235,.5)" stroke="rgba(147,197,253,.5)" strokeWidth=".7"/>
-              <path d="M 84 114 Q 98 108 110 120 Q 105 138 86 135 Q 72 128 84 114 Z"
-                fill="rgba(37,99,235,.38)" stroke="rgba(147,197,253,.35)" strokeWidth=".6"/>
-              <path d="M 135 140 Q 158 134 172 152 Q 170 170 152 175 Q 130 173 128 156 Z"
-                fill="rgba(37,99,235,.42)" stroke="rgba(147,197,253,.45)" strokeWidth=".6"/>
-              <path d="M 97 150 Q 114 146 120 160 Q 115 173 97 171 Q 84 162 97 150 Z"
-                fill="rgba(37,99,235,.28)" stroke="rgba(147,197,253,.3)" strokeWidth=".5"/>
-              {/* Continente extra no lado oposto para preencher na rotação */}
-              <path d="M 60 90 Q 80 82 94 95 Q 90 115 68 112 Q 52 102 60 90 Z"
-                fill="rgba(37,99,235,.35)" stroke="rgba(147,197,253,.35)" strokeWidth=".6"/>
-              <path d="M 175 105 Q 192 98 200 112 Q 198 130 180 132 Q 164 124 175 105 Z"
-                fill="rgba(37,99,235,.32)" stroke="rgba(147,197,253,.3)" strokeWidth=".6"/>
+
+              {/* Massas de terra — cópia 1 */}
+              {[0, 194].map(dx => (
+                <g key={dx} transform={`translate(${dx}, 0)`}>
+                  <path d="M 120 75 Q 145 66 162 78 Q 175 94 168 112 Q 152 120 128 117 Q 108 111 104 93 Z"
+                    fill="rgba(30,90,220,.55)" stroke="rgba(147,197,253,.5)" strokeWidth=".7"/>
+                  <path d="M 82 112 Q 100 105 114 118 Q 110 140 88 137 Q 70 128 82 112 Z"
+                    fill="rgba(30,90,220,.45)" stroke="rgba(147,197,253,.38)" strokeWidth=".6"/>
+                  <path d="M 138 138 Q 162 130 175 150 Q 174 172 154 178 Q 130 176 127 157 Z"
+                    fill="rgba(30,90,220,.48)" stroke="rgba(147,197,253,.45)" strokeWidth=".6"/>
+                  <path d="M 95 152 Q 116 145 122 162 Q 117 176 96 174 Q 80 164 95 152 Z"
+                    fill="rgba(30,90,220,.35)" stroke="rgba(147,197,253,.3)" strokeWidth=".5"/>
+                  <path d="M 58 88 Q 78 80 94 93 Q 90 116 66 113 Q 49 102 58 88 Z"
+                    fill="rgba(30,90,220,.4)" stroke="rgba(147,197,253,.35)" strokeWidth=".6"/>
+                  <path d="M 172 102 Q 192 94 204 110 Q 202 132 182 134 Q 163 124 172 102 Z"
+                    fill="rgba(30,90,220,.38)" stroke="rgba(147,197,253,.32)" strokeWidth=".6"/>
+                </g>
+              ))}
             </g>
           </g>
 

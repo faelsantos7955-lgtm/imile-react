@@ -199,16 +199,12 @@ table { border-collapse: collapse; }
 @keyframes route-flash { 0%,100% { opacity: 0; } 50% { opacity: .7; } }
 @keyframes ring-pulse  { 0% { r: 4; opacity: .9; } 100% { r: 22; opacity: 0; } }
 
-/* Globo — rotação real no eixo Y */
-@keyframes globe-spin {
-  from { transform: rotateY(0deg); }
-  to   { transform: rotateY(360deg); }
+/* Globo — deslizamento horizontal para simular rotação */
+@keyframes globe-slide {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-194px); }
 }
-.globe-rotate {
-  animation: globe-spin 28s linear infinite;
-  transform-box: fill-box;
-  transform-origin: center;
-}
+.globe-slide { animation: globe-slide 22s linear infinite; }
 
 /* Pins pulsantes */
 @keyframes pin-pulse {
