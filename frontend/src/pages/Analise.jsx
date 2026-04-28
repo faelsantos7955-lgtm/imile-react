@@ -514,28 +514,35 @@ function Hero3D({ kpis, nBases }) {
 
           {/* Grid lines */}
           <g clipPath="url(#gb-clip)">
+            {/* Latitudes — fixas, servem de referência visual */}
             {[-62, -33, 0, 33, 62].map((lat, i) => {
               const y = 132 + lat
               const rx = Math.sqrt(97 * 97 - lat * lat) * 0.94
               return <ellipse key={i} cx="132" cy={y} rx={rx} ry="9"
-                fill="none" stroke="rgba(147,197,253,.1)" strokeWidth=".8"/>
+                fill="none" stroke="rgba(147,197,253,.08)" strokeWidth=".8"/>
             })}
-            {[0, 36, 72, 108, 144].map((angle, i) => (
-              <ellipse key={i} cx="132" cy="132" rx="50" ry="97"
-                fill="none" stroke="rgba(147,197,253,.11)" strokeWidth=".7"
-                className="globe-meridian"
-                style={{ animationDelay: `${i * 1.6}s`, animationDuration: '8s', transformOrigin: '132px 132px', transformBox: 'fill-box' }}
-                transform={`rotate(${angle}, 132, 132)`}/>
-            ))}
-            {/* Massas de terra estilizadas */}
-            <path d="M 120 75 Q 142 68 158 78 Q 170 92 164 110 Q 150 118 128 115 Q 110 110 106 92 Z"
-              fill="rgba(37,99,235,.42)" stroke="rgba(147,197,253,.45)" strokeWidth=".7"/>
-            <path d="M 84 114 Q 98 108 110 120 Q 105 138 86 135 Q 72 128 84 114 Z"
-              fill="rgba(37,99,235,.32)" stroke="rgba(147,197,253,.3)" strokeWidth=".6"/>
-            <path d="M 135 140 Q 158 134 172 152 Q 170 170 152 175 Q 130 173 128 156 Z"
-              fill="rgba(37,99,235,.36)" stroke="rgba(147,197,253,.4)" strokeWidth=".6"/>
-            <path d="M 97 150 Q 114 146 120 160 Q 115 173 97 171 Q 84 162 97 150 Z"
-              fill="rgba(37,99,235,.24)" stroke="rgba(147,197,253,.26)" strokeWidth=".5"/>
+            {/* Meridianos + massas de terra — grupo rotaciona no eixo Y */}
+            <g className="globe-rotate">
+              {[0, 36, 72, 108, 144].map((angle, i) => (
+                <ellipse key={i} cx="132" cy="132" rx="97" ry="97"
+                  fill="none" stroke="rgba(147,197,253,.13)" strokeWidth=".7"
+                  transform={`rotate(${angle}, 132, 132)`}/>
+              ))}
+              {/* Massas de terra */}
+              <path d="M 120 75 Q 142 68 158 78 Q 170 92 164 110 Q 150 118 128 115 Q 110 110 106 92 Z"
+                fill="rgba(37,99,235,.5)" stroke="rgba(147,197,253,.5)" strokeWidth=".7"/>
+              <path d="M 84 114 Q 98 108 110 120 Q 105 138 86 135 Q 72 128 84 114 Z"
+                fill="rgba(37,99,235,.38)" stroke="rgba(147,197,253,.35)" strokeWidth=".6"/>
+              <path d="M 135 140 Q 158 134 172 152 Q 170 170 152 175 Q 130 173 128 156 Z"
+                fill="rgba(37,99,235,.42)" stroke="rgba(147,197,253,.45)" strokeWidth=".6"/>
+              <path d="M 97 150 Q 114 146 120 160 Q 115 173 97 171 Q 84 162 97 150 Z"
+                fill="rgba(37,99,235,.28)" stroke="rgba(147,197,253,.3)" strokeWidth=".5"/>
+              {/* Continente extra no lado oposto para preencher na rotação */}
+              <path d="M 60 90 Q 80 82 94 95 Q 90 115 68 112 Q 52 102 60 90 Z"
+                fill="rgba(37,99,235,.35)" stroke="rgba(147,197,253,.35)" strokeWidth=".6"/>
+              <path d="M 175 105 Q 192 98 200 112 Q 198 130 180 132 Q 164 124 175 105 Z"
+                fill="rgba(37,99,235,.32)" stroke="rgba(147,197,253,.3)" strokeWidth=".6"/>
+            </g>
           </g>
 
           {/* Globe border */}

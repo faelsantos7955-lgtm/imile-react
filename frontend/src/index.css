@@ -199,12 +199,16 @@ table { border-collapse: collapse; }
 @keyframes route-flash { 0%,100% { opacity: 0; } 50% { opacity: .7; } }
 @keyframes ring-pulse  { 0% { r: 4; opacity: .9; } 100% { r: 22; opacity: 0; } }
 
-/* Meridianos do globo — efeito de rotação por mudança de rx */
-@keyframes meridian-spin {
-  0%,100% { rx: 50px; opacity: .18; }
-  25%,75% { rx: 2px;  opacity: .03; }
+/* Globo — rotação real no eixo Y */
+@keyframes globe-spin {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
 }
-.globe-meridian { animation: meridian-spin 8s ease-in-out infinite; }
+.globe-rotate {
+  animation: globe-spin 28s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
 
 /* Pins pulsantes */
 @keyframes pin-pulse {
@@ -235,5 +239,5 @@ table { border-collapse: collapse; }
 .box-float    { animation: box-float 3.5s ease-in-out infinite; }
 .signal-blink { animation: signal-blink 1.8s ease-in-out infinite; }
 .route-flow   { animation: route-flow 3s linear infinite; }
-.radar-rotate { animation: radar-rotate 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+.radar-rotate { animation: radar-rotate 6s linear infinite; }
 .scanline     { animation: scanline 5s linear infinite; }
