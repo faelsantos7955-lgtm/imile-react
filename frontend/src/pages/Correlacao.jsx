@@ -11,60 +11,6 @@ import { Loader, AlertCircle, TrendingUp } from 'lucide-react'
 import { Card, SectionHeader } from '../components/ui'
 import api from '../lib/api'
 
-// ── Hero Correlação ───────────────────────────────────────────
-function HeroCorrelacao() {
-  const pontos = [
-    { cx: 620, cy: 60,  r: 8,  delay: '0s'   },
-    { cx: 680, cy: 90,  r: 11, delay: '0.5s' },
-    { cx: 720, cy: 50,  r: 7,  delay: '1s'   },
-    { cx: 660, cy: 120, r: 14, delay: '1.5s' },
-    { cx: 740, cy: 100, r: 9,  delay: '2s'   },
-    { cx: 700, cy: 70,  r: 6,  delay: '2.5s' },
-  ]
-  return (
-    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
-      style={{ background: '#0a0d2e', minHeight: 168 }}>
-      <div className="blob blob-a" style={{ width: 380, height: 380, top: -150, left: -90, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
-      <div className="blob blob-b" style={{ width: 280, height: 280, top: -60, right: -40, background: 'radial-gradient(circle,#8b5cf6 0%,transparent 70%)', opacity: 0.22 }} />
-      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
-
-      {/* Scatter plot decorativo */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 168" preserveAspectRatio="xMidYMid slice">
-        {/* Eixos */}
-        <line x1={560} y1={148} x2={790} y2={148} stroke="rgba(255,255,255,0.15)" strokeWidth={1}/>
-        <line x1={560} y1={148} x2={560} y2={28}  stroke="rgba(255,255,255,0.15)" strokeWidth={1}/>
-        {/* Linha de tendência */}
-        <path d="M575,138 L780,42" stroke="rgba(139,92,246,0.4)" strokeWidth={1.5} strokeDasharray="6 5" className="route-flow"/>
-        {/* Pontos do scatter */}
-        {pontos.map((p, i) => (
-          <g key={i}>
-            <circle cx={p.cx} cy={p.cy} r={p.r} fill="rgba(139,92,246,0.25)" stroke="rgba(139,92,246,0.6)" strokeWidth={0.8}/>
-            <circle cx={p.cx} cy={p.cy} r={p.r + 5} fill="none" stroke="rgba(139,92,246,0.3)" strokeWidth={0.6}
-              className="hub-ring" style={{ animationDelay: p.delay, animationDuration: '3s' }}/>
-          </g>
-        ))}
-        {/* Risco extremo — ponto vermelho */}
-        <circle cx={755} cy={45}  r={13} fill="rgba(239,68,68,0.3)"  stroke="rgba(239,68,68,0.7)"  strokeWidth={1}/>
-        <circle cx={755} cy={45}  r={18} fill="none" stroke="rgba(239,68,68,0.4)" strokeWidth={0.8}
-          className="hub-ring" style={{ animationDelay: '1s', animationDuration: '2s' }}/>
-        {/* Label eixos */}
-        <text x={790} y={152} fill="rgba(255,255,255,0.25)" fontSize={8} textAnchor="end" fontFamily="monospace">Backlog</text>
-        <text x={555} y={26}  fill="rgba(255,255,255,0.25)" fontSize={8} textAnchor="end" fontFamily="monospace" writingMode="tb">Recl.</text>
-        {/* Rota de conexão entre páginas */}
-        <path d="M0,90 Q200,60 400,80 Q500,88 560,88" stroke="rgba(255,255,255,0.06)" strokeWidth="1.5" strokeDasharray="8 8" className="route-flow" style={{ animationDelay: '1s' }}/>
-      </svg>
-
-      <div className="relative z-10 px-6 py-5">
-        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
-          style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', color: 'rgba(200,180,255,.9)' }}>
-          ANÁLISE DE RISCO
-        </div>
-        <h2 className="text-white font-bold text-[20px] leading-tight">Correlação Backlog × Reclamações</h2>
-        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>DS com alto backlog vencido e muitas reclamações — maior risco operacional</p>
-      </div>
-    </div>
-  )
-}
 
 const RISCO_COR = (risco) => {
   if (risco >= 70) return '#ef4444'   // vermelho
@@ -168,43 +114,36 @@ export default function Correlacao() {
 
   return (
     <div>
-      <HeroCorrelacao />
-
-      {/* Data refs */}
-      <div className="flex flex-wrap gap-3 mb-4 text-xs text-slate-500">
-        {backlogDR && <span className="bg-slate-100 px-2 py-1 rounded-lg">Backlog: {backlogDR}</span>}
-        {recDR     && <span className="bg-slate-100 px-2 py-1 rounded-lg">Reclamações: {recDR}</span>}
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Correlação Backlog × Reclamações</h1>
+          <div className="page-sub">DS com alto backlog vencido e muitas reclamações — maior risco operacional
+            {backlogDR && <> · Backlog: <strong>{backlogDR}</strong></>}
+            {recDR     && <> · Reclamações: <strong>{recDR}</strong></>}
+          </div>
+        </div>
+        <div className="page-actions">
+          {supervisores.length > 0 && (
+            <select value={filtroSup} onChange={e => setFiltroSup(e.target.value)} className="filter-select">
+              <option value="">Todos os supervisores</option>
+              {supervisores.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+        </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: 'DS analisadas',   val: dados.length },
-          { label: 'DS críticas',     val: dados.filter(d => d.risco >= 70).length,  cls: 'text-red-600' },
-          { label: 'DS risco alto',   val: dados.filter(d => d.risco >= 40 && d.risco < 70).length, cls: 'text-orange-600' },
-          { label: 'Média backlog>7d', val: `${mediaX.toFixed(1)}%` },
-        ].map(({ label, val, cls = 'text-slate-800' }) => (
-          <Card key={label} className="text-center py-4">
-            <p className={`text-2xl font-bold ${cls}`}>{val}</p>
-            <p className="text-xs text-slate-500 mt-1">{label}</p>
-          </Card>
-        ))}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+        <div className="kpi"><div className="kpi-head"><div className="kpi-label">DS analisadas</div></div><div className="kpi-value">{dados.length}</div></div>
+        <div className="kpi"><div className="kpi-head"><div className="kpi-label">DS críticas</div><div className="kpi-icon danger"><TrendingUp size={14}/></div></div><div className="kpi-value" style={{color:'var(--danger-600)'}}>{dados.filter(d=>d.risco>=70).length}</div></div>
+        <div className="kpi"><div className="kpi-head"><div className="kpi-label">DS risco alto</div></div><div className="kpi-value" style={{color:'var(--warn-600)'}}>{dados.filter(d=>d.risco>=40&&d.risco<70).length}</div></div>
+        <div className="kpi"><div className="kpi-head"><div className="kpi-label">Média backlog &gt;7d</div></div><div className="kpi-value">{mediaX.toFixed(1)}<span className="unit">%</span></div></div>
       </div>
 
-      {/* Filtro supervisor */}
-      {supervisores.length > 0 && (
-        <div className="mb-4">
-          <select value={filtroSup} onChange={e => setFiltroSup(e.target.value)}
-            className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-            <option value="">Todos os supervisores</option>
-            {supervisores.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-      )}
-
       {/* Scatter Chart */}
-      <SectionHeader title="Mapa de Risco: Backlog >7d (%) × Reclamações" />
-      <Card>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-head"><h3 className="card-title">Mapa de Risco — Backlog &gt;7d × Reclamações</h3></div>
+        <div className="card-body">
         <div className="flex gap-4 text-xs text-slate-500 mb-3 flex-wrap">
           {[
             { cor: '#ef4444', label: 'Crítico (≥70)' },
@@ -247,24 +186,22 @@ export default function Correlacao() {
             </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
-        <p className="text-xs text-slate-400 mt-2 text-center">
+        <p className="card-sub" style={{ marginTop: 8 }}>
           Tamanho do ponto proporcional ao volume de orders · Quadrante superior direito = maior risco
         </p>
-      </Card>
+        </div>
+      </div>
 
       {/* Tabela de risco */}
-      <SectionHeader title="Ranking de Risco por DS" />
-      <Card className="p-0 overflow-hidden">
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="card-head"><h3 className="card-title">Ranking de Risco por DS</h3></div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="tbl">
             <thead>
-              <tr className="bg-slate-800 text-white text-xs">
-                <th className="px-4 py-3 text-left">DS</th>
-                <th className="px-4 py-3 text-left">Supervisor</th>
-                {thBtn('backlog',     'Backlog')}
-                {thBtn('pct_7d',      '>7d (%)')}
-                {thBtn('reclamacoes', 'Reclamações')}
-                {thBtn('risco',       'Risco')}
+              <tr>
+                <th>DS</th><th>Supervisor</th>
+                {thBtn('backlog','Backlog')}{thBtn('pct_7d','>7d (%)')}
+                {thBtn('reclamacoes','Reclamações')}{thBtn('risco','Risco')}
               </tr>
             </thead>
             <tbody>
@@ -298,7 +235,7 @@ export default function Correlacao() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }

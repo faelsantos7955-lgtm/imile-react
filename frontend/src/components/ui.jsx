@@ -18,18 +18,18 @@ export const toast = {
 export const chartTheme = {
   tooltip: {
     contentStyle: {
-      background: '#0a1628',
-      border: '1px solid rgba(255,255,255,.08)',
+      background: '#ffffff',
+      border: '1px solid #e5e9f0',
       borderRadius: 10,
-      color: '#fff',
+      color: '#1a2030',
       fontSize: 12,
-      boxShadow: '0 8px 32px rgba(0,0,0,.35)',
+      boxShadow: '0 4px 12px rgba(15,23,42,.08)',
     },
-    labelStyle: { color: 'rgba(255,255,255,.6)', fontSize: 11, marginBottom: 4 },
-    itemStyle:  { color: '#fff' },
-    cursor:     { fill: 'rgba(0,50,160,.06)' },
+    labelStyle: { color: '#64748b', fontSize: 11, marginBottom: 4 },
+    itemStyle:  { color: '#1a2030' },
+    cursor:     { fill: 'rgba(29,78,216,.04)' },
   },
-  grid:    { strokeDasharray: '3 3', stroke: '#f1f5f9' },
+  grid:    { strokeDasharray: '3 3', stroke: '#eef1f6' },
   axisStyle: { fontSize: 11, fill: '#94a3b8' },
 }
 

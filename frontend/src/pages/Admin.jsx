@@ -69,7 +69,7 @@ const ROLE_COR = {
 function UploadPage() {
   return (
     <div>
-      <PageHeader icon="📤" title="Upload / Processar" subtitle="Instruções para processar e enviar dados ao portal" />
+      <div className="page-head" style={{marginBottom:20}}><div><h1 className="page-title">Upload / Processar</h1><div className="page-sub">Instruções para processar e enviar dados ao portal</div></div></div>
       <Alert type="info">
         O processamento é feito <strong>localmente</strong> via <code className="bg-blue-100 px-1 rounded">processar.py</code>. Abra o <code className="bg-blue-100 px-1 rounded">PROCESSAR.bat</code> na máquina admin.
       </Alert>
@@ -431,7 +431,7 @@ function SolicitacoesPage() {
 
   return (
     <div>
-      <PageHeader icon="👥" title="Solicitações & Usuários" subtitle="Gerencie acessos e permissões do portal" />
+      <div className="page-head" style={{marginBottom:20}}><div><h1 className="page-title">Solicitações & Usuários</h1><div className="page-sub">Gerencie acessos e permissões do portal</div></div></div>
 
       <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-xl w-fit">
         {[['pendentes', `Pendentes (${solicitacoes.length})`], ['usuarios', `Usuários (${usuarios.length})`]].map(([k, l]) => (
@@ -617,7 +617,7 @@ function ConfigPage() {
 
   return (
     <div>
-      <PageHeader icon="⚙️" title="Configurações" subtitle="Gerenciamento de motoristas bloqueados" />
+      <div className="page-head" style={{marginBottom:20}}><div><h1 className="page-title">Configurações</h1><div className="page-sub">Gerenciamento de motoristas bloqueados</div></div></div>
 
       <SectionHeader title="Bloquear Motorista Manualmente" />
       <Card>
@@ -722,7 +722,7 @@ function AuditLogPage() {
 
   return (
     <div>
-      <PageHeader icon="📋" title="Histórico de Ações" subtitle="Registro de todas as ações administrativas" />
+      <div className="page-head" style={{marginBottom:20}}><div><h1 className="page-title">Histórico de Ações</h1><div className="page-sub">Registro de todas as ações administrativas</div></div></div>
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 mb-4">
@@ -866,7 +866,7 @@ function SupervisoresPage() {
 
   return (
     <div>
-      <PageHeader icon="🗺️" title="Mapa de Supervisores" subtitle="Vincula cada DS ao supervisor responsável" />
+      <div className="page-head" style={{marginBottom:20}}><div><h1 className="page-title">Mapa de Supervisores</h1><div className="page-sub">Vincula cada DS ao supervisor responsável</div></div></div>
 
       <Card className="mb-6">
         <p className="text-sm text-slate-600 mb-3">
@@ -986,7 +986,7 @@ function MetasPage() {
 
   return (
     <div>
-      <PageHeader icon="🎯" title="Metas por DS" subtitle="Defina as metas de expedição e entrega por estação de destino" />
+      <div className="page-head" style={{marginBottom:20}}><div><h1 className="page-title">Metas por DS</h1><div className="page-sub">Defina as metas de expedição e entrega por estação</div></div></div>
 
       <SectionHeader title="Adicionar / Atualizar Meta" />
       <Card>
@@ -1104,37 +1104,39 @@ function MetasPage() {
 
 // ── Admin root ────────────────────────────────────────────────
 export default function Admin() {
-  const tabClass = isActive =>
-    `flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-      isActive ? 'bg-imile-500 text-white' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-    }`
-
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-6 bg-white border border-slate-200 p-1.5 rounded-xl w-fit">
-        <NavLink to="/admin" end className={({ isActive }) => tabClass(isActive)}>
-          <Upload size={15} /> Upload / Processar
+      <div className="page-head" style={{ marginBottom: 20 }}>
+        <div>
+          <h1 className="page-title">Administração</h1>
+          <div className="page-sub">Configurações, usuários, dados e integrações</div>
+        </div>
+      </div>
+
+      <div className="tabs" style={{ marginBottom: 24 }}>
+        <NavLink to="/admin" end className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <Upload size={13} /> Upload
         </NavLink>
-        <NavLink to="/admin/users" className={({ isActive }) => tabClass(isActive)}>
-          <Users size={15} /> Solicitações
+        <NavLink to="/admin/users" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <Users size={13} /> Solicitações
         </NavLink>
-        <NavLink to="/admin/config" className={({ isActive }) => tabClass(isActive)}>
-          <Settings size={15} /> Configurações
+        <NavLink to="/admin/config" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <Settings size={13} /> Configurações
         </NavLink>
-        <NavLink to="/admin/auditlog" className={({ isActive }) => tabClass(isActive)}>
-          <History size={15} /> Histórico
+        <NavLink to="/admin/auditlog" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <History size={13} /> Histórico
         </NavLink>
-        <NavLink to="/admin/metas" className={({ isActive }) => tabClass(isActive)}>
-          <Target size={15} /> Metas por DS
+        <NavLink to="/admin/metas" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <Target size={13} /> Metas por DS
         </NavLink>
-        <NavLink to="/admin/lote" className={({ isActive }) => tabClass(isActive)}>
-          <PackageSearch size={15} /> Carga em Lote
+        <NavLink to="/admin/lote" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <PackageSearch size={13} /> Carga em Lote
         </NavLink>
-        <NavLink to="/admin/monitoramento" className={({ isActive }) => tabClass(isActive)}>
-          <Upload size={15} /> Monitoramento
+        <NavLink to="/admin/monitoramento" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <Upload size={13} /> Monitoramento
         </NavLink>
-        <NavLink to="/admin/supervisores" className={({ isActive }) => tabClass(isActive)}>
-          <Users size={15} /> Supervisores
+        <NavLink to="/admin/supervisores" className={({ isActive }) => `tab${isActive ? ' active' : ''}`}>
+          <Users size={13} /> Supervisores
         </NavLink>
       </div>
 

@@ -21,75 +21,6 @@ import clsx from 'clsx'
 const fmt = (n) => (n ?? 0).toLocaleString('pt-BR')
 const pct = (n) => `${(n ?? 0).toFixed(1)}%`
 
-// ── Hero Not Arrived ──────────────────────────────────────────
-function HeroNa() {
-  return (
-    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
-      style={{ background: '#0a0d2e', minHeight: 168 }}>
-      <div className="blob blob-a" style={{ width: 380, height: 380, top: -150, left: -90, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
-      <div className="blob blob-b" style={{ width: 280, height: 280, top: -60, right: -40, background: 'radial-gradient(circle,#0891b2 0%,transparent 70%)', opacity: 0.22 }} />
-      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
-
-      {/* Caminhão "parado" com delay longo */}
-      <div className="absolute pointer-events-none"
-        style={{ bottom: 26, left: 0, animation: 'truck-move 20s linear infinite', animationDelay: '3s' }}>
-        <svg width={260} height={52} viewBox="0 0 260 52" fill="none">
-          <rect x={2} y={8} width={148} height={32} rx={3} fill="white" fillOpacity={0.88}/>
-          <rect x={2} y={32} width={148} height={8} rx={2} fill="#0032A0"/>
-          <text x={40} y={27} fontFamily="Arial,sans-serif" fontSize={8} fontWeight="bold" fill="#0032A0" fillOpacity={0.7} letterSpacing={3}>iMile</text>
-          <path d="M154 8 L154 42 L252 42 L252 26 L246 8 Z" fill="#0032A0"/>
-          <path d="M163 8 Q168 3 196 3 L246 3 L252 11 L246 8 L163 8 Z" fill="#0028a0"/>
-          <path d="M220 5 L248 5 L252 14 L220 14 Z" fill="white" fillOpacity={0.12}/>
-          <rect x={158} y={12} width={22} height={12} rx={2} fill="white" fillOpacity={0.15}/>
-          <rect x={249} y={25} width={4} height={8} rx={1} fill="#001d6e"/>
-          <rect x={246} y={34} width={6} height={6} rx={1} fill="white" fillOpacity={0.85}/>
-          <rect x={249} y={13} width={4} height={6} rx={1} fill="white" fillOpacity={0.9}/>
-          {[22,37].map(cx => (
-            <g key={cx}><circle cx={cx} cy={46} r={6} fill="#1a1a2e" stroke="white" strokeWidth={1} strokeOpacity={0.5}/><circle cx={cx} cy={46} r={3.5} fill="#111122" stroke="#0032A0" strokeWidth={0.8}/><circle cx={cx} cy={46} r={1.5} fill="white" fillOpacity={0.7}/></g>
-          ))}
-          {[185,228].map(cx => (
-            <g key={cx}><circle cx={cx} cy={46} r={7} fill="#1a1a2e" stroke="white" strokeWidth={1.2} strokeOpacity={0.5}/><circle cx={cx} cy={46} r={4} fill="#111122" stroke="#0032A0" strokeWidth={1}/><circle cx={cx} cy={46} r={1.8} fill="white" fillOpacity={0.7}/></g>
-          ))}
-        </svg>
-      </div>
-
-      {/* Pins de destino pulsando */}
-      {[
-        { right: '30%', top: '18%', delay: '0s'   },
-        { right: '22%', top: '32%', delay: '1.2s' },
-        { right: '38%', top: '25%', delay: '2.4s' },
-      ].map((p, i) => (
-        <div key={i} className="absolute pointer-events-none"
-          style={{ right: p.right, top: p.top, animationDelay: p.delay }}>
-          <div className="relative">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center signal-blink"
-              style={{ background: 'rgba(8,145,178,0.25)', border: '1px solid rgba(8,145,178,0.5)', animationDelay: p.delay }}>
-              <div className="w-2 h-2 rounded-full bg-cyan-400"/>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Rota pontilhada */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 168" preserveAspectRatio="xMidYMid slice">
-        <path d="M-50,130 L480,130 Q550,130 590,80" stroke="rgba(8,145,178,0.25)" strokeWidth="1.5" strokeDasharray="8 8" className="route-flow"/>
-        <circle cx={590} cy={80} r={5} fill="rgba(8,145,178,0.7)" className="signal-blink"/>
-        <circle cx={590} cy={80} r={12} fill="none" stroke="rgba(8,145,178,0.35)" strokeWidth={0.8} className="hub-ring"/>
-        {/* Ponto de interrogação — pacote não chegou */}
-        <text x={600} y={50} fill="rgba(8,145,178,0.6)" fontSize={22} fontWeight="bold" fontFamily="monospace">?</text>
-      </svg>
-
-      <div className="relative z-10 px-6 py-5">
-        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
-          style={{ background: 'rgba(8,145,178,0.1)', border: '1px solid rgba(8,145,178,0.3)', color: 'rgba(130,220,240,.9)' }}>
-          NOT ARRIVED 有发未到
-        </div>
-        <h2 className="text-white font-bold text-[20px] leading-tight">Pacotes Não Recebidos</h2>
-        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Expedidos e ainda não chegaram ao destino</p>
-      </div>
-    </div>
-  )
-}
 
 // ── Upload Panel ───────────────────────────────────────────────
 function UploadPanel({ onClose, onSuccess }) {
@@ -654,42 +585,28 @@ export default function Na() {
 
   return (
     <div className="space-y-6 max-w-[1600px]">
-      <HeroNa />
-      {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="page-head">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-imile-500 mb-0.5">
-            Relatório de Exceção
-          </p>
-          <h1 className="text-2xl font-bold text-slate-900 leading-tight">Not Arrived</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Pacotes expedidos que ainda não chegaram ao destino (有发未到)
-          </p>
+          <h1 className="page-title">Not Arrived <span style={{fontSize:18,opacity:.5}}>有发未到</span></h1>
+          <div className="page-sub">Pacotes expedidos que ainda não chegaram ao destino</div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Tabs */}
-          <div className="flex bg-slate-100 rounded-lg p-0.5 text-xs font-semibold">
-            <button onClick={() => setView('dados')}
-              className={clsx('px-3 py-1.5 rounded-md transition-colors', view === 'dados' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
-              Dados
-            </button>
+        <div className="page-actions">
+          <div className="tabs" style={{ border: 'none', marginBottom: 0 }}>
+            <button className={`tab${view==='dados'?' active':''}`} onClick={() => setView('dados')}>Dados</button>
             {uploads.length > 1 && (
-              <button onClick={() => setView('historico')}
-                className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors', view === 'historico' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              <button className={`tab${view==='historico'?' active':''}`} onClick={() => setView('historico')}>
                 <History size={12} /> Histórico
               </button>
             )}
           </div>
           {selectedId && view === 'dados' && (
-            <button onClick={handleExcel} disabled={downloading}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors">
-              <Download size={14} />
-              {downloading ? 'Gerando…' : 'Excel'}
+            <button onClick={handleExcel} disabled={downloading} className="btn">
+              <Download size={14}/>{downloading ? 'Gerando…' : 'Excel'}
             </button>
           )}
-          <Button onClick={() => setShowPanel(true)} size="md">
-            <Upload size={14} /> Novo Upload
-          </Button>
+          <button onClick={() => setShowPanel(true)} className="btn btn-primary">
+            <Upload size={14}/> Novo Upload
+          </button>
         </div>
       </div>
 
@@ -725,29 +642,26 @@ export default function Na() {
 
           {/* KPIs */}
           {upload && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KpiCard label="Total Waybills"   value={fmt(upload.total)}          color="blue"   icon={PackageX} />
-              <KpiCard
-                label={thresholdLabel}
-                value={fmt(upload.grd10d)}
-                sub={upload.total > 0 ? `${(upload.grd10d / upload.total * 100).toFixed(1)}% do total` : ''}
-                color="red"
-                icon={AlertTriangle}
-              />
-              <KpiCard
-                label="Offloaded"
-                value={fmt(upload.total_offload)}
-                sub={upload.total > 0 ? `${(upload.total_offload / upload.total * 100).toFixed(1)}% do total` : ''}
-                color="orange"
-                icon={Truck}
-              />
-              <KpiCard
-                label="Confirmados"
-                value={fmt(upload.total_arrive)}
-                sub={upload.total > 0 ? `${(upload.total_arrive / upload.total * 100).toFixed(1)}% do total` : ''}
-                color="green"
-                icon={PackageCheck}
-              />
+            <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+              <div className="kpi">
+                <div className="kpi-head"><div className="kpi-label">Total Waybills</div><div className="kpi-icon"><PackageX size={14}/></div></div>
+                <div className="kpi-value">{fmt(upload.total)}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-head"><div className="kpi-label">{thresholdLabel}</div><div className="kpi-icon danger"><AlertTriangle size={14}/></div></div>
+                <div className="kpi-value" style={{color:'var(--danger-600)'}}>{fmt(upload.grd10d)}</div>
+                <div className="kpi-foot"><span className="muted">{upload.total > 0 ? `${(upload.grd10d / upload.total * 100).toFixed(1)}% do total` : ''}</span></div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-head"><div className="kpi-label">Offloaded</div><div className="kpi-icon warn"><Truck size={14}/></div></div>
+                <div className="kpi-value">{fmt(upload.total_offload)}</div>
+                <div className="kpi-foot"><span className="muted">{upload.total > 0 ? `${(upload.total_offload / upload.total * 100).toFixed(1)}% do total` : ''}</span></div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-head"><div className="kpi-label">Confirmados</div><div className="kpi-icon success"><PackageCheck size={14}/></div></div>
+                <div className="kpi-value" style={{color:'var(--success-600)'}}>{fmt(upload.total_arrive)}</div>
+                <div className="kpi-foot"><span className="muted">{upload.total > 0 ? `${(upload.total_arrive / upload.total * 100).toFixed(1)}% do total` : ''}</span></div>
+              </div>
             </div>
           )}
 

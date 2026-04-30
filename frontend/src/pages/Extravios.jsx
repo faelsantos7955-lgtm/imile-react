@@ -12,68 +12,6 @@ import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme, Logi
 import { useAuth } from '../lib/AuthContext'
 import api, { pollJob } from '../lib/api'
 
-// ── Hero Extravios ────────────────────────────────────────────
-function HeroExtravios() {
-  return (
-    <div className="relative overflow-hidden -mx-4 -mt-4 lg:-mx-8 lg:-mt-8 mb-6"
-      style={{ background: '#0a0d2e', minHeight: 168 }}>
-      <div className="blob blob-a" style={{ width: 380, height: 380, top: -150, left: -90, background: 'radial-gradient(circle,#0032A0 0%,transparent 70%)', opacity: 0.5 }} />
-      <div className="blob blob-b" style={{ width: 300, height: 300, top: -70, right: -50, background: 'radial-gradient(circle,#dc2626 0%,transparent 70%)', opacity: 0.28 }} />
-      <div className="blob blob-c" style={{ width: 200, height: 200, bottom: -60, left: '50%', background: 'radial-gradient(circle,#f97316 0%,transparent 70%)', opacity: 0.18 }} />
-      <div className="grid-3d absolute bottom-0 left-0 right-0" style={{ height: 70 }} />
-
-      {/* Caixas danificadas flutuando */}
-      {[
-        { right: '32%', bottom: '52%', delay: '0s',   dur: '3.2s' },
-        { right: '26%', bottom: '62%', delay: '1.1s', dur: '4s'   },
-        { right: '38%', bottom: '44%', delay: '2.2s', dur: '3.6s' },
-      ].map((b, i) => (
-        <div key={i} className="absolute pointer-events-none box-float"
-          style={{ right: b.right, bottom: b.bottom, animationDelay: b.delay, animationDuration: b.dur }}>
-          <svg width={28} height={26} viewBox="0 0 28 26" fill="none">
-            <rect x={1} y={5} width={26} height={20} rx={3} fill="rgba(239,68,68,0.25)" stroke="rgba(239,68,68,0.5)" strokeWidth={0.8}/>
-            <path d="M1 11 L27 11" stroke="rgba(239,68,68,0.3)" strokeWidth={0.6}/>
-            <path d="M11 5 L11 11" stroke="rgba(239,68,68,0.3)" strokeWidth={0.6}/>
-            {/* X mark */}
-            <path d="M8 14 L14 20 M14 14 L8 20" stroke="rgba(239,68,68,0.85)" strokeWidth={1.5} strokeLinecap="round"/>
-            {/* Crack */}
-            <path d="M20 6 L22 9 L19 11 L21 15" stroke="rgba(239,68,68,0.5)" strokeWidth={0.8} strokeLinecap="round"/>
-          </svg>
-        </div>
-      ))}
-
-      {/* Lupa de investigação */}
-      <div className="absolute right-16 top-1/2 -translate-y-1/2 hidden md:block signal-blink" style={{ animationDuration: '3s' }}>
-        <svg width={64} height={64} viewBox="0 0 64 64" fill="none" opacity={0.55}>
-          <circle cx={26} cy={26} r={18} stroke="rgba(255,255,255,0.4)" strokeWidth={2.5}/>
-          <circle cx={26} cy={26} r={18} stroke="rgba(239,68,68,0.3)" strokeWidth={5} strokeDasharray="8 4"/>
-          <line x1={40} y1={40} x2={58} y2={58} stroke="rgba(255,255,255,0.4)" strokeWidth={3} strokeLinecap="round"/>
-          <circle cx={26} cy={26} r={10} fill="rgba(239,68,68,0.08)" stroke="rgba(239,68,68,0.25)" strokeWidth={0.8}/>
-        </svg>
-      </div>
-
-      {/* Rotas vermelhas */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 168" preserveAspectRatio="xMidYMid slice">
-        <path d="M-50,140 L400,140" stroke="rgba(239,68,68,0.2)" strokeWidth="1.5" strokeDasharray="8 8" className="route-flow"/>
-        <path d="M400,140 Q500,140 560,100" stroke="rgba(239,68,68,0.35)" strokeWidth="1.5" strokeDasharray="6 6" className="route-flow" style={{ animationDelay: '0.5s' }}/>
-        {[120, 250, 380].map((cx, i) => (
-          <g key={i}>
-            <circle cx={cx} cy={140} r={3} fill="rgba(239,68,68,0.7)" className="signal-blink" style={{ animationDelay: `${i * 0.6}s` }}/>
-          </g>
-        ))}
-      </svg>
-
-      <div className="relative z-10 px-6 py-5">
-        <div className="inline-flex items-center gap-1.5 mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest"
-          style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: 'rgba(255,180,180,.9)' }}>
-          EXTRAVIOS & AVARIAS
-        </div>
-        <h2 className="text-white font-bold text-[20px] leading-tight">Controle de Extravios</h2>
-        <p className="text-[12px] mt-1" style={{ color: 'rgba(255,255,255,0.42)' }}>Perdas e avarias por DS, motivo e período</p>
-      </div>
-    </div>
-  )
-}
 
 const CORES_MOTIVO = [
   '#ef4444', '#f97316', '#eab308', '#84cc16',
@@ -81,15 +19,6 @@ const CORES_MOTIVO = [
 ]
 const BRL = (v) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-function KPI({ label, value, sub, cls = '' }) {
-  return (
-    <Card className="text-center py-4">
-      <p className={`text-2xl font-bold ${cls}`}>{value}</p>
-      {sub && <p className="text-sm font-medium text-slate-500 mt-0.5">{sub}</p>}
-      <p className="text-xs text-slate-400 mt-1">{label}</p>
-    </Card>
-  )
-}
 
 function UploadZone({ onSuccess }) {
   const [uploading, setUploading] = useState(false)
@@ -197,35 +126,20 @@ export default function Extravios() {
 
   return (
     <div>
-      <HeroExtravios />
-
-      {/* Upload + seletor */}
-      <div className="flex flex-wrap gap-3 items-center mb-6">
-        {uploads.length > 0 && (
-          <select
-            value={uploadSel ?? ''}
-            onChange={e => setUploadSel(Number(e.target.value))}
-            className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white min-w-[200px]"
-          >
-            {uploads.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.data_ref || 'Sem data'} — {u.total?.toLocaleString('pt-BR')} registros
-              </option>
-            ))}
-          </select>
-        )}
-        {uploadSel && (
-          <button onClick={handleExcel} disabled={baixando}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors">
-            {baixando ? <Loader size={13} className="animate-spin" /> : <Download size={13} />} Excel
-          </button>
-        )}
-        {isAdmin && uploadSel && (
-          <button onClick={deletar} disabled={deletando}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50">
-            {deletando ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />} Excluir
-          </button>
-        )}
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Extravios</h1>
+          <div className="page-sub">Perdas e avarias · {up?.total?.toLocaleString('pt-BR') || 0} ocorrências · {uploads.find(u=>u.id===uploadSel)?.data_ref || '—'}</div>
+        </div>
+        <div className="page-actions">
+          {uploads.length > 0 && (
+            <select value={uploadSel ?? ''} onChange={e => setUploadSel(Number(e.target.value))} className="filter-select">
+              {uploads.map(u => <option key={u.id} value={u.id}>{u.data_ref || 'Sem data'} — {u.total?.toLocaleString('pt-BR')} reg.</option>)}
+            </select>
+          )}
+          {uploadSel && <button onClick={handleExcel} disabled={baixando} className="btn"><Download size={14}/>{baixando?'Gerando…':'Excel'}</button>}
+          {isAdmin && uploadSel && <button onClick={deletar} disabled={deletando} className="btn" style={{color:'var(--danger-600)'}}><Trash2 size={14}/>Excluir</button>}
+        </div>
       </div>
 
       <UploadZone onSuccess={(id) => setUploadSel(id)} />
@@ -239,18 +153,19 @@ export default function Extravios() {
       {!loading && up && (
         <>
           {/* KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-            <KPI label="Total ocorrências" value={up.total?.toLocaleString('pt-BR')} cls="text-red-600" />
-            <KPI label="Valor declarado total" value={BRL(up.valor_total)} cls="text-orange-600" />
-            <KPI label="Goods Lost" value={porDs.reduce((s, d) => s + (d.total_lost || 0), 0).toLocaleString('pt-BR')} cls="text-red-700" />
-            <KPI label="Avarias" value={porDs.reduce((s, d) => s + (d.total_damaged || 0), 0).toLocaleString('pt-BR')} cls="text-amber-600" />
+          <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginTop: 16 }}>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Total ocorrências</div><div className="kpi-icon danger"><AlertCircle size={14}/></div></div><div className="kpi-value" style={{color:'var(--danger-600)'}}>{up.total?.toLocaleString('pt-BR')}</div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Valor declarado</div></div><div className="kpi-value" style={{fontSize:20}}>{BRL(up.valor_total)}</div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Goods Lost</div></div><div className="kpi-value" style={{color:'var(--danger-700)'}}>{porDs.reduce((s,d)=>s+(d.total_lost||0),0).toLocaleString('pt-BR')}</div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Avarias</div></div><div className="kpi-value" style={{color:'var(--warn-600)'}}>{porDs.reduce((s,d)=>s+(d.total_damaged||0),0).toLocaleString('pt-BR')}</div></div>
           </div>
 
           {/* Top DS */}
           {top15.length > 0 && (
             <>
-              <SectionHeader title="Top 15 DS por Ocorrências" />
-              <Card>
+              <div className="card" style={{ marginTop: 20 }}>
+                <div className="card-head"><h3 className="card-title">Top 15 DS por Ocorrências</h3></div>
+                <div className="card-body">
                 <ResponsiveContainer width="100%" height={340}>
                   <BarChart data={top15} layout="vertical" margin={{ left: 70, right: 30 }}>
                     <defs>
@@ -274,16 +189,17 @@ export default function Extravios() {
                     <Bar dataKey="total_damaged" stackId="a" fill="url(#gradDmgH)"  name="total_damaged" radius={[0,4,4,0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              </Card>
+                </div>
+              </div>
             </>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <div className="grid-2" style={{ marginTop: 20 }}>
             {/* Motivos */}
             {porMot.length > 0 && (
-              <div>
-                <SectionHeader title="Por Motivo" />
-                <Card>
+              <div className="card">
+                <div className="card-head"><h3 className="card-title">Por Motivo</h3></div>
+                <div className="card-body">
                   <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
                       <Pie data={porMot} dataKey="total" nameKey="motivo" cx="50%" cy="50%" outerRadius={100}
@@ -295,15 +211,15 @@ export default function Extravios() {
                       <Legend formatter={(v) => v.length > 35 ? v.slice(0, 35) + '…' : v} />
                     </PieChart>
                   </ResponsiveContainer>
-                </Card>
+                </div>
               </div>
             )}
 
             {/* Evolução por semana */}
             {porSem.length > 0 && (
-              <div>
-                <SectionHeader title="Evolução Semanal" />
-                <Card>
+              <div className="card">
+                <div className="card-head"><h3 className="card-title">Evolução Semanal</h3></div>
+                <div className="card-body">
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={porSem} margin={{ right: 20 }}>
                       <CartesianGrid {...chartTheme.grid} />
@@ -319,28 +235,22 @@ export default function Extravios() {
                       <Line yAxisId="right" type="monotone" dataKey="valor_total" stroke="#f97316" strokeWidth={2} dot={{ r: 4 }} name="valor_total" strokeDasharray="5 5" />
                     </LineChart>
                   </ResponsiveContainer>
-                </Card>
+                </div>
               </div>
             )}
           </div>
 
           {/* Tabela por DS */}
           {porDs.length > 0 && (
-            <>
-              <SectionHeader title={`Detalhe por DS (${porDs.length})`} />
-              <Card className="p-0 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+            <div className="card" style={{ marginTop: 20, padding: 0, overflow: 'hidden' }}>
+              <div className="card-head"><h3 className="card-title">Detalhe por DS ({porDs.length})</h3></div>
+              <div className="overflow-x-auto">
+                  <table className="tbl">
                     <thead>
-                      <tr className="text-[10px] uppercase text-white/70"
-                        style={{ background: 'linear-gradient(135deg,#0a1628,#1e3a5f)' }}>
-                        <th className="px-4 py-3 text-left">#</th>
-                        <th className="px-4 py-3 text-left">DS / Responsável</th>
-                        <th className="px-4 py-3 text-left">Supervisor</th>
-                        <th className="px-4 py-3 text-center">Total</th>
-                        <th className="px-4 py-3 text-center">Goods Lost</th>
-                        <th className="px-4 py-3 text-center">Avaria</th>
-                        <th className="px-4 py-3 text-right">Valor Declarado</th>
+                      <tr>
+                        <th>#</th><th>DS</th><th>Supervisor</th>
+                        <th className="num">Total</th><th className="num">Goods Lost</th>
+                        <th className="num">Avaria</th><th className="num">Valor Declarado</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -358,8 +268,7 @@ export default function Extravios() {
                     </tbody>
                   </table>
                 </div>
-              </Card>
-            </>
+              </div>
           )}
         </>
       )}

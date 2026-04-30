@@ -1,18 +1,18 @@
 /**
  * pages/Avisos.jsx — Quadro de Avisos
- * Todos os usuários logados veem os avisos ativos e marcam como lido.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, BellOff, CheckCheck, Info, AlertTriangle, Zap } from 'lucide-react'
-import { PageHeader, Button, EmptyState, toast } from '../components/ui'
+import { Bell, BellOff, CheckCheck, Info, AlertTriangle, Zap, Megaphone, Plus } from 'lucide-react'
+import { toast } from '../components/ui'
 import api from '../lib/api'
-import clsx from 'clsx'
 
 const TIPO_CONFIG = {
-  info:    { icon: Info,          bg: 'bg-imile-50',   border: 'border-imile-200',  text: 'text-imile-700',  badge: 'bg-imile-100 text-imile-700',  label: 'Informativo' },
-  aviso:   { icon: AlertTriangle, bg: 'bg-amber-50',   border: 'border-amber-200',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-700',  label: 'Aviso' },
-  urgente: { icon: Zap,           bg: 'bg-red-50',     border: 'border-red-200',    text: 'text-red-700',    badge: 'bg-red-100 text-red-700',      label: 'Urgente' },
+  info:    { kind: 'info',    label: 'Informativo' },
+  aviso:   { kind: 'warn',    label: 'Aviso' },
+  urgente: { kind: 'danger',  label: 'Urgente' },
 }
+
+const TIPO_ICON = { info: Info, aviso: AlertTriangle, urgente: Zap }
 
 function fmtData(iso) {
   if (!iso) return ''
@@ -20,52 +20,59 @@ function fmtData(iso) {
 }
 
 function AvisoCard({ aviso, onMarcarLido }) {
-  const cfg = TIPO_CONFIG[aviso.tipo] || TIPO_CONFIG.info
-  const Icone = cfg.icon
+  const cfg  = TIPO_CONFIG[aviso.tipo] || TIPO_CONFIG.info
+  const Icon = TIPO_ICON[aviso.tipo]   || Info
+  const variantBg = { info: 'var(--info-50)', warn: 'var(--warn-50)', danger: 'var(--danger-50)' }[cfg.kind]
+  const variantBorder = { info: 'var(--imile-200)', warn: 'var(--warn-100)', danger: 'var(--danger-100)' }[cfg.kind]
+  const variantText   = { info: 'var(--imile-700)', warn: 'var(--warn-600)', danger: 'var(--danger-600)' }[cfg.kind]
+
   return (
-    <div className={clsx(
-      'rounded-xl border p-5 transition-all duration-200 animate-in',
-      cfg.bg, cfg.border,
-      aviso.lido && 'opacity-60'
-    )}>
-      <div className="flex items-start gap-4">
-        <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', cfg.bg, 'border', cfg.border)}>
-          <Icone size={16} className={cfg.text} />
-        </div>
+    <div style={{
+      background: 'white', border: `1px solid var(--border)`,
+      borderRadius: 'var(--r-lg)', padding: '16px 20px',
+      transition: 'all var(--t-base)', opacity: aviso.lido ? .65 : 1,
+      display: 'flex', gap: 14, alignItems: 'flex-start',
+    }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+        background: variantBg, border: `1px solid ${variantBorder}`,
+        display: 'grid', placeItems: 'center', color: variantText,
+      }}>
+        <Icon size={16} />
+      </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-semibold text-slate-900">{aviso.titulo}</h3>
-              <span className={clsx('px-2 py-0.5 rounded-md text-[10px] font-semibold', cfg.badge)}>
-                {cfg.label}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--slate-900)' }}>{aviso.titulo}</h3>
+            <span className={`chip chip-${cfg.kind}`}>{cfg.label}</span>
+            {aviso.lido && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--slate-400)' }}>
+                <CheckCheck size={11} /> Lido
               </span>
-              {aviso.lido && (
-                <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                  <CheckCheck size={11} /> Lido
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-400 shrink-0">{fmtData(aviso.criado_em)}</p>
-          </div>
-
-          {aviso.conteudo && (
-            <p className="mt-2 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-              {aviso.conteudo}
-            </p>
-          )}
-
-          <div className="flex items-center gap-3 mt-3">
-            <p className="text-[11px] text-slate-400">Publicado por <span className="font-medium">{aviso.criado_por}</span></p>
-            {!aviso.lido && (
-              <button
-                onClick={() => onMarcarLido(aviso.id)}
-                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 transition-colors"
-              >
-                <CheckCheck size={11} /> Marcar como lido
-              </button>
             )}
           </div>
+          <span style={{ fontSize: 11, color: 'var(--slate-400)', flexShrink: 0 }}>{fmtData(aviso.criado_em)}</span>
+        </div>
+
+        {aviso.conteudo && (
+          <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--slate-600)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+            {aviso.conteudo}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+          <span style={{ fontSize: 11, color: 'var(--slate-400)' }}>
+            Publicado por <strong style={{ color: 'var(--slate-600)' }}>{aviso.criado_por}</strong>
+          </span>
+          {!aviso.lido && (
+            <button
+              onClick={() => onMarcarLido(aviso.id)}
+              className="btn-ghost btn"
+              style={{ padding: '2px 8px', fontSize: 11, color: 'var(--success-600)', gap: 4 }}>
+              <CheckCheck size={11} /> Marcar como lido
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -100,68 +107,68 @@ export default function Avisos() {
   })
 
   const naoLidos = avisos.filter(a => !a.lido)
+  const urgentes = avisos.filter(a => a.tipo === 'urgente').length
 
   return (
-    <div className="max-w-3xl">
-      <PageHeader
-        title="Quadro de Avisos"
-        subtitle="Comunicados e atualizações do time de gestão operacional"
-        action={
-          naoLidos.length > 0 && (
-            <Button
-              variant="secondary" size="sm"
-              onClick={() => marcarTodos.mutate()}
-              disabled={marcarTodos.isPending}
-            >
-              <CheckCheck size={13} /> Marcar todos como lidos
-            </Button>
-          )
-        }
-      />
+    <>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Avisos & Comunicados</h1>
+          <div className="page-sub">
+            {avisos.length} avisos ativos
+            {urgentes > 0 && ` · ${urgentes} urgentes`}
+            {naoLidos.length > 0 && ` · ${naoLidos.length} não lidos`}
+          </div>
+        </div>
+        <div className="page-actions">
+          {naoLidos.length > 0 && (
+            <button className="btn" onClick={() => marcarTodos.mutate()} disabled={marcarTodos.isPending}>
+              <CheckCheck size={14} /> Marcar todos como lidos
+            </button>
+          )}
+        </div>
+      </div>
 
+      {/* KPIs */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 24 }}>
+        <div className="kpi">
+          <div className="kpi-head"><div className="kpi-label">Total de avisos</div><div className="kpi-icon"><Megaphone size={14} /></div></div>
+          <div className="kpi-value">{avisos.length}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-head"><div className="kpi-label">Urgentes</div><div className="kpi-icon danger"><Zap size={14} /></div></div>
+          <div className="kpi-value" style={{ color: urgentes > 0 ? 'var(--danger-600)' : 'var(--slate-900)' }}>{urgentes}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-head"><div className="kpi-label">Não lidos</div><div className="kpi-icon warn"><Bell size={14} /></div></div>
+          <div className="kpi-value" style={{ color: naoLidos.length > 0 ? 'var(--warn-600)' : 'var(--slate-900)' }}>{naoLidos.length}</div>
+        </div>
+      </div>
+
+      {/* Lista */}
       {isLoading && (
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-xl border border-slate-100 p-5 animate-pulse">
-              <div className="flex gap-4">
-                <div className="w-9 h-9 bg-slate-100 rounded-lg shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-slate-200 rounded w-48" />
-                  <div className="h-3 bg-slate-100 rounded w-full" />
-                  <div className="h-3 bg-slate-100 rounded w-3/4" />
-                </div>
-              </div>
-            </div>
+            <div key={i} className="skel" style={{ height: 96, borderRadius: 'var(--r-lg)' }} />
           ))}
         </div>
       )}
 
       {!isLoading && avisos.length === 0 && (
-        <EmptyState
-          icon={BellOff}
-          title="Nenhum aviso no momento"
-          description="Quando a equipe de gestão publicar comunicados, eles aparecerão aqui."
-        />
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <BellOff size={32} style={{ margin: '0 auto 12px', color: 'var(--slate-300)' }} />
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--slate-700)', margin: 0 }}>Nenhum aviso no momento</p>
+          <p style={{ fontSize: 12, color: 'var(--slate-400)', marginTop: 4 }}>Comunicados do time de gestão aparecerão aqui.</p>
+        </div>
       )}
 
       {!isLoading && avisos.length > 0 && (
-        <>
-          {naoLidos.length > 0 && (
-            <p className="text-xs font-semibold text-slate-500 mb-3">
-              {naoLidos.length} aviso{naoLidos.length > 1 ? 's' : ''} não lido{naoLidos.length > 1 ? 's' : ''}
-            </p>
-          )}
-          <div className="space-y-3">
-            {avisos.map(a => (
-              <AvisoCard
-                key={a.id}
-                aviso={a}
-                onMarcarLido={(id) => marcarLido.mutate(id)}
-              />
-            ))}
-          </div>
-        </>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {avisos.map(a => (
+            <AvisoCard key={a.id} aviso={a} onMarcarLido={(id) => marcarLido.mutate(id)} />
+          ))}
+        </div>
       )}
-    </div>
+    </>
   )
 }

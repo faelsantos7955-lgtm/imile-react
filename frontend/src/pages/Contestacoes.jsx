@@ -799,31 +799,21 @@ export default function Contestacoes() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-[18px] font-bold text-slate-900 leading-none">Contestações de Descontos</h1>
-        <p className="text-[12px] text-slate-400 mt-1">Registre, acompanhe e consulte contestações de descontos logísticos</p>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Contestações de Descontos</h1>
+          <div className="page-sub">Registre, acompanhe e consulte contestações de descontos logísticos</div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-slate-100 rounded-xl p-1 w-fit">
+      <div className="tabs" style={{ marginBottom: 24 }}>
         {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setAba(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all ${
-              aba === key
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Icon size={13} />
-            {label}
+          <button key={key} className={`tab${aba === key ? ' active' : ''}`} onClick={() => setAba(key)}>
+            <Icon size={13} /> {label}
           </button>
         ))}
       </div>
 
-      {/* Conteúdo */}
       {aba === 'base'     && <BaseDados />}
       {aba === 'novo'     && <NovoRegistro onSaved={() => setAba('base')} />}
       {aba === 'consulta' && <Consulta />}

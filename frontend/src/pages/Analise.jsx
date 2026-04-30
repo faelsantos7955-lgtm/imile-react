@@ -756,9 +756,6 @@ export default function Analise() {
 
   return (
     <div className="relative">
-      {/* Partículas flutuantes de fundo */}
-      <ParticleField count={28} className="fixed inset-0 z-0" />
-
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
@@ -771,50 +768,27 @@ export default function Analise() {
         />
       )}
 
-      {/* Hero 3D */}
-      <Hero3D
-        kpis={isHoje ? dFiltrado?.kpis : periodoData?.totais}
-        nBases={isHoje ? dFiltrado?.kpis?.n_ds : periodoData?.por_ds?.length}
-      />
-
-      {/* Banner de avisos não lidos */}
-      {naoLidos.length > 0 && (
-        <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-imile-50 border border-imile-200 rounded-xl">
-          <div className="w-8 h-8 rounded-lg bg-imile-100 flex items-center justify-center shrink-0">
-            <Megaphone size={15} className="text-imile-600" />
+      {/* Page head */}
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Análise</h1>
+          <div className="page-sub">
+            Dashboard · Histórico · Comparativos
+            {naoLidos.length > 0 && (
+              <button onClick={() => navigate('/avisos')}
+                style={{ marginLeft: 12, color: 'var(--imile-600)', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Megaphone size={12} /> {naoLidos.length} aviso{naoLidos.length > 1 ? 's' : ''} não lido{naoLidos.length > 1 ? 's' : ''} →
+              </button>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-imile-800">
-              {naoLidos.length === 1
-                ? `Você tem 1 aviso não lido`
-                : `Você tem ${naoLidos.length} avisos não lidos`}
-            </p>
-            <p className="text-xs text-imile-600 truncate mt-0.5">
-              {naoLidos[0]?.titulo}
-              {naoLidos.length > 1 ? ` e mais ${naoLidos.length - 1}...` : ''}
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/avisos')}
-            className="flex items-center gap-1 text-xs font-semibold text-imile-700 hover:text-imile-900 shrink-0 transition-colors"
-          >
-            Ver avisos <ArrowRight size={12} />
-          </button>
         </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <PageHeader icon="📊" title="Análise" subtitle="Dashboard · Histórico · Comparativos" />
-        <div className="flex gap-2">
+        <div className="page-actions">
           {isAdmin && (
-            <button onClick={() => setShowUpload(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-imile-500 text-white rounded-lg text-sm font-medium hover:bg-imile-600 transition-colors">
+            <button onClick={() => setShowUpload(true)} className="btn btn-primary">
               <Upload size={14} /> Upload
             </button>
           )}
-          <button onClick={handleExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-navy-900 text-white rounded-lg text-sm font-medium hover:bg-navy-800 transition-colors">
+          <button onClick={handleExcel} className="btn">
             <Download size={14} /> Excel
           </button>
         </div>
@@ -848,12 +822,12 @@ export default function Analise() {
             </Alert>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
-            <KpiCard index={0} label="Recebido"   value={dFiltrado.kpis.recebido}  sub="waybills no dia" color="blue" />
-            <KpiCard index={1} label="Em Rota"    value={dFiltrado.kpis.expedido}  sub={`taxa ${P(dFiltrado.kpis.taxa_exp)}`} color="blue" />
-            <KpiCard index={2} label="Entregas"   value={dFiltrado.kpis.entregas}  sub={dFiltrado.kpis.entregas ? `taxa ${P(dFiltrado.kpis.taxa_ent)}` : 'sem dados'} color="blue" />
-            <KpiCard index={3} label="DS na Meta" value={dFiltrado.kpis.n_ok}      sub={`de ${dFiltrado.kpis.n_ds} bases`} color="green" />
-            <KpiCard index={4} label="DS Abaixo"  value={dFiltrado.kpis.n_abaixo}  sub="precisam atenção" color="red" />
+          <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(5,1fr)', marginTop: 16 }}>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Recebido</div></div><div className="kpi-value">{F(dFiltrado.kpis.recebido)}</div><div className="kpi-foot"><span className="muted">waybills no dia</span></div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Em Rota</div></div><div className="kpi-value">{F(dFiltrado.kpis.expedido)}</div><div className="kpi-foot"><span className="muted">taxa {P(dFiltrado.kpis.taxa_exp)}</span></div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">Entregas</div></div><div className="kpi-value">{F(dFiltrado.kpis.entregas)}</div><div className="kpi-foot"><span className="muted">{dFiltrado.kpis.entregas ? `taxa ${P(dFiltrado.kpis.taxa_ent)}` : 'sem dados'}</span></div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">DS na Meta</div><div className="kpi-icon success"><Check size={14}/></div></div><div className="kpi-value" style={{color:'var(--success-600)'}}>{dFiltrado.kpis.n_ok}</div><div className="kpi-foot"><span className="muted">de {dFiltrado.kpis.n_ds} bases</span></div></div>
+            <div className="kpi"><div className="kpi-head"><div className="kpi-label">DS Abaixo</div><div className="kpi-icon danger"><AlertCircle size={14}/></div></div><div className="kpi-value" style={{color:dFiltrado.kpis.n_abaixo>0?'var(--danger-600)':'var(--slate-900)'}}>{dFiltrado.kpis.n_abaixo}</div><div className="kpi-foot"><span className="muted">precisam atenção</span></div></div>
           </div>
 
           {ontem?.recebido > 0 && (
@@ -974,12 +948,11 @@ export default function Analise() {
           {!periodoData.resumo?.recebido
             ? <Alert type="info">Nenhum dado no período selecionado.</Alert>
             : <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <KpiCard label="Total Recebido" value={F(periodoData.resumo.recebido)} color="blue" />
-                <KpiCard label="Total Expedido" value={F(periodoData.resumo.expedido)} color="blue" />
-                <KpiCard label="Taxa Média"      value={P(periodoData.resumo.taxa_exp)} color="green" />
-                <KpiCard label={agrup === 'Diário' ? 'Dias' : agrup === 'Semanal' ? 'Semanas' : 'Meses'}
-                  value={chartData.length} color="slate" />
+              <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
+                <div className="kpi"><div className="kpi-label">Total Recebido</div><div className="kpi-value">{F(periodoData.resumo.recebido)}</div></div>
+                <div className="kpi"><div className="kpi-label">Total Expedido</div><div className="kpi-value">{F(periodoData.resumo.expedido)}</div></div>
+                <div className="kpi"><div className="kpi-head"><div className="kpi-label">Taxa Média</div><div className="kpi-icon success"><Check size={14}/></div></div><div className="kpi-value" style={{color:'var(--success-600)'}}>{P(periodoData.resumo.taxa_exp)}</div></div>
+                <div className="kpi"><div className="kpi-label">{agrup === 'Diário' ? 'Dias' : agrup === 'Semanal' ? 'Semanas' : 'Meses'}</div><div className="kpi-value">{chartData.length}</div></div>
               </div>
 
               <SectionHeader title={`Evolução ${agrup}`} />

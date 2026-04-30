@@ -1,6 +1,6 @@
 /**
- * components/Layout.jsx — Clean & Premium · iMile Portal
- * Mobile: sidebar como drawer com overlay
+ * Layout.jsx — Shell visual v2 · iMile Portal
+ * Sidebar light + topbar Stripe-style · Plus Jakarta Sans
  */
 import { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -8,44 +8,42 @@ import { useAuth } from '../lib/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 import {
-  BarChart2, Wrench, FileWarning, Upload, Users, Settings,
+  TrendingUp, Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
   GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale, Megaphone,
-  RefreshCw,
+  Search, PanelLeft, Home, LogIn, EyeOff, Building2, Navigation,
+  ChevronsUpDown, Filter, Download, Sparkles,
 } from 'lucide-react'
-import clsx from 'clsx'
 
+// ── Navegação ─────────────────────────────────────────────────
 const NAV_GROUPS = [
   {
-    label: 'Painel',
+    section: 'Painel',
     items: [
-      { to: '/',            icon: BarChart2,   label: 'Análise' },
+      { to: '/',            icon: Home,         label: 'Análise',          end: true },
     ],
   },
   {
-    label: 'Operações',
+    section: 'Operações',
     items: [
-      { to: '/operacional', icon: Wrench,      label: 'Operacional' },
-      { to: '/backlog',     icon: Package,     label: 'Backlog SLA' },
-      { to: '/correlacao',  icon: GitMerge,    label: 'Correlação' },
-      { to: '/notracking',  icon: Clock,       label: 'No Tracking' },
-      { to: '/not-arrived', icon: AlertCircle, label: 'Not Arrived Mov.' },
-      { to: '/na',          icon: PackageX,    label: 'Not Arrived' },
+      { to: '/operacional', icon: Wrench,        label: 'Operacional' },
+      { to: '/backlog',     icon: Package,       label: 'Backlog SLA',     badge: true },
+      { to: '/correlacao',  icon: GitMerge,      label: 'Correlação' },
+      { to: '/notracking',  icon: EyeOff,        label: 'No Tracking' },
+      { to: '/not-arrived', icon: AlertCircle,   label: 'Not Arrived Mov.' },
+      { to: '/na',          icon: PackageX,      label: 'Not Arrived' },
     ],
   },
   {
-    label: 'Ocorrências',
+    section: 'Ocorrências',
     items: [
-      { to: '/reclamacoes', icon: FileWarning, label: 'Reclamações' },
-      { to: '/extravios',   icon: ShieldAlert, label: 'Extravios' },
-      { to: '/contestacoes', icon: Scale,      label: 'Contestações' },
-      { to: '/avisos',       icon: Megaphone,  label: 'Avisos' },
+      { to: '/reclamacoes',  icon: FileWarning,  label: 'Reclamações' },
+      { to: '/extravios',    icon: ShieldAlert,  label: 'Extravios' },
+      { to: '/contestacoes', icon: Scale,        label: 'Contestações' },
+      { to: '/avisos',       icon: Megaphone,    label: 'Avisos' },
     ],
   },
 ]
-
-// Flat list para compatibilidade com PAGE_TITLES
-const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items)
 
 const ADMIN_ITEMS = [
   { to: '/admin',          icon: Upload,        label: 'Upload / Processar' },
@@ -57,151 +55,28 @@ const ADMIN_ITEMS = [
   { to: '/admin/avisos',   icon: Megaphone,     label: 'Quadro de Avisos' },
 ]
 
-const PAGE_TITLES = [
-  { path: '/',                label: 'Análise' },
-  { path: '/operacional',     label: 'Operacional' },
-  { path: '/reclamacoes',     label: 'Reclamações' },
-  { path: '/backlog',         label: 'Backlog SLA' },
-  { path: '/correlacao',      label: 'Correlação Backlog × Reclamações' },
-  { path: '/extravios',       label: 'Controle de Extravios' },
-  { path: '/notracking',      label: 'No Tracking (断更)' },
-  { path: '/na',              label: 'Not Arrived' },
-  { path: '/not-arrived',     label: 'Not Arrived com Movimentação' },
-  { path: '/contestacoes',   label: 'Contestações de Descontos' },
-  { path: '/avisos',         label: 'Quadro de Avisos' },
-  { path: '/admin',           label: 'Upload / Processar' },
-  { path: '/admin/lote',      label: 'Carga em Lote' },
-  { path: '/admin/users',     label: 'Solicitações de Acesso' },
-  { path: '/admin/config',    label: 'Configurações' },
-  { path: '/admin/auditlog',  label: 'Histórico de Ações' },
-  { path: '/admin/metas',     label: 'Metas por DS' },
-  { path: '/admin/avisos',    label: 'Quadro de Avisos (Admin)' },
-]
-
-// ── Nav link ──────────────────────────────────────────────────
-function SideLink({ to, icon: Icon, label, onClick, badge }) {
-  return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      onClick={onClick}
-      className={({ isActive }) => clsx(
-        'group relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150',
-        isActive
-          ? 'bg-white/10 text-white'
-          : 'text-white/40 hover:text-white/80 hover:bg-white/5'
-      )}
-    >
-      {({ isActive }) => (
-        <>
-          {isActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-imile-400" />
-          )}
-          <Icon size={16} strokeWidth={isActive ? 2 : 1.8} className="shrink-0" />
-          <span className="flex-1 truncate">{label}</span>
-          {badge > 0 && (
-            <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-              {badge > 99 ? '99+' : badge}
-            </span>
-          )}
-        </>
-      )}
-    </NavLink>
-  )
+const PAGE_TITLES = {
+  '/':                'Análise',
+  '/operacional':     'Operacional',
+  '/reclamacoes':     'Reclamações',
+  '/backlog':         'Backlog SLA',
+  '/correlacao':      'Correlação',
+  '/extravios':       'Extravios',
+  '/notracking':      'No Tracking',
+  '/na':              'Not Arrived',
+  '/not-arrived':     'Not Arrived c/ Mov.',
+  '/contestacoes':    'Contestações',
+  '/avisos':          'Avisos',
+  '/admin':           'Upload / Processar',
+  '/admin/lote':      'Carga em Lote',
+  '/admin/users':     'Solicitações',
+  '/admin/config':    'Configurações',
+  '/admin/auditlog':  'Histórico',
+  '/admin/metas':     'Metas por DS',
+  '/admin/avisos':    'Quadro de Avisos',
 }
 
-// ── Nav group ─────────────────────────────────────────────────
-function NavGroup({ label, children }) {
-  return (
-    <div className="mb-2">
-      <p className="px-3 pt-5 pb-2 text-[9px] font-bold uppercase tracking-widest text-white/20">
-        {label}
-      </p>
-      <div className="space-y-px">{children}</div>
-    </div>
-  )
-}
-
-// ── Sidebar ───────────────────────────────────────────────────
-function Sidebar({ onClose }) {
-  const { user, logout, isAdmin } = useAuth()
-  const firstName = user?.nome?.split(' ')[0] || user?.email?.split('@')[0] || ''
-  const initial = firstName[0]?.toUpperCase() || '?'
-  const handleLogout = () => { onClose?.(); logout() }
-
-  const { data: naoLidos } = useQuery({
-    queryKey: ['avisos-nao-lidos'],
-    queryFn: () => api.get('/api/avisos/nao-lidos').then(r => r.data.total),
-    refetchInterval: 2 * 60 * 1000, // revalida a cada 2 min
-  })
-
-  return (
-    <aside className="w-[220px] bg-navy-950 flex flex-col h-full border-r border-white/5">
-
-      {/* Logo */}
-      <div className="px-4 h-14 flex items-center justify-between shrink-0 border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-[26px] h-[26px] rounded-[7px] flex items-center justify-center text-white font-extrabold text-[13px] shrink-0"
-            style={{ background: 'linear-gradient(135deg, #3b82f6, #1D4ED8)', boxShadow: '0 4px 12px rgba(29,78,216,.35)', letterSpacing: '-.5px' }}>
-            i
-          </div>
-          <div>
-            <p className="text-white font-bold text-[14px] leading-none tracking-[-0.2px]">iMile</p>
-            <p className="text-white/40 font-medium text-[10px] mt-0.5 tracking-[0.5px]">PORTAL BRASIL</p>
-          </div>
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="lg:hidden p-1 text-white/30 hover:text-white/70">
-            <X size={16} />
-          </button>
-        )}
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 px-2.5 overflow-y-auto sidebar-scroll py-1">
-        {NAV_GROUPS.map(group => (
-          <NavGroup key={group.label} label={group.label}>
-            {group.items.map(item => (
-              <SideLink
-                key={item.to} {...item} onClick={onClose}
-                badge={item.to === '/avisos' ? (naoLidos || 0) : 0}
-              />
-            ))}
-          </NavGroup>
-        ))}
-        {isAdmin && (
-          <NavGroup label="Admin">
-            {ADMIN_ITEMS.map(item => (
-              <SideLink key={item.to} {...item} onClick={onClose} />
-            ))}
-          </NavGroup>
-        )}
-      </nav>
-
-      {/* User footer */}
-      <div className="p-2.5 border-t border-white/5 shrink-0">
-        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg">
-          <div className="w-6 h-6 rounded-full bg-imile-500/20 border border-imile-500/20 flex items-center justify-center text-imile-300 text-[11px] font-bold shrink-0">
-            {initial}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white/80 text-[12px] font-semibold truncate leading-none">{firstName}</p>
-            {isAdmin && <p className="text-imile-400/70 text-[9px] font-semibold mt-0.5">Admin</p>}
-          </div>
-          <button
-            onClick={handleLogout}
-            title="Sair"
-            className="p-1.5 text-white/20 hover:text-red-400 transition-colors"
-          >
-            <LogOut size={13} />
-          </button>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-// ── Bell / Notificações ───────────────────────────────────────
+// ── BellMenu (notificações admin) ─────────────────────────────
 function BellMenu({ isAdmin }) {
   const [open, setOpen] = useState(false)
   const ref = useRef()
@@ -223,47 +98,39 @@ function BellMenu({ isAdmin }) {
   if (!isAdmin) return null
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className={clsx(
-          'relative w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-          open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-        )}
-      >
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button className="tb-btn" onClick={() => setOpen(v => !v)} title="Notificações">
         <Bell size={16} />
-        {pendentes.length > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
-        )}
+        {pendentes.length > 0 && <span className="ind" />}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 w-72 bg-white border border-slate-100 rounded-xl shadow-popover z-50 overflow-hidden animate-scale">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-700">Solicitações Pendentes</p>
-            {pendentes.length > 0 && (
-              <span className="px-2 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded-full border border-red-100">
-                {pendentes.length}
-              </span>
-            )}
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 8px)',
+          width: 280, background: 'white', border: '1px solid var(--border)',
+          borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-lg)',
+          zIndex: 50, overflow: 'hidden',
+          animation: 'scaleIn .15s ease-out',
+        }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--slate-700)' }}>Solicitações pendentes</span>
+            {pendentes.length > 0 && <span className="chip chip-danger">{pendentes.length}</span>}
           </div>
           {pendentes.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-8">Nenhuma solicitação pendente</p>
+            <p style={{ fontSize: 12, color: 'var(--slate-400)', textAlign: 'center', padding: '20px 0' }}>Nenhuma pendente</p>
           ) : (
-            <ul className="max-h-60 overflow-y-auto divide-y divide-slate-50">
+            <ul style={{ maxHeight: 220, overflowY: 'auto', listStyle: 'none', margin: 0, padding: 0 }}>
               {pendentes.map(s => (
-                <li key={s.id} className="px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <p className="text-xs font-semibold text-slate-800 truncate">{s.nome || s.email}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5 truncate">{s.email}</p>
+                <li key={s.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-2)' }}>
+                  <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--slate-800)' }}>{s.nome || s.email}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--slate-400)' }}>{s.email}</p>
                 </li>
               ))}
             </ul>
           )}
-          <div className="border-t border-slate-100 px-4 py-2.5">
-            <button
-              onClick={() => { navigate('/admin/users'); setOpen(false) }}
-              className="text-[11px] font-semibold text-imile-600 hover:text-imile-700 transition-colors"
-            >
+          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-2)' }}>
+            <button className="btn-ghost btn" style={{ fontSize: 12, color: 'var(--imile-600)', padding: 0 }}
+              onClick={() => { navigate('/admin/users'); setOpen(false) }}>
               Ver todas as solicitações →
             </button>
           </div>
@@ -273,88 +140,203 @@ function BellMenu({ isAdmin }) {
   )
 }
 
+// ── Sidebar ───────────────────────────────────────────────────
+function Sidebar({ collapsed, onClose }) {
+  const { user, logout, isAdmin } = useAuth()
+  const firstName = user?.nome?.split(' ')[0] || user?.email?.split('@')[0] || ''
+  const initial = (firstName[0] || '?').toUpperCase()
+  const role = isAdmin ? 'Admin · iMile Brasil' : 'Portal iMile Brasil'
+
+  const { data: naoLidos } = useQuery({
+    queryKey: ['avisos-nao-lidos'],
+    queryFn: () => api.get('/api/avisos/nao-lidos').then(r => r.data.total),
+    refetchInterval: 2 * 60 * 1000,
+  })
+
+  return (
+    <aside className="sidebar" style={{ width: collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-w)' }}>
+
+      {/* Logo */}
+      <div className="sb-head">
+        <div className="sb-mark">iM</div>
+        {!collapsed && (
+          <div>
+            <div className="sb-brand">iMile <small>Operations Hub</small></div>
+          </div>
+        )}
+        {onClose && (
+          <button onClick={onClose} className="btn-ghost btn" style={{ marginLeft: 'auto', padding: 4 }}>
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
+      {/* Search */}
+      {!collapsed && (
+        <div className="sb-search">
+          <Search size={14} className="sb-search-icon" />
+          <input placeholder="Buscar páginas…" />
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="sb-nav">
+        {NAV_GROUPS.map(group => (
+          <div key={group.section}>
+            <div className="sb-section-label">{group.section}</div>
+            {group.items.map(item => {
+              const Icon = item.icon
+              const avisosBadge = item.to === '/avisos' ? (naoLidos || 0) : 0
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  onClick={onClose}
+                  className={({ isActive }) => `sb-link${isActive ? ' active' : ''}`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon size={18} className="sb-icon" />
+                  <span className="sb-link-label">{item.label}</span>
+                  {avisosBadge > 0 && <span className="sb-badge">{avisosBadge > 99 ? '99+' : avisosBadge}</span>}
+                </NavLink>
+              )
+            })}
+          </div>
+        ))}
+
+        {isAdmin && (
+          <div>
+            <div className="sb-section-label">Admin</div>
+            {ADMIN_ITEMS.map(item => {
+              const Icon = item.icon
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onClose}
+                  className={({ isActive }) => `sb-link${isActive ? ' active' : ''}`}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon size={18} className="sb-icon" />
+                  <span className="sb-link-label">{item.label}</span>
+                </NavLink>
+              )
+            })}
+          </div>
+        )}
+      </nav>
+
+      {/* User footer */}
+      <div className="sb-foot">
+        <div className="sb-avatar">{initial}</div>
+        {!collapsed && (
+          <div className="sb-foot-text">
+            <div className="sb-user-name">{firstName}</div>
+            <div className="sb-user-role">{role}</div>
+          </div>
+        )}
+        {!collapsed && (
+          <button onClick={logout} title="Sair" className="btn-ghost btn" style={{ padding: 6, color: 'var(--slate-400)', marginLeft: 'auto' }}>
+            <LogOut size={14} />
+          </button>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 // ── Layout principal ──────────────────────────────────────────
 export default function Layout() {
   const { user, isAdmin } = useAuth()
   const location = useLocation()
+  const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const firstName = user?.nome?.split(' ')[0] || user?.email?.split('@')[0] || ''
-  const initial = firstName[0]?.toUpperCase() || '?'
-  const pageTitle = PAGE_TITLES.find(p => p.path === location.pathname)?.label || 'Dashboard'
+  const pageTitle = PAGE_TITLES[location.pathname] || 'Dashboard'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f8fafc]">
-
-      {/* Sidebar desktop */}
-      <div className="hidden lg:flex shrink-0">
-        <Sidebar />
-      </div>
-
-      {/* Sidebar mobile */}
+    <>
+      {/* Mobile overlay */}
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden animate-fade"
             onClick={() => setMobileOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(4px)', zIndex: 45, animation: 'fadeIn .15s ease-out' }}
           />
-          <div className="fixed inset-y-0 left-0 z-50 lg:hidden animate-slide">
-            <Sidebar onClose={() => setMobileOpen(false)} />
+          <div style={{ position: 'fixed', inset: '0 auto 0 0', zIndex: 50, animation: 'slideIn .2s ease-out' }}>
+            <Sidebar collapsed={false} onClose={() => setMobileOpen(false)} />
           </div>
         </>
       )}
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      {/* Desktop layout */}
+      <div className={`app${collapsed ? ' collapsed' : ''}`}>
 
-        {/* Header */}
-        <header className="h-14 bg-white border-b border-slate-100 flex items-center justify-between px-4 lg:px-6 shrink-0 gap-3">
-          {/* Esquerda: menu mobile + título */}
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
-              aria-label="Abrir menu"
-            >
-              <Menu size={18} />
+        {/* Sidebar (desktop) */}
+        <div className="hidden lg:block" style={{ position: 'sticky', top: 0, height: '100vh' }}>
+          <Sidebar collapsed={collapsed} />
+        </div>
+
+        {/* Main */}
+        <div className="portal-main">
+
+          {/* Topbar */}
+          <header className="topbar">
+            {/* Mobile menu toggle */}
+            <button className="tb-toggle lg:hidden" onClick={() => setMobileOpen(true)}>
+              <Menu size={16} />
             </button>
-            <div>
-              <h1 className="text-[13.5px] font-semibold text-slate-900 leading-none">{pageTitle}</h1>
-              <p className="text-[10.5px] text-slate-400 mt-0.5 leading-none hidden sm:block tracking-[0.02em]">
-                iMile Brasil · Portal Operacional
-              </p>
+
+            {/* Desktop sidebar toggle */}
+            <button className="tb-toggle hidden lg:grid" onClick={() => setCollapsed(c => !c)} title="Recolher menu">
+              <PanelLeft size={16} />
+            </button>
+
+            {/* Breadcrumb */}
+            <div className="tb-breadcrumb">
+              <span>iMile</span>
+              <span className="sep">/</span>
+              <span className="current">{pageTitle}</span>
             </div>
-          </div>
 
-          {/* Direita: refresh + bell + user */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              className="w-[34px] h-[34px] rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
-              title="Atualizar"
-              onClick={() => window.location.reload()}
-            >
-              <RefreshCw size={14} />
-            </button>
+            <div className="tb-spacer" />
+
+            {/* Actions */}
             <BellMenu isAdmin={isAdmin} />
-            <div className="w-px h-5 bg-slate-100 mx-0.5" />
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-default transition-colors">
-              <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
-                style={{ background: 'linear-gradient(135deg, #3b82f6, #1D4ED8)' }}>
-                {initial}
-              </div>
-              <div className="hidden sm:block text-left">
-                <p className="text-[12px] font-semibold text-slate-700 leading-none">{firstName}</p>
-                <p className="text-[10px] text-slate-400 mt-[3px] truncate max-w-[130px] leading-none">{user?.email}</p>
-              </div>
-            </div>
-          </div>
-        </header>
 
-        {/* Page */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-6 lg:p-8">
-          <Outlet />
-        </main>
+            <button className="tb-btn" title="Exportar">
+              <Download size={16} />
+            </button>
+
+            {/* User chip */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '5px 10px 5px 6px',
+              border: '1px solid var(--border)', borderRadius: 'var(--r-md)',
+              background: 'white', cursor: 'default',
+            }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg, var(--imile-400), var(--imile-600))',
+                color: 'white', display: 'grid', placeItems: 'center',
+                fontSize: 11, fontWeight: 700,
+              }}>
+                {(firstName[0] || '?').toUpperCase()}
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--slate-700)', whiteSpace: 'nowrap' }} className="hidden sm:block">
+                {firstName}
+              </span>
+            </div>
+          </header>
+
+          {/* Page content */}
+          <div className="portal-content" key={location.pathname}>
+            <Outlet />
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
