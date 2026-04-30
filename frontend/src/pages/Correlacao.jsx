@@ -8,7 +8,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, Cell, ZAxis,
 } from 'recharts'
 import { Loader, AlertCircle, TrendingUp } from 'lucide-react'
-import { Card, SectionHeader } from '../components/ui'
+import { Card } from '../components/ui'
 import api from '../lib/api'
 
 
@@ -95,12 +95,17 @@ export default function Correlacao() {
   )
 
   if (isError || !dados.length) return (
-    <div className="mt-8">
-      <PageHeader icon="📊" title="Correlação Backlog × Reclamações" subtitle="Identifique DS com alto backlog vencido e alto volume de reclamações" />
-      <div className="flex items-center gap-2 text-slate-500 mt-6 bg-white border border-slate-200 rounded-xl p-6">
+    <>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">Correlação Backlog × Reclamações</h1>
+          <div className="page-sub">Identifique DS com alto backlog vencido e alto volume de reclamações</div>
+        </div>
+      </div>
+      <div className="card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--slate-500)' }}>
         <AlertCircle size={16} /> Sem dados disponíveis. Faça o upload de backlog e reclamações primeiro.
       </div>
-    </div>
+    </>
   )
 
   const thBtn = (field, label) => (

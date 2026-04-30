@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import { PageHeader, Card, Alert, UploadGuide, toast, TableSkeleton, ConfirmDialog } from '../components/ui'
+import { Card, Alert, toast, TableSkeleton, ConfirmDialog } from '../components/ui'
 import { Upload, Download, Loader, RefreshCw, Trash2, Filter, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 import { useAuth } from '../lib/AuthContext'
