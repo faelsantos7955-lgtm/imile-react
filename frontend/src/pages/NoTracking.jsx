@@ -147,6 +147,8 @@ export default function NoTracking() {
   }))
 
   const pct7d = up ? ((up.total_7d_mais / up.total) * 100).toFixed(1) : '—'
+  const fmtDate = d => { if (!d) return 'Sem data'; const [y, m, day] = String(d).split('-'); return `${day}/${m}/${y}` }
+  const uploadsSorted = [...uploads].sort((a, b) => String(b.data_ref || '').localeCompare(String(a.data_ref || '')))
 
   return (
     <div>
@@ -170,11 +172,11 @@ export default function NoTracking() {
       </div>
 
       {/* Seletor */}
-      {uploads.length > 0 && (
+      {uploadsSorted.length > 0 && (
         <div className="filter-bar" style={{ marginBottom: 16 }}>
           <select value={uploadSel ?? ''} onChange={e => setUploadSel(Number(e.target.value))} className="filter-select">
-            {uploads.map(u => (
-              <option key={u.id} value={u.id}>{u.data_ref || 'Sem data'} — {u.total?.toLocaleString('pt-BR')} pacotes</option>
+            {uploadsSorted.map(u => (
+              <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {u.total?.toLocaleString('pt-BR')} pacotes</option>
             ))}
           </select>
         </div>

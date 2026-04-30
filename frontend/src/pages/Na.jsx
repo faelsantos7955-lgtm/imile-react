@@ -390,7 +390,7 @@ const SUP_COLORS = ['#095EF7','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2',
 const fmtDate = iso => { const [,m,d] = (iso||'').split('-'); return `${d}/${m}` }
 
 function HistoricoNA({ uploads }) {
-  const uploadsSorted = [...uploads].sort((a, b) => a.data_ref?.localeCompare(b.data_ref))
+  const uploadsSorted = [...uploads].sort((a, b) => String(b.data_ref || '').localeCompare(String(a.data_ref || '')))
 
   const { data: supData = [], isLoading } = useQuery({
     queryKey: ['na-historico-supervisores'],
@@ -532,8 +532,10 @@ export default function Na() {
     enabled:  !!selectedId,
   })
 
-  const upload        = uploads.find(u => u.id === selectedId)
+  const upload         = uploads.find(u => u.id === selectedId)
   const thresholdLabel = upload?.threshold_col || '>10D'
+  const fmtDateSel     = d => { if (!d) return 'Sem data'; const [y, m, day] = String(d).split('-'); return `${day}/${m}/${y}` }
+  const uploadsSel     = [...uploads].sort((a, b) => String(b.data_ref || '').localeCompare(String(a.data_ref || '')))
 
   const handleUploadSuccess = (data) => {
     setFlashResult(data)
@@ -620,9 +622,9 @@ export default function Na() {
             <span className="text-xs text-slate-500 font-medium">Data de referência:</span>
             <select value={selectedId || ''} onChange={e => setSelectedId(Number(e.target.value))}
               className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-imile-500/20 focus:border-imile-400 text-slate-700">
-              {uploads.map(u => (
+              {uploadsSel.map(u => (
                 <option key={u.id} value={u.id}>
-                  {u.data_ref} — {fmt(u.total)} waybills · {fmt(u.grd10d)} {u.threshold_col || '>10D'}
+                  {fmtDateSel(u.data_ref)} — {fmt(u.total)} waybills · {fmt(u.grd10d)} {u.threshold_col || '>10D'}
                 </option>
               ))}
             </select>

@@ -12,7 +12,7 @@ router = APIRouter()
 @router.get("/uploads")
 def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.execute(
-        text("SELECT * FROM notracking_uploads ORDER BY criado_em DESC LIMIT 30")
+        text("SELECT * FROM notracking_uploads ORDER BY data_ref DESC")
     ).mappings().all()
     return [dict(r) for r in rows]
 

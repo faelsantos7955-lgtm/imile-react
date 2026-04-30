@@ -15,7 +15,7 @@ def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends
         text("""
             SELECT id, data_ref, criado_por, total, total_offload, total_arrive,
                    grd10d, threshold_col, criado_em
-            FROM na_uploads ORDER BY criado_em DESC LIMIT 60
+            FROM na_uploads ORDER BY data_ref DESC
         """)
     ).mappings().all()
     return [dict(r) for r in rows]

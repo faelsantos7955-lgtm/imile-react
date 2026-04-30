@@ -217,6 +217,8 @@ export default function Reclamacoes() {
 
   const u = uploads.find(x => x.id === sel)
   const F = n => n?.toLocaleString('pt-BR') || '0'
+  const fmtDate = d => { if (!d) return 'Sem data'; const [y, m, day] = String(d).split('-'); return `${day}/${m}/${y}` }
+  const uploadsSorted = [...uploads].sort((a, b) => String(b.data_ref || '').localeCompare(String(a.data_ref || '')))
 
   const handleExcel = async () => {
     try {
@@ -288,8 +290,8 @@ export default function Reclamacoes() {
               onChange={e => setSel(Number(e.target.value))}
               className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm max-w-md flex-1"
             >
-              {uploads.map(u => (
-                <option key={u.id} value={u.id}>{u.data_ref} — {F(u.n_registros)} registros</option>
+              {uploadsSorted.map(u => (
+                <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {F(u.n_registros)} registros</option>
               ))}
             </select>
             {isAdmin && sel && (

@@ -121,6 +121,9 @@ export default function Extravios() {
 
   const loading = loadingUps || (!!uploadSel && loadingDet)
 
+  const fmtDate = d => { if (!d) return 'Sem data'; const [y, m, day] = String(d).split('-'); return `${day}/${m}/${y}` }
+  const uploadsSorted = [...uploads].sort((a, b) => String(b.data_ref || '').localeCompare(String(a.data_ref || '')))
+
   return (
     <div>
       <div className="page-head">
@@ -129,9 +132,9 @@ export default function Extravios() {
           <div className="page-sub">Perdas e avarias · {up?.total?.toLocaleString('pt-BR') || 0} ocorrências · {uploads.find(u=>u.id===uploadSel)?.data_ref || '—'}</div>
         </div>
         <div className="page-actions">
-          {uploads.length > 0 && (
+          {uploadsSorted.length > 0 && (
             <select value={uploadSel ?? ''} onChange={e => setUploadSel(Number(e.target.value))} className="filter-select">
-              {uploads.map(u => <option key={u.id} value={u.id}>{u.data_ref || 'Sem data'} — {u.total?.toLocaleString('pt-BR')} reg.</option>)}
+              {uploadsSorted.map(u => <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {u.total?.toLocaleString('pt-BR')} reg.</option>)}
             </select>
           )}
           {uploadSel && <button onClick={handleExcel} disabled={baixando} className="btn"><Download size={14}/>{baixando?'Gerando…':'Excel'}</button>}
