@@ -206,7 +206,17 @@ export default function Backlog() {
     finally { setDownloading(false) }
   }
 
-  const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
+  // Formata 'YYYY-MM-DD' → 'DD/MM/YYYY' sem conversão de timezone
+  const fmtDate = d => {
+    if (!d) return '—'
+    const [y, m, day] = String(d).split('-')
+    return `${day}/${m}/${y}`
+  }
+
+  // Uploads ordenados por data_ref decrescente
+  const uploadsSorted = [...uploads].sort((a, b) =>
+    String(b.data_ref || '').localeCompare(String(a.data_ref || ''))
+  )
   const F = n => n?.toLocaleString('pt-BR') ?? '0'
 
   return (
@@ -228,12 +238,12 @@ export default function Backlog() {
       {erro && <Alert type="warning" className="mb-4">{erro}</Alert>}
 
       {/* Seletor de upload + filtro de cliente */}
-      {uploads.length > 0 && (
+      {uploadsSorted.length > 0 && (
         <div className="flex items-center gap-3 mb-6 bg-white border border-slate-200 rounded-xl p-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500 uppercase">Upload</span>
           <select value={uploadSel || ''} onChange={e => handleUploadChange(Number(e.target.value))}
             className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white flex-1 max-w-xs">
-            {uploads.map(u => (
+            {uploadsSorted.map(u => (
               <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {(u.total || 0).toLocaleString('pt-BR')} pedidos</option>
             ))}
           </select>
@@ -267,7 +277,7 @@ export default function Backlog() {
         </div>
       )}
 
-      {uploads.length === 0 && !loading && (
+      {uploadsSorted.length === 0 && !loading && (
         <Card className="text-center py-12">
           <Upload size={40} className="text-slate-300 mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Nenhum upload ainda</p>
