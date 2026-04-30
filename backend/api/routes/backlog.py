@@ -559,8 +559,8 @@ def excel_backlog(
                 c.font = BFNT; c.border = BRD; c.alignment = CTR
                 if rf: c.fill = rf
                 if ci in (3, 4): c.alignment = LFT
-                if ci == offset + 2: c.number_format = "0.0%"
-                fo = ci - (offset + 3)
+                if ci == offset + 3: c.number_format = "0.0%"
+                fo = ci - (offset + 4)
                 if 0 <= fo < len(FAIXAS):
                     cor = CORES_FAIXA.get(FAIXAS[fo], "FFFFFF")
                     if isinstance(val, (int, float)) and val > 0:
