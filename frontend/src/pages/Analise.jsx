@@ -15,7 +15,7 @@ import {
   PieChart, Pie, Cell, Label, ComposedChart, Line, LineChart,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { Download, Upload, X, Filter, Loader, ChevronDown, Check, Megaphone, ArrowRight } from 'lucide-react'
+import { Download, Upload, X, Filter, Loader, AlertCircle, ChevronDown, Check, Megaphone, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { validarArquivos } from '../lib/validarArquivo'
 
