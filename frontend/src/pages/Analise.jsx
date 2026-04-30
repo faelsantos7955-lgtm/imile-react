@@ -10,11 +10,7 @@ import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { PageHeader, KpiCard, ParticleField, SectionHeader, Card, RankingRow, Alert, Skeleton, toast } from '../components/ui'
 import Heatmap from '../components/Heatmap'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, Label, ComposedChart, Line, LineChart,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-} from 'recharts'
+import { LineChart, BarChart, RankBar, Donut } from '../components/charts.jsx'
 import { Download, Upload, X, Filter, Loader, AlertCircle, ChevronDown, Check, Megaphone, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { validarArquivos } from '../lib/validarArquivo'
@@ -844,60 +840,33 @@ export default function Analise() {
           )}
 
           {chFiltrado && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
-              <Card className="lg:col-span-2">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-700">Volume por DS</h3>
-                  <div className="flex items-center gap-4">
-                    {[{c:'#3b82f6',l:'Recebido'},{c:'#1048c8',l:'Expedido'},{c:'#10b981',l:'Entregas'}].map(({c,l}) => (
-                      <span key={l} className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                        <span className="w-2 h-2 rounded-sm" style={{background:c}}/>
-                        {l}
-                      </span>
-                    ))}
-                  </div>
+            <div className="grid-12" style={{ marginTop: 20 }}>
+              <div className="card">
+                <div className="card-head">
+                  <h3 className="card-title">Volume por DS</h3>
+                  <span className="chip chip-info">Top {Math.min(chFiltrado.volume_ds.length, 15)} DSs</span>
                 </div>
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={chFiltrado.volume_ds.slice(0, 20)} margin={{ bottom: 60 }}>
-                    <ChartGradients />
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="ds" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-40} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                    <Tooltip content={<ChartTooltip formatter={v => F(v)} />} />
-                    <Bar dataKey="recebido" fill="url(#grad-rec)" name="Recebido" radius={[4, 4, 0, 0]} maxBarSize={14} />
-                    <Bar dataKey="expedido" fill="url(#grad-exp)" name="Expedido" radius={[4, 4, 0, 0]} maxBarSize={14} />
-                    <Bar dataKey="entregas" fill="url(#grad-ent)" name="Entregas" radius={[4, 4, 0, 0]} maxBarSize={14} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-              <Card>
-                <h3 className="text-sm font-semibold text-slate-700 mb-4">Proporção de Expedição</h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <defs>
-                      <linearGradient id="grad-pie-exp" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
-                        <stop offset="100%" stopColor="#0032A0" stopOpacity={1}/>
-                      </linearGradient>
-                    </defs>
-                    <Pie data={[{ name: 'Expedido', value: chFiltrado.donut.expedido }, { name: 'Backlog', value: chFiltrado.donut.backlog }]}
-                      cx="50%" cy="50%" innerRadius={72} outerRadius={100} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                      <Cell fill="url(#grad-pie-exp)" />
-                      <Cell fill="#e2e8f0" />
-                      <Label value={P(chFiltrado.donut.taxa)} position="center" fill="#0f172a" fontSize={20} fontWeight={700} />
-                    </Pie>
-                    <Tooltip content={<ChartTooltip formatter={v => F(v)} />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex items-center justify-center gap-6 mt-2">
-                  {[{c:'url(#grad-pie-exp)',hex:'#3b82f6',l:'Expedido'},{c:'#e2e8f0',hex:'#e2e8f0',l:'Backlog'}].map(({hex,l}) => (
-                    <span key={l} className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                      <span className="w-2.5 h-2.5 rounded-sm" style={{background:hex}}/>
-                      {l}
-                    </span>
-                  ))}
+                <div className="card-body">
+                  <RankBar
+                    items={chFiltrado.volume_ds.slice(0, 15).map(d => ({
+                      label: d.ds, value: d.recebido, sub: `exp: ${F(d.expedido)}`,
+                    }))}
+                    formatV={v => F(v)}
+                  />
                 </div>
-              </Card>
+              </div>
+              <div className="card">
+                <div className="card-head"><h3 className="card-title">Proporção de Expedição</h3></div>
+                <div className="card-body">
+                  <Donut
+                    items={[
+                      { label: 'Expedido', value: chFiltrado.donut.expedido, color: 'var(--imile-500)' },
+                      { label: 'Backlog',  value: chFiltrado.donut.backlog,  color: 'var(--slate-200)' },
+                    ]}
+                    size={170}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -955,66 +924,60 @@ export default function Analise() {
                 <div className="kpi"><div className="kpi-label">{agrup === 'Diário' ? 'Dias' : agrup === 'Semanal' ? 'Semanas' : 'Meses'}</div><div className="kpi-value">{chartData.length}</div></div>
               </div>
 
-              <SectionHeader title={`Evolução ${agrup}`} />
-              <Card>
-                <ResponsiveContainer width="100%" height={380}>
-                  <ComposedChart data={chartData} margin={{ bottom: 40 }}>
-                    <ChartGradients />
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" tickFormatter={xFmt} />
-                    <YAxis yAxisId="vol" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                    <YAxis yAxisId="taxa" orientation="right" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v * 100).toFixed(0)}%`} domain={[0, 1.1]} />
-                    <Tooltip content={<ChartTooltip formatter={(v, n) => n === 'Taxa Exp.' ? P(v) : F(v)} />} />
-                    <Legend wrapperStyle={{ fontSize: 12, color: '#64748b' }} />
-                    <Bar yAxisId="vol" dataKey="recebido" fill="url(#grad-rec)" name="Recebido" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                    <Bar yAxisId="vol" dataKey="expedido" fill="url(#grad-exp)" name="Expedido" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                    <Line yAxisId="taxa" dataKey="taxa_exp" stroke="#10b981" strokeWidth={2.5}
-                      dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: 'white' }}
-                      activeDot={{ r: 6, fill: '#10b981', stroke: 'white', strokeWidth: 2 }}
-                      name="Taxa Exp." />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </Card>
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="card-head">
+                  <h3 className="card-title">Evolução {agrup}</h3>
+                  <span className="chip chip-muted">{chartData.length} {agrup === 'Diário' ? 'dias' : agrup === 'Semanal' ? 'semanas' : 'meses'}</span>
+                </div>
+                <div className="card-body">
+                  <LineChart
+                    series={[
+                      { name: 'Recebido', color: 'var(--imile-500)',   data: chartData.map(d => ({ x: xFmt(d[xKey]), y: d.recebido })) },
+                      { name: 'Expedido', color: 'var(--success-500)', data: chartData.map(d => ({ x: xFmt(d[xKey]), y: d.expedido })) },
+                    ]}
+                    height={340}
+                    formatY={v => F(v)}
+                  />
+                </div>
+              </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-                <Card className="lg:col-span-2">
-                  <div className="flex items-center gap-4 mb-4">
-                    <h3 className="text-sm font-semibold text-slate-700">Evolução por DS</h3>
-                    <select value={dsEvoSel} onChange={e => setDsEvoSel(e.target.value)}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm">
+              <div className="grid-12" style={{ marginTop: 16 }}>
+                <div className="card">
+                  <div className="card-head">
+                    <h3 className="card-title">Evolução por DS — Taxa de Expedição</h3>
+                    <select value={dsEvoSel} onChange={e => setDsEvoSel(e.target.value)} className="filter-select">
                       <option value="">Top 10 automático</option>
                       {dsList.map(ds => <option key={ds} value={ds}>{ds}</option>)}
                     </select>
                   </div>
-                  {evoChartData.length > 0 && (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={evoChartData} margin={{ bottom: 30 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="data_ref" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" tickFormatter={fD} />
-                        <YAxis tickFormatter={v => `${(v * 100).toFixed(0)}%`} tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} domain={[0, 1.1]} />
-                        <Tooltip content={<ChartTooltip formatter={(v) => v !== null ? P(v) : '—'} />} />
-                        {evoData?.series?.map((s, i) => (
-                          <Line key={s.ds} type="monotone" dataKey={s.ds} stroke={COLORS[i % COLORS.length]}
-                            strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2, stroke: 'white' }}
-                            activeDot={{ r: 5, strokeWidth: 2, stroke: 'white' }} connectNulls={false} />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </Card>
+                  <div className="card-body">
+                    {evoChartData.length > 0 && (
+                      <LineChart
+                        series={(evoData?.series || []).map((s, i) => ({
+                          name: s.ds, color: COLORS[i % COLORS.length], area: false,
+                          data: evoChartData.map(d => ({ x: fD(d.data_ref), y: d[s.ds] != null ? +(d[s.ds] * 100).toFixed(1) : 0 })),
+                        }))}
+                        height={280}
+                        formatY={v => v.toFixed(1) + '%'}
+                      />
+                    )}
+                  </div>
+                </div>
 
                 {radarData.length >= 3 && (
-                  <Card>
-                    <h3 className="text-sm font-semibold text-slate-700 mb-4">Top DS — Taxa de Expedição</h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <RadarChart data={radarData}>
-                        <PolarGrid stroke="#f1f5f9" />
-                        <PolarAngleAxis dataKey="ds" tick={{ fontSize: 9, fill: '#64748b' }} />
-                        <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 8, fill: '#94a3b8' }} />
-                        <Radar name="Taxa %" dataKey="taxa" stroke="#0032A0" strokeWidth={2} fill="#0032A0" fillOpacity={0.18} />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </Card>
+                  <div className="card">
+                    <div className="card-head"><h3 className="card-title">Top DS — Ranking Taxa Exp.</h3></div>
+                    <div className="card-body">
+                      <RankBar
+                        items={radarData.map(d => ({
+                          label: d.ds, value: d.taxa,
+                          color: d.taxa >= 90 ? 'var(--success-500)' : d.taxa >= 70 ? 'var(--warn-500)' : 'var(--danger-500)',
+                        }))}
+                        formatV={v => v?.toFixed(1)}
+                        valueLabel="%"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
 

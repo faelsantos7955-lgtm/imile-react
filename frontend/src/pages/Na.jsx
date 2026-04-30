@@ -8,9 +8,7 @@ import {
   Upload, X, FileSpreadsheet, PackageX, ChevronUp, ChevronDown,
   Truck, PackageCheck, AlertTriangle, Download, History,
 } from 'lucide-react'
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from 'recharts'
+import { LineChart } from '../components/charts.jsx'
 import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import {
@@ -426,51 +424,41 @@ function HistoricoNA({ uploads }) {
 
   return (
     <div className="space-y-6">
-      {/* Gráfico global */}
-      <Card title="Evolução Global" subtitle="Total de waybills e pacotes em atraso por semana">
-        {isLoading ? (
-          <div className="h-48 flex items-center justify-center">
-            <span className="w-5 h-5 border-2 border-imile-500/30 border-t-imile-500 rounded-full animate-spin" />
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={globalData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid {...chartTheme.grid} />
-              <XAxis dataKey="data" tick={chartTheme.axisStyle} />
-              <YAxis tick={chartTheme.axisStyle} width={50} />
-              <Tooltip {...chartTheme.tooltip}
-                formatter={(v, name) => [v?.toLocaleString('pt-BR'), name]}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="Total" stroke="#095EF7" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              {globalData[0] && Object.keys(globalData[0]).filter(k => k !== 'data' && k !== 'Total').map(key => (
-                <Line key={key} type="monotone" dataKey={key} stroke="#dc2626" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 4 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </Card>
+      <div className="card">
+        <div className="card-head"><h3 className="card-title">Evolução Global</h3><div className="card-sub">Total de waybills e pacotes em atraso por semana</div></div>
+        <div className="card-body">
+          {isLoading ? (
+            <div className="skel" style={{ height: 200, borderRadius: 'var(--r-md)' }} />
+          ) : (
+            <LineChart
+              series={[
+                { name: 'Total', color: 'var(--imile-500)', data: globalData.map(d => ({ x: d.data, y: d.Total || 0 })) },
+                ...(globalData[0] ? Object.keys(globalData[0]).filter(k => k !== 'data' && k !== 'Total').map(key => ({
+                  name: key, color: 'var(--danger-500)', area: false,
+                  data: globalData.map(d => ({ x: d.data, y: d[key] || 0 })),
+                })) : []),
+              ]}
+              height={240}
+              formatY={v => v.toLocaleString('pt-BR')}
+            />
+          )}
+        </div>
+      </div>
 
-      {/* Gráfico por supervisor */}
       {supervisores.length > 0 && (
-        <Card title="Total por Supervisor" subtitle="Evolução semanal de waybills em atraso por supervisor">
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={supChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid {...chartTheme.grid} />
-              <XAxis dataKey="data" tick={chartTheme.axisStyle} />
-              <YAxis tick={chartTheme.axisStyle} width={50} />
-              <Tooltip {...chartTheme.tooltip}
-                formatter={(v, name) => [v?.toLocaleString('pt-BR'), name]}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              {supervisores.map((sup, i) => (
-                <Line key={sup} type="monotone" dataKey={sup}
-                  stroke={SUP_COLORS[i % SUP_COLORS.length]}
-                  strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
+        <div className="card">
+          <div className="card-head"><h3 className="card-title">Total por Supervisor</h3><div className="card-sub">Evolução semanal de waybills em atraso por supervisor</div></div>
+          <div className="card-body">
+            <LineChart
+              series={supervisores.map((sup, i) => ({
+                name: sup, color: SUP_COLORS[i % SUP_COLORS.length], area: false,
+                data: supChartData.map(d => ({ x: d.data, y: d[sup] || 0 })),
+              }))}
+              height={280}
+              formatY={v => v.toLocaleString('pt-BR')}
+            />
+          </div>
+        </div>
       )}
 
       {/* Tabela resumo */}

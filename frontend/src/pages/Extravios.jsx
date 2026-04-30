@@ -3,10 +3,7 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
-} from 'recharts'
+import { RankBar, Donut, LineChart } from '../components/charts.jsx'
 import { Upload, Loader, Trash2, AlertCircle, TrendingDown, Download } from 'lucide-react'
 import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme, LogisticsEmptyState } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
@@ -162,36 +159,20 @@ export default function Extravios() {
 
           {/* Top DS */}
           {top15.length > 0 && (
-            <>
-              <div className="card" style={{ marginTop: 20 }}>
-                <div className="card-head"><h3 className="card-title">Top 15 DS por Ocorrências</h3></div>
-                <div className="card-body">
-                <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={top15} layout="vertical" margin={{ left: 70, right: 30 }}>
-                    <defs>
-                      <linearGradient id="gradLostH" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#f87171" stopOpacity={0.95}/>
-                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.85}/>
-                      </linearGradient>
-                      <linearGradient id="gradDmgH" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#fb923c" stopOpacity={0.95}/>
-                        <stop offset="100%" stopColor="#ea580c" stopOpacity={0.85}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid {...chartTheme.grid} horizontal={false} />
-                    <XAxis type="number" tick={chartTheme.axisStyle} />
-                    <YAxis type="category" dataKey="ds" tick={chartTheme.axisStyle} width={70} />
-                    <Tooltip {...chartTheme.tooltip}
-                      formatter={(v, n) => [v.toLocaleString('pt-BR'), n === 'total_lost' ? 'Perdidos' : 'Avarias']}
-                    />
-                    <Legend formatter={n => n === 'total_lost' ? 'Goods Lost' : 'Avaria'} />
-                    <Bar dataKey="total_lost"    stackId="a" fill="url(#gradLostH)" name="total_lost" radius={[0,0,0,0]} />
-                    <Bar dataKey="total_damaged" stackId="a" fill="url(#gradDmgH)"  name="total_damaged" radius={[0,4,4,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-                </div>
+            <div className="card" style={{ marginTop: 20 }}>
+              <div className="card-head"><h3 className="card-title">Top 15 DS — Ocorrências</h3></div>
+              <div className="card-body">
+                <RankBar
+                  items={top15.map(d => ({
+                    label: d.ds,
+                    value: d.total,
+                    sub: `lost: ${d.total_lost} · avaria: ${d.total_damaged}`,
+                    color: 'var(--danger-500)',
+                  }))}
+                  formatV={v => String(v)}
+                />
               </div>
-            </>
+            </div>
           )}
 
           <div className="grid-2" style={{ marginTop: 20 }}>
@@ -200,41 +181,29 @@ export default function Extravios() {
               <div className="card">
                 <div className="card-head"><h3 className="card-title">Por Motivo</h3></div>
                 <div className="card-body">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie data={porMot} dataKey="total" nameKey="motivo" cx="50%" cy="50%" outerRadius={100}
-                        label={({ motivo, percent }) => `${(percent * 100).toFixed(0)}%`}
-                        labelLine={false}>
-                        {porMot.map((_, i) => <Cell key={i} fill={CORES_MOTIVO[i % CORES_MOTIVO.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v, n) => [v.toLocaleString('pt-BR'), n]} />
-                      <Legend formatter={(v) => v.length > 35 ? v.slice(0, 35) + '…' : v} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <Donut
+                    items={porMot.map((m, i) => ({
+                      label: m.motivo.length > 28 ? m.motivo.slice(0, 28) + '…' : m.motivo,
+                      value: m.total,
+                      color: CORES_MOTIVO[i % CORES_MOTIVO.length],
+                    }))}
+                    size={160}
+                  />
                 </div>
               </div>
             )}
 
-            {/* Evolução por semana */}
             {porSem.length > 0 && (
               <div className="card">
                 <div className="card-head"><h3 className="card-title">Evolução Semanal</h3></div>
                 <div className="card-body">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={porSem} margin={{ right: 20 }}>
-                      <CartesianGrid {...chartTheme.grid} />
-                      <XAxis dataKey="semana" tick={chartTheme.axisStyle} />
-                      <YAxis yAxisId="left"  tick={chartTheme.axisStyle} />
-                      <YAxis yAxisId="right" orientation="right" tick={chartTheme.axisStyle}
-                        tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-                      <Tooltip {...chartTheme.tooltip}
-                        formatter={(v, n) => n === 'valor_total' ? [BRL(v), 'Valor'] : [v.toLocaleString('pt-BR'), 'Ocorrências']}
-                      />
-                      <Legend />
-                      <Line yAxisId="left"  type="monotone" dataKey="total"       stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} name="Ocorrências" />
-                      <Line yAxisId="right" type="monotone" dataKey="valor_total" stroke="#f97316" strokeWidth={2} dot={{ r: 4 }} name="valor_total" strokeDasharray="5 5" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <LineChart
+                    series={[
+                      { name: 'Ocorrências', color: 'var(--danger-500)', data: porSem.map(s => ({ x: s.semana, y: s.total })) },
+                    ]}
+                    height={260}
+                    formatY={v => v.toLocaleString('pt-BR')}
+                  />
                 </div>
               </div>
             )}

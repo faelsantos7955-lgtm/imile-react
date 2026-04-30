@@ -3,10 +3,7 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell,
-} from 'recharts'
+import { BarChart, Donut } from '../components/charts.jsx'
 import { Upload, Loader, Trash2, AlertCircle, Clock, Download } from 'lucide-react'
 import { PageHeader, Card, SectionHeader, toast, TableSkeleton, chartTheme, LogisticsEmptyState } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
@@ -215,72 +212,50 @@ export default function NoTracking() {
                   ))}
                 </div>
               </div>
-              <Card>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={supChart} margin={{ left: 10, right: 20 }}>
-                    <defs>
-                      <linearGradient id="gradBlueV" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#1048c8" stopOpacity={0.95}/>
-                        <stop offset="100%" stopColor="#0032A0" stopOpacity={0.85}/>
-                      </linearGradient>
-                      <linearGradient id="gradRedV" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f87171" stopOpacity={0.95}/>
-                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0.85}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid {...chartTheme.grid} />
-                    <XAxis dataKey="name" tick={chartTheme.axisStyle} />
-                    <YAxis tick={chartTheme.axisStyle} />
-                    <Tooltip {...chartTheme.tooltip} formatter={v => v.toLocaleString('pt-BR')} />
-                    {viewSup === 'total'
-                      ? <Bar dataKey="Total"   fill="url(#gradBlueV)" radius={[4,4,0,0]} />
-                      : <Bar dataKey="≥7 dias" fill="url(#gradRedV)"  radius={[4,4,0,0]} />
-                    }
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
+              <div className="card">
+                <div className="card-body">
+                  <BarChart
+                    data={supChart.map(d => ({
+                      label: d.name.length > 14 ? d.name.slice(0, 14) + '…' : d.name,
+                      value: viewSup === 'total' ? d['Total'] : d['≥7 dias'],
+                      color: viewSup === 'total' ? 'var(--imile-500)' : 'var(--danger-500)',
+                    }))}
+                    height={280}
+                    formatY={v => v.toLocaleString('pt-BR')}
+                  />
+                </div>
+              </div>
             </>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             {/* Distribuição por Faixa de Aging */}
             {porFaixa.length > 0 && (
-              <div>
-                <SectionHeader title="Distribuição por Aging" />
-                <Card>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={porFaixa} margin={{ right: 10 }}>
-                      <CartesianGrid {...chartTheme.grid} />
-                      <XAxis dataKey="faixa" tick={chartTheme.axisStyle} angle={-15} textAnchor="end" height={40} />
-                      <YAxis tick={chartTheme.axisStyle} />
-                      <Tooltip {...chartTheme.tooltip} formatter={(v, n) => [v.toLocaleString('pt-BR'), n === 'total' ? 'Pacotes' : n]} />
-                      <Bar dataKey="total" name="total" radius={[4,4,0,0]}>
-                        {porFaixa.map((f, i) => (
-                          <Cell key={i} fill={COR_FAIXA[f.faixa] || '#94a3b8'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
+              <div className="card">
+                <div className="card-head"><h3 className="card-title">Distribuição por Aging</h3></div>
+                <div className="card-body">
+                  <BarChart
+                    data={porFaixa.map(f => ({ label: f.faixa, value: f.total, color: COR_FAIXA[f.faixa] || 'var(--slate-400)' }))}
+                    height={240}
+                    formatY={v => v.toLocaleString('pt-BR')}
+                  />
+                </div>
               </div>
             )}
 
-            {/* Por Status */}
             {porSta.length > 0 && (
-              <div>
-                <SectionHeader title="Por Último Status" />
-                <Card>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={porSta} dataKey="total" nameKey="status" cx="50%" cy="50%"
-                        outerRadius={95} label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
-                        {porSta.map((_, i) => <Cell key={i} fill={CORES_STATUS[i % CORES_STATUS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v) => v.toLocaleString('pt-BR')} />
-                      <Legend formatter={v => v.length > 30 ? v.slice(0, 30) + '…' : v} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Card>
+              <div className="card">
+                <div className="card-head"><h3 className="card-title">Por Último Status</h3></div>
+                <div className="card-body">
+                  <Donut
+                    items={porSta.map((s, i) => ({
+                      label: s.status.length > 22 ? s.status.slice(0, 22) + '…' : s.status,
+                      value: s.total,
+                      color: CORES_STATUS[i % CORES_STATUS.length],
+                    }))}
+                    size={160}
+                  />
+                </div>
               </div>
             )}
           </div>

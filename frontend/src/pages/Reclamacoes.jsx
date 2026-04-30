@@ -6,10 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { PageHeader, KpiCard, SectionHeader, Card, Alert, toast, ConfirmDialog, chartTheme } from '../components/ui'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, Legend,
-} from 'recharts'
+import { LineChart, RankBar } from '../components/charts.jsx'
 import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader, X, FileSpreadsheet } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
 import { processReclamacoes } from '../lib/processarLocal'
@@ -350,54 +347,39 @@ export default function Reclamacoes() {
                         </p>
                       )}
                     </Card>
-                    <Card>
-                      <ResponsiveContainer width="100%" height={240}>
-                        <BarChart data={detail.top5.slice().reverse()} layout="vertical" margin={{ left: 100, right: 40 }}>
-                          <defs>
-                            <linearGradient id="gradRecH" x1="0" y1="0" x2="1" y2="0">
-                              <stop offset="0%" stopColor="#dc2626" stopOpacity={0.95}/>
-                              <stop offset="100%" stopColor="#1048c8" stopOpacity={0.8}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid {...chartTheme.grid} />
-                          <XAxis type="number" tick={chartTheme.axisStyle} />
-                          <YAxis type="category" dataKey="motorista" tick={chartTheme.axisStyle} width={95} />
-                          <Tooltip {...chartTheme.tooltip} />
-                          <Bar dataKey="total" name="Reclamações" fill="url(#gradRecH)" radius={[0, 4, 4, 0]}
-                            label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: '#dc2626' }} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
+                    <div className="card" style={{ padding: '16px 20px' }}>
+                      <RankBar
+                        items={detail.top5.map(r => ({
+                          label: r.motorista.length > 22 ? r.motorista.slice(0, 22) + '…' : r.motorista,
+                          value: r.total,
+                          color: 'var(--danger-500)',
+                        }))}
+                        formatV={v => String(v)}
+                      />
+                    </div>
                   </div>
                 </>
               )}
 
               {weeklyChartData.length > 1 && (
-                <>
-                  <SectionHeader title="Motoristas Ofensores por Semana" />
-                  <Card>
-                    <ResponsiveContainer width="100%" height={350}>
-                      <BarChart data={weeklyChartData} margin={{ bottom: 30 }}>
-                        <defs>
-                          {COLORS_WEEK.map((c, i) => (
-                            <linearGradient key={i} id={`gradWeek${i}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={c} stopOpacity={0.95}/>
-                              <stop offset="100%" stopColor={c} stopOpacity={0.7}/>
-                            </linearGradient>
-                          ))}
-                        </defs>
-                        <CartesianGrid {...chartTheme.grid} />
-                        <XAxis dataKey="semana" tick={chartTheme.axisStyle} />
-                        <YAxis tick={chartTheme.axisStyle} />
-                        <Tooltip {...chartTheme.tooltip} /><Legend />
-                        {weeklyMotoristas.map((m, i) => (
-                          <Bar key={m} dataKey={m} stackId="a" fill={`url(#gradWeek${i % COLORS_WEEK.length})`}
-                            name={m.length > 15 ? m.slice(0, 15) + '…' : m} />
-                        ))}
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Card>
-                </>
+                <div className="card" style={{ marginTop: 20 }}>
+                  <div className="card-head">
+                    <h3 className="card-title">Motoristas Ofensores por Semana</h3>
+                    <span className="chip chip-muted">{weeklyChartData.length} semanas</span>
+                  </div>
+                  <div className="card-body">
+                    <LineChart
+                      series={weeklyMotoristas.map((m, i) => ({
+                        name: m.length > 18 ? m.slice(0, 18) + '…' : m,
+                        color: COLORS_WEEK[i % COLORS_WEEK.length],
+                        data: weeklyChartData.map(d => ({ x: d.semana, y: d[m] || 0 })),
+                        area: false,
+                      }))}
+                      height={300}
+                      formatY={v => String(v)}
+                    />
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
