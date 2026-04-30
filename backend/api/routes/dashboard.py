@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user
 import pandas as pd
+pd.set_option('future.no_silent_downcasting', True)
 
 router = APIRouter()
 
@@ -139,7 +140,7 @@ def heatmap_data(data_ref: str, user: dict = Depends(get_current_user), db: Sess
     # Monta matriz para heatmap
     def _matrix(col):
         pivot = df.pivot_table(index="scan_station", columns="destination_city",
-                       values=col, aggfunc="mean").fillna(0).infer_objects(copy=False)
+                       values=col, aggfunc="mean").astype(float).fillna(0.0)
         pivot = pivot.reindex(index=ds_list, columns=city_list, fill_value=0)
         return [[round(float(pivot.loc[ds, city]), 4) for city in city_list] for ds in ds_list]
 
