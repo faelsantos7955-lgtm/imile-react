@@ -1,11 +1,6 @@
 """
 Testes de integração leve — endpoints que não requerem banco.
 """
-import os
-os.environ.setdefault("SUPABASE_URL", "http://localhost")
-os.environ.setdefault("SUPABASE_KEY", "fake-key")
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
-
 from fastapi.testclient import TestClient
 from api.main import app
 

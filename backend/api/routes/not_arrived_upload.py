@@ -4,17 +4,17 @@ api/routes/not_arrived_upload.py — Upload e processamento do relatório
 """
 import gc
 import io
-import uuid
 import logging
 import threading
 from datetime import date
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db, _engine
+from api.deps import get_current_user, get_db, _session_factory
+from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, detectar_aba
 
@@ -29,12 +29,9 @@ try:
 except ImportError:
     pass
 
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
-
 
 def _make_db() -> Session:
-    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
+    return _session_factory()()
 
 
 OPERACAO_MAP = {
@@ -313,8 +310,7 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
     db = _make_db()
 
     def _set(update: dict):
-        with _jobs_lock:
-            _jobs[job_id].update(update)
+        update_job(job_id, **update)
 
     try:
         _set({"fase": "processando"})
@@ -450,17 +446,14 @@ async def processar_not_arrived(
             if existing:
                 return {"skipped": True, "data_ref": data_ref_peek, "upload_id": existing["id"]}
 
-    job_id = str(uuid.uuid4())
-    with _jobs_lock:
-        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+    job_id = create_job()
     threading.Thread(target=_run_job, args=(job_id, conteudo, user), daemon=True).start()
     return {"job_id": job_id, "status": "processing"}
 
 
 @router.get("/job/{job_id}")
 def status_job(job_id: str, user: dict = Depends(get_current_user)):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
+    job = get_job(job_id)
     if job is None:
-        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+        raise HTTPException(404, "Job não encontrado.")
     return job

@@ -3,7 +3,7 @@ api/routes/triagem.py — Dados de triagem
 """
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -46,7 +46,12 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user), db: S
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def deletar_upload(
+    upload_id: int,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
         try:
             db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
@@ -55,7 +60,7 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Sess
             raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
     db.execute(text("DELETE FROM triagem_uploads WHERE id = :id"), {"id": upload_id})
     db.commit()
-    audit_log("upload_deletado", f"triagem_uploads:{upload_id}", {}, user)
+    audit_log(background_tasks, "upload_deletado", f"triagem_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 

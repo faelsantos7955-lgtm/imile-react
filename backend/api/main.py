@@ -6,6 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -34,44 +35,100 @@ from api.routes.na_upload import router as na_upload_router
 from api.routes.avisos import router as avisos_router
 from api.routes.whatsapp import router as whatsapp_router
 
+log = logging.getLogger("startup")
+
+
 async def _neon_keepalive():
     """Pinga o banco a cada 4 min para o Neon não suspender."""
     from sqlalchemy import text as _text
-    from api.deps import _engine
-    from sqlalchemy.orm import sessionmaker
+    from api.deps import _session_factory
     await asyncio.sleep(30)  # aguarda o boot
     while True:
         try:
-            Session = sessionmaker(bind=_engine())
-            db = Session()
-            db.execute(_text("SELECT 1"))
-            db.close()
+            db = _session_factory()()
+            try:
+                db.execute(_text("SELECT 1"))
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
-            print(f"[keepalive] Neon ping falhou: {e}")
-        await asyncio.sleep(4 * 60)
+            log.warning("[keepalive] Neon ping falhou: %s", e)
+        try:
+            await asyncio.sleep(4 * 60)
+        except asyncio.CancelledError:
+            raise
+
+
+def _run_migrations() -> None:
+    """Migrações idempotentes — toleram falha individual sem derrubar o boot."""
+    from sqlalchemy import text as _text
+    from api.deps import _session_factory
+    from api.routes.contestacoes import _ensure_resolucao_column
+    from api.jobs import ensure_schema as _ensure_jobs
+
+    db = _session_factory()()
+    try:
+        # contestacoes.resolucao
+        try:
+            _ensure_resolucao_column(db)
+        except Exception as e:
+            log.warning("[migration] resolucao: %s", e)
+
+        # audit_log.detalhe → JSONB (legado vira {"legacy_text": "..."})
+        try:
+            db.execute(_text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'audit_log' AND column_name = 'detalhe'
+                          AND data_type NOT IN ('jsonb', 'json')
+                    ) THEN
+                        ALTER TABLE audit_log
+                            ALTER COLUMN detalhe TYPE jsonb
+                            USING jsonb_build_object('legacy_text', COALESCE(detalhe, ''));
+                    END IF;
+                END$$;
+            """))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            log.warning("[migration] audit_log jsonb: %s", e)
+
+        # tabela jobs (substitui dict in-memory)
+        try:
+            _ensure_jobs(db)
+        except Exception as e:
+            db.rollback()
+            log.warning("[migration] jobs: %s", e)
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Migrações idempotentes
     try:
-        from api.deps import get_db as _get_db
-        db = next(_get_db())
-        from api.routes.contestacoes import _ensure_resolucao_column
-        _ensure_resolucao_column(db)
-        db.close()
+        _run_migrations()
     except Exception as e:
-        print(f"[lifespan] migration warn: {e}")
+        log.warning("[lifespan] migrations falharam: %s", e)
 
     task = asyncio.create_task(_neon_keepalive())
-    yield
-    task.cancel()
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 app = FastAPI(title="iMile Dashboard API", version="1.0.0", docs_url="/docs", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 _default_origins = "https://imile-react.vercel.app,http://localhost:5173,http://localhost:5174"
 allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _default_origins).split(",") if o.strip()]
@@ -80,8 +137,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router,                 prefix="/api/auth",          tags=["Auth"])

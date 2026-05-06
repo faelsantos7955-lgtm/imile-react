@@ -1,7 +1,7 @@
 """
 api/routes/not_arrived.py — Listagem, detalhe e exclusão de uploads Not Arrived
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
@@ -58,7 +58,12 @@ def tendencia_upload(upload_id: int, user: dict = Depends(get_current_user), db:
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def deletar_upload(
+    upload_id: int,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     for tbl in ("not_arrived_por_estacao", "not_arrived_por_regiao",
                 "not_arrived_por_operacao", "not_arrived_por_supervisor",
                 "not_arrived_tendencia"):
@@ -68,5 +73,5 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Sess
             raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
     db.execute(text("DELETE FROM not_arrived_uploads WHERE id = :id"), {"id": upload_id})
     db.commit()
-    audit_log("upload_deletado", f"not_arrived_uploads:{upload_id}", {}, user)
+    audit_log(background_tasks, "upload_deletado", f"not_arrived_uploads:{upload_id}", {}, user)
     return {"ok": True}

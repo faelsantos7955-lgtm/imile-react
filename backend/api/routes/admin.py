@@ -3,8 +3,10 @@ api/routes/admin.py — Rotas administrativas
 """
 import io
 import uuid
+import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Request
 from pydantic import BaseModel, field_validator
 from typing import Literal
@@ -13,7 +15,10 @@ from sqlalchemy import text
 from api.deps import get_db, require_admin, audit_log
 from api.email_utils import email_boas_vindas
 from api.limiter import limiter
+from api.routes.auth import hash_password_token
 import pandas as pd
+
+log = logging.getLogger("admin")
 
 PAGINAS_VALIDAS = {'dashboard','historico','comparativos','triagem','reclamacoes','backlog','monitoramento','admin'}
 ACOES_VALIDAS   = {'excel','bloquear_motorista','aprovar_acesso'}
@@ -53,8 +58,13 @@ class PermissoesRequest(BaseModel):
 
 
 @router.put("/usuarios/{user_id}")
-def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
-    from datetime import datetime
+def atualizar_usuario(
+    user_id: str,
+    req: PermissoesRequest,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     result = db.execute(
         text("""
             UPDATE usuarios
@@ -70,14 +80,14 @@ def atualizar_usuario(user_id: str, req: PermissoesRequest, user: dict = Depends
             "role": req.role,
             "ativo": req.ativo,
             "atualizado_por": user["email"],
-            "atualizado_em": datetime.utcnow().isoformat(),
+            "atualizado_em": datetime.now(timezone.utc).isoformat(),
             "id": user_id,
         }
     )
     if result.rowcount == 0:
         raise HTTPException(404, "Usuário não encontrado")
     db.commit()
-    audit_log("permissoes_atualizadas", f"usuario:{user_id}",
+    audit_log(background_tasks, "permissoes_atualizadas", f"usuario:{user_id}",
               {"role": req.role, "ativo": req.ativo, "paginas": req.paginas}, user)
     return {"ok": True}
 
@@ -122,6 +132,7 @@ def aprovar(sol_id: int, background_tasks: BackgroundTasks, role: str = "viewer"
     email_enviado = False
     try:
         token = secrets.token_urlsafe(32)
+        token_hash = hash_password_token(token)
         expires_at = datetime.utcnow() + timedelta(hours=48)
         db.execute(
             text("""
@@ -130,15 +141,15 @@ def aprovar(sol_id: int, background_tasks: BackgroundTasks, role: str = "viewer"
                 ON CONFLICT (email) DO UPDATE
                 SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, usado = false
             """),
-            {"token": token, "email": s["email"], "expires_at": expires_at}
+            {"token": token_hash, "email": s["email"], "expires_at": expires_at}
         )
         db.commit()
         background_tasks.add_task(email_boas_vindas, s["nome"], s["email"], token)
         email_enviado = True
-    except Exception as e:
-        print(f"[aprovar] Erro ao gerar token: {e}")
+    except Exception:
+        log.exception("[aprovar] Erro ao gerar token de senha")
 
-    audit_log("solicitacao_aprovada", f"solicitacao:{sol_id}",
+    audit_log(background_tasks, "solicitacao_aprovada", f"solicitacao:{sol_id}",
               {"email": s["email"], "role": role}, user)
     return {"ok": True, "email_enviado": email_enviado}
 
@@ -153,6 +164,7 @@ def reenviar_convite(user_id: str, background_tasks: BackgroundTasks, user: dict
         raise HTTPException(404, "Usuário não encontrado")
 
     token = secrets.token_urlsafe(32)
+    token_hash = hash_password_token(token)
     expires_at = datetime.utcnow() + timedelta(hours=48)
     db.execute(
         text("""
@@ -161,7 +173,7 @@ def reenviar_convite(user_id: str, background_tasks: BackgroundTasks, user: dict
             ON CONFLICT (email) DO UPDATE
             SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, usado = false
         """),
-        {"token": token, "email": row["email"], "expires_at": expires_at}
+        {"token": token_hash, "email": row["email"], "expires_at": expires_at}
     )
     db.commit()
     background_tasks.add_task(email_boas_vindas, row["nome"], row["email"], token)
@@ -169,13 +181,18 @@ def reenviar_convite(user_id: str, background_tasks: BackgroundTasks, user: dict
 
 
 @router.post("/solicitacoes/{sol_id}/rejeitar")
-def rejeitar(sol_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def rejeitar(
+    sol_id: int,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     db.execute(
         text("UPDATE solicitacoes_acesso SET status = 'rejeitado' WHERE id = :id"),
         {"id": sol_id}
     )
     db.commit()
-    audit_log("solicitacao_rejeitada", f"solicitacao:{sol_id}", {}, user)
+    audit_log(background_tasks, "solicitacao_rejeitada", f"solicitacao:{sol_id}", {}, user)
     return {"ok": True}
 
 
@@ -216,7 +233,6 @@ class MotoristaRequest(BaseModel):
 
 @router.post("/motoristas")
 def upsert_motorista(req: MotoristaRequest, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
-    from datetime import datetime
     db.execute(
         text("""
             INSERT INTO motoristas_status (id_motorista, nome_motorista, ativo, motivo, atualizado_em, atualizado_por)
@@ -233,7 +249,7 @@ def upsert_motorista(req: MotoristaRequest, user: dict = Depends(require_admin),
             "nome_motorista": req.nome_motorista,
             "ativo":          req.ativo,
             "motivo":         req.motivo,
-            "atualizado_em":  datetime.utcnow().isoformat(),
+            "atualizado_em":  datetime.now(timezone.utc).isoformat(),
             "atualizado_por": user["email"],
         }
     )
@@ -257,14 +273,14 @@ def listar_metas(user: dict = Depends(require_admin), db: Session = Depends(get_
 
 @router.put("/metas")
 def upsert_metas(metas: list[MetaDS], user: dict = Depends(require_admin), db: Session = Depends(get_db)):
-    from datetime import datetime
+    now_iso = datetime.now(timezone.utc).isoformat()
     rows = [
         {
             "ds":              m.ds.strip().upper(),
             "meta_expedicao":  round(m.meta_expedicao, 4),
             "meta_entrega":    round(m.meta_entrega, 4),
             "regiao":          m.regiao.strip(),
-            "atualizado_em":   datetime.utcnow().isoformat(),
+            "atualizado_em":   now_iso,
             "atualizado_por":  user["email"],
         }
         for m in metas
@@ -312,6 +328,7 @@ def listar_supervisores(user: dict = Depends(require_admin), db: Session = Depen
 @limiter.limit("10/minute")
 async def upload_supervisores(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
@@ -363,5 +380,6 @@ async def upload_supervisores(
         rows
     )
     db.commit()
-    audit_log("supervisores_atualizados", "config_supervisores", {"total": len(rows), "aba": aba}, user)
+    audit_log(background_tasks, "supervisores_atualizados", "config_supervisores",
+              {"total": len(rows), "aba": aba}, user)
     return {"ok": True, "total": len(rows), "aba": aba}

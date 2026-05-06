@@ -11,7 +11,6 @@ Lógica Arrival (opcional):
   Recebidos NOK = waybills NOK do LoadingScan que aparecem no Arrival
 """
 import io
-import uuid
 import time
 import logging
 import threading
@@ -26,19 +25,16 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from sqlalchemy.orm import sessionmaker
-from api.deps import get_current_user, _engine
+from api.deps import get_current_user, _session_factory
+from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, detectar_aba
 from api.lark_utils import notify_triagem
 
+
 def _make_db() -> Session:
     """Cria uma Session independente — seguro para uso em threads."""
-    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
-
-# ── Job store (in-memory, thread-safe) ───────────────────────
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
+    return _session_factory()()
 
 router = APIRouter()
 
@@ -301,12 +297,11 @@ def _processar(df: pd.DataFrame, db: Session, arrival_set: set[str] | None = Non
 
 
 def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: dict):
-    """Executa processamento em thread separada e atualiza _jobs."""
+    """Executa processamento em thread separada e atualiza a tabela jobs."""
     db = _make_db()
 
     def _set(update: dict):
-        with _jobs_lock:
-            _jobs[job_id].update(update)
+        update_job(job_id, **update)
 
     try:
         t_total = time.time()
@@ -467,20 +462,15 @@ async def processar_triagem(
     conteudos = [await validar_arquivo(f) for f in ls_uploads]
     arr_bytes = [await validar_arquivo(f) for f in arr_uploads]
 
-    job_id = str(uuid.uuid4())
-    with _jobs_lock:
-        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
-
-    t = threading.Thread(target=_run_job, args=(job_id, conteudos, arr_bytes, user), daemon=True)
-    t.start()
+    job_id = create_job()
+    threading.Thread(target=_run_job, args=(job_id, conteudos, arr_bytes, user), daemon=True).start()
 
     return {"job_id": job_id, "status": "processing"}
 
 
 @router.get("/job/{job_id}")
 def status_job(job_id: str, user: dict = Depends(get_current_user)):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
+    job = get_job(job_id)
     if job is None:
-        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado. Tente novamente.")
+        raise HTTPException(404, "Job não encontrado.")
     return job

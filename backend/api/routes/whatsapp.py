@@ -126,9 +126,8 @@ def _parse_planilha(buf: bytes) -> list[dict]:
 
 def _disparar_campanha(campanha_id: int, intervalo: float = 1.0):
     """Roda em background — envia mensagens com intervalo entre cada uma."""
-    from api.deps import _engine
-    from sqlalchemy.orm import sessionmaker
-    db = sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
+    from api.deps import _session_factory
+    db = _session_factory()()
     try:
         contatos = db.execute(
             text("SELECT id, nome, telefone, rastreio, empresa FROM whatsapp_contatos WHERE campanha_id = :cid AND status = 'pendente'"),

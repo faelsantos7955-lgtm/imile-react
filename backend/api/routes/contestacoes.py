@@ -1,13 +1,15 @@
 """
 api/routes/contestacoes.py — Controle de Contestações de Descontos Logísticos
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional, List, Any
 from datetime import date, timedelta
 import json
+
+from api.limiter import limiter
 
 
 def add_business_days(d: date, days: int) -> date:
@@ -67,16 +69,20 @@ class StatusUpdate(BaseModel):
     resolucao: Optional[str] = None
 
 
-# ── Consulta pública por waybill (sem autenticação) ───────────
+# ── Consulta pública por waybill (sem autenticação, com rate limit) ───────────
 @router.get("/consulta/{waybill}")
-def consulta_publica(waybill: str, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def consulta_publica(request: Request, waybill: str, db: Session = Depends(get_db)):
+    waybill = waybill.strip()
+    if not waybill or len(waybill) > 64 or not waybill.replace("-", "").isalnum():
+        raise HTTPException(400, "Waybill inválido")
     rows = db.execute(text("""
         SELECT waybill, motivo_desconto, valor_desconto, ds,
                status_analise, observacao, resolucao, previsao, data_contestacao
         FROM contestacoes
         WHERE UPPER(waybill) = UPPER(:waybill)
         ORDER BY criado_em DESC
-    """), {"waybill": waybill.strip()}).mappings().all()
+    """), {"waybill": waybill}).mappings().all()
     return [dict(r) for r in rows]
 
 
@@ -94,9 +100,10 @@ def listar(db: Session = Depends(get_db), user: dict = Depends(get_current_user)
     return [dict(r) for r in rows]
 
 
-# ── Criação (pública — sem autenticação) ─────────────────────
+# ── Criação (pública — sem autenticação, com rate limit) ─────────────────────
 @router.post("")
-def criar(body: ContestacaoCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def criar(request: Request, body: ContestacaoCreate, db: Session = Depends(get_db)):
     if body.motivo_desconto not in MOTIVOS:
         raise HTTPException(400, f"Motivo inválido. Opções: {', '.join(MOTIVOS)}")
     if body.faturamento_b64 and len(body.faturamento_b64) > MAX_B64_LEN:

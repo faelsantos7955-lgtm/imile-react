@@ -2,8 +2,8 @@
 api/routes/auth.py — Login, registro e perfil (JWT próprio + PostgreSQL)
 """
 import os
+import hashlib
 import secrets
-import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Response, Cookie
@@ -33,6 +33,10 @@ _COOKIE_OPTS = dict(
 
 
 # ── Helpers JWT ───────────────────────────────────────────────
+
+def hash_password_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
 
 def _make_access_token(user_id: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TTL)
@@ -151,14 +155,15 @@ def logout(response: Response):
 
 @router.post("/definir-senha")
 def definir_senha(req: DefinirSenhaRequest, db: Session = Depends(get_db)):
+    if len(req.senha) < 8:
+        raise HTTPException(422, "A senha deve ter pelo menos 8 caracteres")
+    token_hash = hash_password_token(req.token)
     row = db.execute(
-        text("SELECT * FROM password_tokens WHERE token = :token AND usado = false AND expires_at > NOW()"),
-        {"token": req.token}
+        text("SELECT email FROM password_tokens WHERE token = :token AND usado = false AND expires_at > NOW()"),
+        {"token": token_hash}
     ).mappings().first()
     if not row:
         raise HTTPException(400, "Link inválido ou expirado")
-    if len(req.senha) < 6:
-        raise HTTPException(422, "A senha deve ter pelo menos 6 caracteres")
     hash_ = pwd_ctx.hash(req.senha)
     db.execute(
         text("UPDATE usuarios SET password_hash = :hash WHERE email = :email"),
@@ -166,7 +171,7 @@ def definir_senha(req: DefinirSenhaRequest, db: Session = Depends(get_db)):
     )
     db.execute(
         text("UPDATE password_tokens SET usado = true WHERE token = :token"),
-        {"token": req.token}
+        {"token": token_hash}
     )
     db.commit()
     return {"ok": True}

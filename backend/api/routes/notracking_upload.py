@@ -2,17 +2,17 @@
 api/routes/notracking_upload.py — Processamento do relatório No Tracking (断更)
 """
 import io
-import uuid
 import logging
 import threading
 from datetime import date
 
 import pandas as pd
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-from sqlalchemy.orm import Session, sessionmaker
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPException, Request
+from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from api.deps import get_db, get_current_user, require_admin, audit_log, _engine
+from api.deps import get_db, get_current_user, require_admin, audit_log, audit_log_sync, _session_factory
+from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo
 
@@ -27,12 +27,9 @@ try:
 except ImportError:
     pass
 
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
-
 
 def _make_db() -> Session:
-    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
+    return _session_factory()()
 
 
 FAIXAS_ORDER = ['<1', '1 ≤ X < 3', '3 ≤ X < 5', '5 ≤ X < 7',
@@ -276,8 +273,7 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
     db = _make_db()
 
     def _set(update: dict):
-        with _jobs_lock:
-            _jobs[job_id].update(update)
+        update_job(job_id, **update)
 
     try:
         _set({"fase": "processando"})
@@ -346,7 +342,7 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
             )
             db.commit()
 
-        audit_log("upload_processado", f"notracking_uploads:{uid}", {"total": resultado['total']}, user)
+        audit_log_sync("upload_processado", f"notracking_uploads:{uid}", {"total": resultado['total']}, user)
         log.info("[job:%s] notracking concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
         _set({"status": "done", "upload_id": uid, "total": resultado['total'], "data_ref": resultado['data_ref']})
 
@@ -367,24 +363,26 @@ async def processar_notracking(
     db: Session = Depends(get_db),
 ):
     conteudo = await validar_arquivo(file)
-    job_id = str(uuid.uuid4())
-    with _jobs_lock:
-        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
+    job_id = create_job()
     threading.Thread(target=_run_job, args=(job_id, conteudo, user), daemon=True).start()
     return {"job_id": job_id, "status": "processing"}
 
 
 @router.get("/job/{job_id}")
 def status_job(job_id: str, user: dict = Depends(get_current_user)):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
+    job = get_job(job_id)
     if job is None:
-        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+        raise HTTPException(404, "Job não encontrado.")
     return job
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def deletar_upload(
+    upload_id: int,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     for tbl in ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa"):
         try:
             db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
@@ -392,5 +390,5 @@ def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Sess
             raise HTTPException(500, f"Erro ao deletar {tbl}")
     db.execute(text("DELETE FROM notracking_uploads WHERE id = :id"), {"id": upload_id})
     db.commit()
-    audit_log("upload_deletado", f"notracking_uploads:{upload_id}", {}, user)
+    audit_log(background_tasks, "upload_deletado", f"notracking_uploads:{upload_id}", {}, user)
     return {"ok": True}

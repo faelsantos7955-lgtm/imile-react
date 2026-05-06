@@ -1,7 +1,7 @@
 """
 api/routes/monitoramento.py — Monitoramento Diário de Entregas
 """
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
@@ -282,6 +282,7 @@ def _peek_data_ref_monitoramento(conteudo: bytes) -> str | None:
 @router.post("/salvar-agregado")
 async def salvar_agregado(
     request: Request,
+    background_tasks: BackgroundTasks,
     user: dict  = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -352,7 +353,8 @@ async def salvar_agregado(
             rows_db[i:i+500]
         )
     db.commit()
-    audit_log("salvar_agregado", f"monitoramento_uploads:{uid}", {"data_ref": data_ref, "total_ds": total_ds}, user)
+    audit_log(background_tasks, "salvar_agregado", f"monitoramento_uploads:{uid}",
+              {"data_ref": data_ref, "total_ds": total_ds}, user)
     return {"upload_id": uid, "total_ds": total_ds, "data_ref": data_ref}
 
 
@@ -367,11 +369,16 @@ def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends
 
 # ── DELETE /upload/{id} ───────────────────────────────────────
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def deletar_upload(
+    upload_id: int,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     db.execute(text("DELETE FROM monitoramento_diario WHERE upload_id = :id"), {"id": upload_id})
     db.execute(text("DELETE FROM monitoramento_uploads WHERE id = :id"), {"id": upload_id})
     db.commit()
-    audit_log("upload_deletado", f"monitoramento_uploads:{upload_id}", {}, user)
+    audit_log(background_tasks, "upload_deletado", f"monitoramento_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 
@@ -420,6 +427,7 @@ def detalhe_upload(upload_id: int, user: dict = Depends(get_current_user), db: S
 @limiter.limit("5/minute")
 async def processar_fontes(
     request: Request,
+    background_tasks: BackgroundTasks,
     rdc:          List[UploadFile] = File(default=[]),
     recebidos:    List[UploadFile] = File(default=[]),
     expedidos:    List[UploadFile] = File(default=[]),
@@ -556,7 +564,8 @@ async def processar_fontes(
             rows_db[i:i+500]
     )
     db.commit()
-    audit_log("processar_fontes", f"monitoramento_uploads:{uid}", {"data_ref": data_ref, "total_ds": total_ds}, user)
+    audit_log(background_tasks, "processar_fontes", f"monitoramento_uploads:{uid}",
+              {"data_ref": data_ref, "total_ds": total_ds}, user)
 
     return {"upload_id": uid, "total_ds": total_ds, "data_ref": data_ref}
 

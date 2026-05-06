@@ -5,7 +5,7 @@ import logging
 import io
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -253,13 +253,18 @@ def listar_uploads(user: dict = Depends(get_current_user), db: Session = Depends
 
 
 @router.delete("/upload/{upload_id}")
-def deletar_upload(upload_id: int, user: dict = Depends(require_admin), db: Session = Depends(get_db)):
+def deletar_upload(
+    upload_id: int,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     for tbl in ("backlog_detalhes", "backlog_por_cliente", "backlog_por_motivo",
                 "backlog_por_ds", "backlog_por_supervisor", "backlog_por_rdc"):
         db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :uid"), {"uid": upload_id})
     db.execute(text("DELETE FROM backlog_uploads WHERE id = :uid"), {"uid": upload_id})
     db.commit()
-    audit_log("upload_deletado", f"backlog_uploads:{upload_id}", {}, user)
+    audit_log(background_tasks, "upload_deletado", f"backlog_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
 

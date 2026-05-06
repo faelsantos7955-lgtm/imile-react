@@ -4,7 +4,6 @@ Port do processar_dashboard() do processar.py local para FastAPI.
 """
 import io
 import re
-import uuid
 import logging
 import threading
 from datetime import date
@@ -12,10 +11,11 @@ from datetime import date
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from api.deps import get_current_user, get_db, _engine
+from api.deps import get_current_user, get_db, _session_factory
+from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
 from api.upload_utils import validar_arquivo, validar_varios
 
@@ -23,12 +23,9 @@ log = logging.getLogger("dashboard")
 
 router = APIRouter()
 
-_jobs: dict[str, dict] = {}
-_jobs_lock = threading.Lock()
-
 
 def _make_db() -> Session:
-    return sessionmaker(bind=_engine(), autocommit=False, autoflush=False)()
+    return _session_factory()()
 
 _ENGINE = "openpyxl"
 try:
@@ -65,8 +62,7 @@ def _run_job(job_id: str, rec_bytes: list, out_bytes: list, ent_bytes: list,
     db = _make_db()
 
     def _set(update: dict):
-        with _jobs_lock:
-            _jobs[job_id].update(update)
+        update_job(job_id, **update)
 
     try:
         _set({"fase": "processando"})
@@ -399,10 +395,7 @@ async def upload_dashboard(
     sup_bytes  = await validar_arquivo(supervisores, obrigatorio=False)
     meta_bytes = await validar_arquivo(metas, obrigatorio=False)
 
-    job_id = str(uuid.uuid4())
-    with _jobs_lock:
-        _jobs[job_id] = {"status": "processing", "fase": "iniciando"}
-
+    job_id = create_job()
     threading.Thread(
         target=_run_job,
         args=(job_id, rec_bytes, out_bytes, ent_bytes, sup_bytes, meta_bytes, data_ref, user),
@@ -413,8 +406,7 @@ async def upload_dashboard(
 
 @router.get("/job/{job_id}")
 def status_job_dashboard(job_id: str, user: dict = Depends(get_current_user)):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
+    job = get_job(job_id)
     if job is None:
-        raise HTTPException(404, "Job não encontrado — o servidor pode ter reiniciado.")
+        raise HTTPException(404, "Job não encontrado.")
     return job
