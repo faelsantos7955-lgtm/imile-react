@@ -7,6 +7,9 @@ import { useAuth } from '../lib/AuthContext'
 import { Eye, EyeOff, ArrowRight, ArrowLeft } from 'lucide-react'
 import api from '../lib/api'
 
+const LOGIN_BG_LOCAL    = '/login-bg.jpg'
+const LOGIN_BG_FALLBACK = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80&fit=crop&crop=center'
+
 // ── Componente principal ──────────────────────────────────────
 export default function Login() {
   const { login } = useAuth()
@@ -19,6 +22,7 @@ export default function Login() {
   const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
+  const [bgError, setBgError] = useState(false)
 
   const [regNome, setRegNome]     = useState('')
   const [regEmail, setRegEmail]   = useState('')
@@ -72,12 +76,17 @@ export default function Login() {
       {/* ── Painel Esquerdo — Editorial foto ─────────────────────── */}
       <div className="hidden lg:flex lg:w-[48%] flex-col justify-between relative overflow-hidden">
 
-        {/* Foto de fundo */}
-        <div className="absolute inset-0" style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80&fit=crop&crop=center)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }} />
+        {/* Foto de fundo — local primeiro, fallback Unsplash via onError */}
+        <img
+          src={bgError ? LOGIN_BG_FALLBACK : LOGIN_BG_LOCAL}
+          onError={() => { if (!bgError) setBgError(true) }}
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
 
         {/* Overlay principal — navy escuro */}
         <div className="absolute inset-0" style={{

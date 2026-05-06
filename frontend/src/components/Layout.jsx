@@ -8,11 +8,10 @@ import { useAuth } from '../lib/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 import {
-  TrendingUp, Wrench, FileWarning, Upload, Users, Settings,
+  Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
-  GitMerge, Target, ShieldAlert, Clock, PackageSearch, Scale, Megaphone,
-  Search, PanelLeft, Home, LogIn, EyeOff, Building2, Navigation,
-  ChevronsUpDown, Filter, Download, Sparkles,
+  GitMerge, Target, ShieldAlert, PackageSearch, Scale, Megaphone,
+  Search, PanelLeft, Home, EyeOff,
 } from 'lucide-react'
 
 // ── Navegação ─────────────────────────────────────────────────
@@ -147,6 +146,19 @@ function Sidebar({ collapsed, onClose }) {
   const initial = (firstName[0] || '?').toUpperCase()
   const role = isAdmin ? 'Admin · iMile Brasil' : 'Portal iMile Brasil'
 
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLowerCase()
+  const matches = (label) => !q || label.toLowerCase().includes(q)
+
+  const filteredGroups = q
+    ? NAV_GROUPS
+        .map(g => ({ ...g, items: g.items.filter(i => matches(i.label)) }))
+        .filter(g => g.items.length > 0)
+    : NAV_GROUPS
+  const filteredAdmin = q ? ADMIN_ITEMS.filter(i => matches(i.label)) : ADMIN_ITEMS
+  const totalShown = filteredGroups.reduce((s, g) => s + g.items.length, 0)
+                   + (isAdmin ? filteredAdmin.length : 0)
+
   const { data: naoLidos } = useQuery({
     queryKey: ['avisos-nao-lidos'],
     queryFn: () => api.get('/api/avisos/nao-lidos').then(r => r.data.total),
@@ -165,7 +177,7 @@ function Sidebar({ collapsed, onClose }) {
           </div>
         )}
         {onClose && (
-          <button onClick={onClose} className="btn-ghost btn" style={{ marginLeft: 'auto', padding: 4 }}>
+          <button onClick={onClose} className="btn-ghost btn" style={{ marginLeft: 'auto', padding: 4 }} aria-label="Fechar menu">
             <X size={16} />
           </button>
         )}
@@ -174,14 +186,21 @@ function Sidebar({ collapsed, onClose }) {
       {/* Search */}
       {!collapsed && (
         <div className="sb-search">
-          <Search size={14} className="sb-search-icon" />
-          <input placeholder="Buscar páginas…" />
+          <Search size={14} className="sb-search-icon" aria-hidden="true" />
+          <input
+            type="search"
+            placeholder="Buscar páginas…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
+            aria-label="Buscar páginas"
+          />
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="sb-nav">
-        {NAV_GROUPS.map(group => (
+      <nav className="sb-nav" aria-label="Navegação principal">
+        {filteredGroups.map(group => (
           <div key={group.section}>
             <div className="sb-section-label">{group.section}</div>
             {group.items.map(item => {
@@ -196,7 +215,7 @@ function Sidebar({ collapsed, onClose }) {
                   className={({ isActive }) => `sb-link${isActive ? ' active' : ''}`}
                   title={collapsed ? item.label : undefined}
                 >
-                  <Icon size={18} className="sb-icon" />
+                  <Icon size={18} className="sb-icon" aria-hidden="true" />
                   <span className="sb-link-label">{item.label}</span>
                   {avisosBadge > 0 && <span className="sb-badge">{avisosBadge > 99 ? '99+' : avisosBadge}</span>}
                 </NavLink>
@@ -205,10 +224,10 @@ function Sidebar({ collapsed, onClose }) {
           </div>
         ))}
 
-        {isAdmin && (
+        {isAdmin && filteredAdmin.length > 0 && (
           <div>
             <div className="sb-section-label">Admin</div>
-            {ADMIN_ITEMS.map(item => {
+            {filteredAdmin.map(item => {
               const Icon = item.icon
               return (
                 <NavLink
@@ -218,11 +237,17 @@ function Sidebar({ collapsed, onClose }) {
                   className={({ isActive }) => `sb-link${isActive ? ' active' : ''}`}
                   title={collapsed ? item.label : undefined}
                 >
-                  <Icon size={18} className="sb-icon" />
+                  <Icon size={18} className="sb-icon" aria-hidden="true" />
                   <span className="sb-link-label">{item.label}</span>
                 </NavLink>
               )
             })}
+          </div>
+        )}
+
+        {q && totalShown === 0 && !collapsed && (
+          <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: 12, color: 'var(--slate-400)' }}>
+            Nenhuma página corresponde a “{query}”.
           </div>
         )}
       </nav>
@@ -247,11 +272,23 @@ function Sidebar({ collapsed, onClose }) {
 }
 
 // ── Layout principal ──────────────────────────────────────────
+const SIDEBAR_KEY = 'imile.sidebar.collapsed'
+
+function readCollapsed() {
+  try { return localStorage.getItem(SIDEBAR_KEY) === '1' }
+  catch { return false }
+}
+
 export default function Layout() {
   const { user, isAdmin } = useAuth()
   const location = useLocation()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(readCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    try { localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0') }
+    catch { /* iOS Safari modo privado pode lançar */ }
+  }, [collapsed])
 
   const firstName = user?.nome?.split(' ')[0] || user?.email?.split('@')[0] || ''
   const pageTitle = PAGE_TITLES[location.pathname] || 'Dashboard'
@@ -305,10 +342,6 @@ export default function Layout() {
 
             {/* Actions */}
             <BellMenu isAdmin={isAdmin} />
-
-            <button className="tb-btn" title="Exportar">
-              <Download size={16} />
-            </button>
 
             {/* User chip */}
             <div style={{

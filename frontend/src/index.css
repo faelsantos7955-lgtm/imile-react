@@ -89,8 +89,8 @@
 
   /* Transitions */
   --t-fast: 120ms;
-  --t-base: 220ms;
-  --t-slow: 380ms;
+  --t-base: 180ms;
+  --t-slow: 200ms;
   --easing: cubic-bezier(.4,0,.2,1);
   --easing-spring: cubic-bezier(.32,.72,0,1);
 }
@@ -243,6 +243,12 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   text-decoration: none;
 }
 .sb-link:hover { background: var(--hover); color: var(--slate-900); }
+.sb-link:focus-visible {
+  outline: 2px solid var(--imile-500);
+  outline-offset: -2px;
+  background: var(--hover);
+  color: var(--slate-900);
+}
 .sb-link.active {
   background: linear-gradient(135deg, rgba(29,78,216,.08), rgba(29,78,216,.03));
   color: var(--imile-600);
@@ -538,7 +544,44 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
+/* ── Global fetch indicator + offline banner ──────────────── */
+.global-fetch-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 9998;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--imile-500), transparent);
+  animation: lazy-progress 1.2s ease-in-out infinite;
+}
+.offline-banner {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 10000;
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
+  color: white;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 2px 12px rgba(220,38,38,.25);
+  animation: fadeIn .2s ease-out;
+}
+.offline-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%;
+  background: white;
+  animation: signal-blink 1.4s ease-in-out infinite;
+}
+
 /* ── Animations ─────────────────────────────────────────────── */
+@keyframes lazy-progress {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
 @keyframes fadeUp   { from { opacity: 0; transform: translateY(8px); }  to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn   { from { opacity: 0; }                              to { opacity: 1; } }
 @keyframes slideIn  { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
@@ -610,4 +653,95 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   --imile-navy:  #151741;
   --imile-blue:  #0032A0;
   --imile-yellow:#fff303;
+}
+
+/* ============================================================
+   KPI CARD — driven by CSS vars (no React re-render no mousemove)
+   ============================================================ */
+
+.kpi-card {
+  --ac-dot:  #0032A0;
+  --ac-glow: rgba(0,50,160,.25);
+  --ac-bar:  linear-gradient(90deg,#0032A0,#1048c8);
+  --mx: 50%;
+  --my: 50%;
+  --rx: 0deg;
+  --ry: 0deg;
+  --lift: 0px;
+
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  cursor: default;
+  overflow: hidden;
+  transform: perspective(700px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
+  transition: transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .3s, border-color .2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  will-change: transform;
+  transform-style: preserve-3d;
+  animation: fadeUp .4s ease-out backwards;
+}
+.kpi-card.is-hovering {
+  --lift: -3px;
+  border-color: color-mix(in srgb, var(--ac-dot) 20%, transparent);
+  box-shadow: 0 16px 40px -12px var(--ac-glow), 0 4px 12px rgba(0,0,0,.06);
+  transition: transform .08s ease-out, box-shadow .2s, border-color .2s;
+}
+.kpi-card .kpi-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  border-top-left-radius: 16px; border-top-right-radius: 16px;
+  background: var(--ac-bar);
+  opacity: .45;
+  transition: opacity .3s;
+  pointer-events: none;
+}
+.kpi-card.is-hovering .kpi-bar { opacity: 1; }
+.kpi-card .kpi-spot {
+  position: absolute; inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .3s;
+  background: radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.15) 0%, transparent 65%);
+}
+.kpi-card.is-hovering .kpi-spot { opacity: 1; }
+.kpi-card .kpi-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ac-dot);
+  flex-shrink: 0;
+  transition: box-shadow .3s;
+}
+.kpi-card.is-hovering .kpi-dot { box-shadow: 0 0 8px var(--ac-dot); }
+.kpi-card .kpi-value-num {
+  color: #0f172a;
+  transition: color .3s;
+}
+.kpi-card.is-hovering .kpi-value-num { color: var(--ac-dot); }
+
+/* ============================================================
+   PREFERS-REDUCED-MOTION — corta animações decorativas
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Animações infinitas decorativas: desligar de vez */
+  .blob, .blob-a, .blob-b, .blob-c,
+  .truck-anim, .box-float, .signal-blink, .route-flow,
+  .radar-rotate, .scanline,
+  .globe-slide, .globe-pin, .globe-particle, .route-dash, .route-glow,
+  .hub-ring, .city-ping,
+  .pulse-dot::after,
+  .skel,
+  .particle-dot {
+    animation: none !important;
+  }
+  .grid-3d { transform: none !important; }
+  .kpi-card { transform: none !important; animation: none !important; }
+  .kpi-card.is-hovering { transform: translateY(-2px) !important; }
 }

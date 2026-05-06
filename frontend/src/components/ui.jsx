@@ -34,10 +34,15 @@ export const chartTheme = {
 }
 
 // ── Counter hook ──────────────────────────────────────────────
+const _prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
 function useCounter(target, duration = 900) {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(target ?? 0)
   useEffect(() => {
     if (typeof target !== 'number' || isNaN(target)) { setCount(target ?? 0); return }
+    if (_prefersReducedMotion()) { setCount(target); return }
     const start = performance.now()
     let raf
     const tick = (now) => {
@@ -65,61 +70,53 @@ const KPI_ACCENT = {
 export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, index = 0 }) {
   const ac = KPI_ACCENT[color] || KPI_ACCENT.blue
   const ref = useRef(null)
-  const [tilt, setTilt] = useState({ x: 0, y: 0 })
-  const [hovering, setHovering] = useState(false)
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 })
 
   const isNum = typeof value === 'number'
   const counted = useCounter(isNum ? value : null, 900)
   const display = isNum ? counted.toLocaleString('pt-BR') : value
 
+  // Mousemove escreve direto em CSS vars — zero re-render React
   const onMove = (e) => {
-    if (!ref.current) return
-    const r = ref.current.getBoundingClientRect()
+    const el = ref.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
     const nx = (e.clientX - r.left) / r.width
     const ny = (e.clientY - r.top) / r.height
-    setMousePos({ x: nx, y: ny })
-    setTilt({ x: (ny - 0.5) * -12, y: (nx - 0.5) * 12 })
+    el.style.setProperty('--mx', `${nx * 100}%`)
+    el.style.setProperty('--my', `${ny * 100}%`)
+    el.style.setProperty('--rx', `${(ny - 0.5) * -12}deg`)
+    el.style.setProperty('--ry', `${(nx - 0.5) * 12}deg`)
   }
-  const onLeave = () => { setTilt({ x: 0, y: 0 }); setHovering(false) }
+  const onEnter = () => { ref.current?.classList.add('is-hovering') }
+  const onLeave = () => {
+    const el = ref.current
+    if (!el) return
+    el.classList.remove('is-hovering')
+    el.style.setProperty('--rx', '0deg')
+    el.style.setProperty('--ry', '0deg')
+  }
 
   return (
     <div
       ref={ref}
       onMouseMove={onMove}
-      onMouseEnter={() => setHovering(true)}
+      onMouseEnter={onEnter}
       onMouseLeave={onLeave}
-      className="stagger relative bg-white rounded-2xl cursor-default overflow-hidden"
+      className="kpi-card stagger"
       style={{
-        border: hovering ? `1px solid ${ac.dot}33` : '1px solid #e2e8f0',
-        transform: `perspective(700px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateY(${hovering ? -3 : 0}px)`,
-        transition: hovering
-          ? 'transform .08s ease-out, box-shadow .2s, border-color .2s'
-          : 'transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .3s, border-color .2s',
-        boxShadow: hovering
-          ? `0 16px 40px -12px ${ac.glow}, 0 4px 12px rgba(0,0,0,.06)`
-          : '0 1px 4px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02)',
+        '--ac-dot':  ac.dot,
+        '--ac-glow': ac.glow,
+        '--ac-bar':  ac.bar,
         animationDelay: `${index * 80}ms`,
-        willChange: 'transform',
-        transformStyle: 'preserve-3d',
       }}
     >
-      {/* Accent bar topo — visível sempre, brilha no hover */}
-      <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-2xl transition-opacity duration-300"
-        style={{ background: ac.bar, opacity: hovering ? 1 : 0.45 }} />
-
-      {/* Shine spotlight */}
-      <div className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity duration-300"
-        style={{
-          opacity: hovering ? 1 : 0,
-          background: `radial-gradient(circle at ${mousePos.x * 100}% ${mousePos.y * 100}%, rgba(255,255,255,.15) 0%, transparent 65%)`,
-        }} />
+      <div className="kpi-bar" />
+      <div className="kpi-spot" />
 
       <div className="p-5 pt-6">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full shrink-0 transition-all duration-300"
-              style={{ background: ac.dot, boxShadow: hovering ? `0 0 8px ${ac.dot}` : 'none' }} />
+            <span className="kpi-dot" />
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-none">
               {label}
             </p>
@@ -127,8 +124,7 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, 
           {Icon && <Icon size={15} className="text-slate-300 shrink-0" />}
         </div>
 
-        <p className="text-[1.85rem] font-extrabold font-mono leading-none tracking-tight"
-          style={{ color: hovering ? ac.dot : '#0f172a' }}>
+        <p className="kpi-value-num text-[1.85rem] font-extrabold font-mono leading-none tracking-tight">
           {display}
         </p>
 
@@ -498,22 +494,74 @@ export function LogisticsEmptyState({ title = 'Nenhum dado disponível', descrip
 }
 
 export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = 'Confirmar', danger = true }) {
+  const dialogRef = useRef(null)
+  const cancelBtnRef = useRef(null)
+  const previouslyFocused = useRef(null)
+
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement
+    cancelBtnRef.current?.focus()
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault(); e.stopPropagation()
+        onCancel()
+        return
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focusables = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables.length) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+      previouslyFocused.current?.focus?.()
+    }
+  }, [onCancel])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in">
-        <p className="text-sm text-slate-700 leading-relaxed mb-5">{message}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-msg"
+        className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in"
+      >
+        <p id="confirm-dialog-msg" className="text-sm text-slate-700 leading-relaxed mb-5">{message}</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel}
-            className="px-4 py-2 text-xs rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+          <button
+            ref={cancelBtnRef}
+            onClick={onCancel}
+            className="px-4 py-2 text-xs rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+          >
             Cancelar
           </button>
           <button
             onClick={() => { onConfirm(); onCancel(); }}
-            className={`px-4 py-2 text-xs rounded-xl text-white font-semibold transition-colors ${
+            className={clsx(
+              'px-4 py-2 text-xs rounded-xl text-white font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
               danger
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
+                ? 'bg-red-600 hover:bg-red-700 focus-visible:outline-red-500'
+                : 'bg-blue-600 hover:bg-blue-700 focus-visible:outline-blue-500'
+            )}
           >{confirmLabel}</button>
         </div>
       </div>
