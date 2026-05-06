@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { SectionHeader, Alert, toast, ConfirmDialog } from '../components/ui'
+import { SectionHeader, Alert, toast, ConfirmDialog, chartTheme } from '../components/ui'
 import { LineChart, RankBar } from '../components/charts.jsx'
 import { Download, Upload, Trash2, ShieldAlert, ShieldOff, ShieldCheck, Loader, X, FileSpreadsheet } from 'lucide-react'
 import { validarArquivos } from '../lib/validarArquivo'
@@ -142,8 +142,8 @@ function UploadPanel({ onClose, onSuccess }) {
   )
 }
 
-const COLORS_TOP  = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
-const COLORS_WEEK = ['#095EF7', '#f97316', '#10b981', '#06b6d4']
+const COLORS_TOP  = chartTheme.palette.danger
+const COLORS_WEEK = ['#095EF7', '#f97316', '#10b981', '#06b6d4']  // série 4 cores intencional (semana)
 
 export default function Reclamacoes() {
   const { isAdmin }               = useAuth()

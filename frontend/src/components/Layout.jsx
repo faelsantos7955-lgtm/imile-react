@@ -11,7 +11,7 @@ import {
   Wrench, FileWarning, Upload, Users, Settings,
   LogOut, Bell, Package, Menu, X, History, AlertCircle, PackageX,
   GitMerge, Target, ShieldAlert, PackageSearch, Scale, Megaphone,
-  Search, PanelLeft, Home, EyeOff,
+  Search, PanelLeft, Home, EyeOff, Rows3, Rows2,
 } from 'lucide-react'
 
 // ── Navegação ─────────────────────────────────────────────────
@@ -273,9 +273,14 @@ function Sidebar({ collapsed, onClose }) {
 
 // ── Layout principal ──────────────────────────────────────────
 const SIDEBAR_KEY = 'imile.sidebar.collapsed'
+const DENSITY_KEY = 'imile.tables.density'
 
 function readCollapsed() {
   try { return localStorage.getItem(SIDEBAR_KEY) === '1' }
+  catch { return false }
+}
+function readCompact() {
+  try { return localStorage.getItem(DENSITY_KEY) === 'compact' }
   catch { return false }
 }
 
@@ -284,11 +289,18 @@ export default function Layout() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [compact, setCompact] = useState(readCompact)
 
   useEffect(() => {
     try { localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0') }
     catch { /* iOS Safari modo privado pode lançar */ }
   }, [collapsed])
+
+  useEffect(() => {
+    try { localStorage.setItem(DENSITY_KEY, compact ? 'compact' : 'cozy') }
+    catch {}
+    document.body.classList.toggle('compact-tables', compact)
+  }, [compact])
 
   const firstName = user?.nome?.split(' ')[0] || user?.email?.split('@')[0] || ''
   const pageTitle = PAGE_TITLES[location.pathname] || 'Dashboard'
@@ -342,6 +354,16 @@ export default function Layout() {
 
             {/* Actions */}
             <BellMenu isAdmin={isAdmin} />
+
+            <button
+              className="tb-btn"
+              onClick={() => setCompact(c => !c)}
+              title={compact ? 'Densidade confortável' : 'Densidade compacta'}
+              aria-pressed={compact}
+              aria-label="Alternar densidade das tabelas"
+            >
+              {compact ? <Rows3 size={16} /> : <Rows2 size={16} />}
+            </button>
 
             {/* User chip */}
             <div style={{

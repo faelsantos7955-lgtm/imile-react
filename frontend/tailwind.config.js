@@ -4,6 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        // slate.400 customizado: #94a3b8 default → #7c8694 para passar
+        // WCAG AA (4.5:1) sobre o bg cinza-claro do app (#f5f6fa).
+        slate: {
+          400: '#7c8694',
+        },
         imile: {
           50:  '#eff6ff',
           100: '#dbeafe',

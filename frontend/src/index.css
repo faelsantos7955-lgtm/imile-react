@@ -30,7 +30,7 @@
   --slate-700: #2c3447;
   --slate-600: #475569;
   --slate-500: #64748b;
-  --slate-400: #94a3b8;
+  --slate-400: #7c8694;  /* customizado: passa WCAG AA sobre --bg #f5f6fa */
   --slate-300: #cbd5e1;
   --slate-200: #e2e8f0;
   --slate-100: #f1f5f9;
@@ -488,6 +488,15 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .tbl tbody tr:hover { background: var(--surface-2); }
 .tbl .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 12.5px; }
 
+/* Compact tables — toggleável via body.compact-tables (preferência persistida) */
+body.compact-tables .tbl              { font-size: 12px; }
+body.compact-tables .tbl th           { padding: 6px 10px; font-size: 10.5px; }
+body.compact-tables .tbl td           { padding: 6px 10px; }
+body.compact-tables .tbl .num         { font-size: 11.5px; }
+/* Cobertura para tabelas que não usam .tbl — pega <table> dentro de .card */
+body.compact-tables .card table th,
+body.compact-tables .card table td    { padding: 6px 10px; }
+
 /* Tabs */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
 .tab { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--slate-500); background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; transition: all var(--t-fast); white-space: nowrap; cursor: pointer; }
@@ -653,6 +662,37 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   --imile-navy:  #151741;
   --imile-blue:  #0032A0;
   --imile-yellow:#fff303;
+}
+
+/* ============================================================
+   DARK MODE — opt-in MANUAL via `<html class="dark">`.
+   AVISO: muitas classes Tailwind no app (bg-white, text-slate-900,
+   border-slate-200) estão hardcoded e NÃO seguem as CSS vars abaixo.
+   Ativar globalmente sem fazer um sweep dessas classes deixa cards
+   brancos sobre fundo escuro. Mantemos as vars prontas para ativar
+   no Lote E quando o sweep for feito. Para testar agora:
+       document.documentElement.classList.add('dark')
+   ============================================================ */
+
+html.dark {
+  color-scheme: dark;
+  --bg:        #0a0e1a;
+  --bg-card:   #131826;
+  --surface-2: #0f1320;
+  --border:    #1f2638;
+  --border-2:  #182030;
+  --hover:     #1a2030;
+
+  --slate-900: #f8fafc;
+  --slate-800: #e2e8f0;
+  --slate-700: #cbd5e1;
+  --slate-600: #94a3b8;
+  --slate-500: #94a3b8;
+  --slate-400: #6b7585;
+  --slate-300: #475569;
+  --slate-200: #334155;
+  --slate-100: #1e293b;
+  --slate-50:  #0f172a;
 }
 
 /* ============================================================

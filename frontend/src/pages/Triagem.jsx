@@ -19,10 +19,10 @@ import {
 import { validarArquivos } from '../lib/validarArquivo'
 import { processTriagem } from '../lib/processarLocal'
 
-const COLOR_OK  = '#10b981'
-const COLOR_NOK = '#ef4444'
-const COLOR_REC = '#095EF7'
-const COLOR_TOP = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
+const COLOR_OK  = chartTheme.series.ok
+const COLOR_NOK = chartTheme.series.nok
+const COLOR_REC = '#095EF7'                 // azul mais brilhante intencional aqui
+const COLOR_TOP = chartTheme.palette.danger
 
 // ── Hero Triagem ──────────────────────────────────────────────
 function HeroTriagem() {

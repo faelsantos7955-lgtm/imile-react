@@ -14,7 +14,7 @@ export const toast = {
   promise: (p, opts) => _sonner.promise(p, opts),
 }
 
-// ── Chart theme (use in tooltip/grid) ────────────────────────
+// ── Chart theme (use in tooltip/grid + paleta) ───────────────
 export const chartTheme = {
   tooltip: {
     contentStyle: {
@@ -30,7 +30,25 @@ export const chartTheme = {
     cursor:     { fill: 'rgba(29,78,216,.04)' },
   },
   grid:    { strokeDasharray: '3 3', stroke: '#eef1f6' },
-  axisStyle: { fontSize: 11, fill: '#94a3b8' },
+  axisStyle: { fontSize: 11, fill: '#7c8694' },
+
+  // Paletas centralizadas — use estas em vez de hardcoded por página.
+  palette: {
+    main:    ['#0032A0', '#1048c8', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899'],
+    danger:  ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca'],
+    success: ['#059669', '#10b981', '#34d399', '#6ee7b7'],
+    cool:    ['#0032A0', '#1e40af', '#3b82f6', '#60a5fa', '#93c5fd'],
+  },
+  // Cores semânticas por tipo de série — referência única do app.
+  series: {
+    recebido: '#0032A0',
+    expedido: '#1048c8',
+    entregas: '#10b981',
+    ok:       '#10b981',
+    nok:      '#ef4444',
+    fora:     '#f59e0b',
+    backlog:  '#dc2626',
+  },
 }
 
 // ── Counter hook ──────────────────────────────────────────────
@@ -117,11 +135,11 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, 
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="kpi-dot" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-none">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 leading-none">
               {label}
             </p>
           </div>
-          {Icon && <Icon size={15} className="text-slate-300 shrink-0" />}
+          {Icon && <Icon size={15} className="text-slate-400 shrink-0" />}
         </div>
 
         <p className="kpi-value-num text-[1.85rem] font-extrabold font-mono leading-none tracking-tight">
@@ -130,7 +148,7 @@ export function KpiCard({ label, value, sub, color = 'blue', icon: Icon, trend, 
 
         {(sub || trend !== undefined) && (
           <div className="flex items-center gap-2 mt-2.5">
-            {sub && <p className="text-[11px] text-slate-400 leading-snug">{sub}</p>}
+            {sub && <p className="text-[11.5px] text-slate-500 leading-snug">{sub}</p>}
             {trend !== undefined && (
               <span className={clsx(
                 'text-[10px] font-bold px-1.5 py-0.5 rounded-md',
@@ -440,7 +458,7 @@ export function EmptyState({ icon: Icon, title, description, action }) {
       )}
       <p className="text-sm font-bold text-slate-700 mb-1">{title}</p>
       {description && (
-        <p className="text-xs text-slate-400 max-w-xs leading-relaxed">{description}</p>
+        <p className="text-xs text-slate-500 max-w-xs leading-relaxed">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -484,9 +502,9 @@ export function LogisticsEmptyState({ title = 'Nenhum dado disponível', descrip
           style={{ background: 'linear-gradient(to right, transparent 10%, rgba(0,50,160,0.3) 50%, transparent 90%)' }} />
       </div>
 
-      <p className="text-sm font-bold text-slate-600 mb-1">{title}</p>
+      <p className="text-sm font-bold text-slate-700 mb-1">{title}</p>
       {description && (
-        <p className="text-xs text-slate-400 max-w-[260px] leading-relaxed">{description}</p>
+        <p className="text-xs text-slate-500 max-w-[260px] leading-relaxed">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>

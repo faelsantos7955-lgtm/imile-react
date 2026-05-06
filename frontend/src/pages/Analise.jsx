@@ -8,15 +8,15 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { SectionHeader, Card, Alert, Skeleton, toast } from '../components/ui'
+import { SectionHeader, Card, Alert, Skeleton, toast, chartTheme } from '../components/ui'
 import Heatmap from '../components/Heatmap'
 import { LineChart, BarChart, RankBar, Donut } from '../components/charts.jsx'
 import { Download, Upload, X, Filter, Loader, AlertCircle, ChevronDown, Check, Megaphone, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { validarArquivos } from '../lib/validarArquivo'
 
-const CB = { recebido: '#0032A0', expedido: '#1048c8', entregas: '#10b981' }
-const COLORS = ['#0032A0', '#1048c8', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#84cc16', '#0ea5e9', '#a855f7', '#ec4899']
+const CB     = chartTheme.series       // { recebido, expedido, entregas, ok, nok, fora, backlog }
+const COLORS = chartTheme.palette.main
 
 const PRESETS = [
   { key: 'hoje',        label: 'Hoje',         days: 0 },
