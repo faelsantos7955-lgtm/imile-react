@@ -1,13 +1,13 @@
 /**
  * pages/Extravios.jsx — Controle de Extravios (perdas e avarias)
  */
-import { useState, useEffect, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { RankBar, Donut, LineChart } from '../components/charts.jsx'
-import { Upload, Loader, Trash2, AlertCircle, TrendingDown, Download } from 'lucide-react'
-import { toast, TableSkeleton, LogisticsEmptyState } from '../components/ui'
+import { AlertCircle } from 'lucide-react'
+import { TableSkeleton, LogisticsEmptyState } from '../components/ui'
 import { useAuth } from '../lib/AuthContext'
-import api, { pollJob } from '../lib/api'
+import { useUploadFlow } from '../lib/useUploadFlow'
+import UploadCard from '../components/UploadCard'
+import { UploadSelect, ExcelButton, DeleteButton } from '../components/UploadActions'
 
 
 const CORES_MOTIVO = [
@@ -17,132 +17,46 @@ const CORES_MOTIVO = [
 const BRL = (v) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 
-function UploadZone({ onSuccess }) {
-  const [uploading, setUploading] = useState(false)
-  const [fase, setFase]           = useState('')
-  const [erro, setErro]           = useState('')
-  const inputRef = useRef(null)
-  const qc = useQueryClient()
-
-  const handleFile = async (e) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setErro(''); setFase(''); setUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', f)
-      const { data } = await api.post('/api/extravios/processar', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      const job = data.job_id
-        ? await pollJob(`/api/extravios/job/${data.job_id}`, setFase)
-        : data
-      qc.invalidateQueries({ queryKey: ['extravios-uploads'] })
-      onSuccess?.(job.upload_id)
-    } catch (err) {
-      setErro(err?.response?.data?.detail || err.message || 'Erro ao processar o arquivo.')
-    } finally {
-      setUploading(false)
-      setFase('')
-      if (inputRef.current) inputRef.current.value = ''
-    }
-  }
-
-  return (
-    <Card className="border-dashed border-2 border-slate-200 bg-slate-50">
-      <div className="flex flex-col items-center gap-3 py-4">
-        <Upload size={28} className="text-slate-400" />
-        <div className="text-center">
-          <p className="text-sm font-medium text-slate-700">Upload — Controle de Extravios</p>
-          <p className="text-xs text-slate-400 mt-1">Excel com aba <code className="bg-slate-200 px-1 rounded">BD</code> (Waybill, Reason, Resp, Motivo PT...)</p>
-        </div>
-        <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm" onChange={handleFile} className="hidden" id="ext-upload" />
-        <label htmlFor="ext-upload"
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all
-            ${uploading ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}>
-          {uploading ? <><Loader size={14} className="animate-spin" /> {fase || 'Processando...'}</> : <><Upload size={14} /> Enviar arquivo</>}
-        </label>
-        {erro && <p className="text-xs text-red-600 text-center max-w-sm">{erro}</p>}
-      </div>
-    </Card>
-  )
-}
-
 export default function Extravios() {
   const { isAdmin } = useAuth()
-  const qc = useQueryClient()
-  const [uploadSel, setUploadSel] = useState(null)
-  const [deletando, setDeletando] = useState(false)
-  const [baixando, setBaixando]   = useState(false)
-
-  const { data: uploads = [], isLoading: loadingUps } = useQuery({
-    queryKey: ['extravios-uploads'],
-    queryFn: () => api.get('/api/extravios/uploads').then(r => r.data),
+  const {
+    uploads, uploadSel, setUploadSel, detalhe, loading,
+    handleExcel, deletar, baixando, deletando,
+  } = useUploadFlow({
+    dataset: 'extravios',
+    excelLabel: 'Extravios',
+    deleteConfirm: 'Excluir este upload de extravios?',
   })
-
-  useEffect(() => {
-    if (uploads.length && !uploadSel) setUploadSel(uploads[0].id)
-  }, [uploads])
-
-  const { data: detalhe, isLoading: loadingDet } = useQuery({
-    queryKey: ['extravios-detalhe', uploadSel],
-    queryFn: () => api.get(`/api/extravios/upload/${uploadSel}`).then(r => r.data),
-    enabled: !!uploadSel,
-  })
-
-  const handleExcel = async () => {
-    setBaixando(true)
-    try {
-      const r = await api.get(`/api/excel/extravios/${uploadSel}`, { responseType: 'blob' })
-      const url = URL.createObjectURL(r.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Extravios_${uploads.find(u => u.id === uploadSel)?.data_ref || 'relatorio'}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch { toast.erro('Erro ao gerar Excel.') }
-    finally { setBaixando(false) }
-  }
-
-  const deletar = async () => {
-    if (!window.confirm('Excluir este upload de extravios?')) return
-    setDeletando(true)
-    try {
-      await api.delete(`/api/extravios/upload/${uploadSel}`)
-      qc.invalidateQueries({ queryKey: ['extravios-uploads'] })
-      setUploadSel(null)
-    } catch { toast.erro('Erro ao excluir.') }
-    finally { setDeletando(false) }
-  }
 
   const up      = detalhe?.upload
   const porDs   = detalhe?.por_ds     ?? []
   const porMot  = detalhe?.por_motivo ?? []
   const porSem  = detalhe?.por_semana ?? []
   const top15   = porDs.slice(0, 15)
-
-  const loading = loadingUps || (!!uploadSel && loadingDet)
-
-  const fmtDate = d => { if (!d) return 'Sem data'; const [y, m, day] = String(d).split('-'); return `${day}/${m}/${y}` }
-  const uploadsSorted = [...uploads].sort((a, b) => String(b.data_ref || '').localeCompare(String(a.data_ref || '')))
+  const dataRefAtual = uploads.find(u => u.id === uploadSel)?.data_ref
 
   return (
     <div>
       <div className="page-head">
         <div>
           <h1 className="page-title">Extravios</h1>
-          <div className="page-sub">Perdas e avarias · {up?.total?.toLocaleString('pt-BR') || 0} ocorrências · {uploads.find(u=>u.id===uploadSel)?.data_ref || '—'}</div>
+          <div className="page-sub">Perdas e avarias · {up?.total?.toLocaleString('pt-BR') || 0} ocorrências · {dataRefAtual || '—'}</div>
         </div>
         <div className="page-actions">
-          {uploadsSorted.length > 0 && (
-            <select value={uploadSel ?? ''} onChange={e => setUploadSel(Number(e.target.value))} className="filter-select">
-              {uploadsSorted.map(u => <option key={u.id} value={u.id}>{fmtDate(u.data_ref)} — {u.total?.toLocaleString('pt-BR')} reg.</option>)}
-            </select>
-          )}
-          {uploadSel && <button onClick={handleExcel} disabled={baixando} className="btn"><Download size={14}/>{baixando?'Gerando…':'Excel'}</button>}
-          {isAdmin && uploadSel && <button onClick={deletar} disabled={deletando} className="btn" style={{color:'var(--danger-600)'}}><Trash2 size={14}/>Excluir</button>}
+          <UploadSelect uploads={uploads} value={uploadSel} onChange={setUploadSel} />
+          {uploadSel && <ExcelButton onClick={handleExcel} loading={baixando} />}
+          {uploadSel && <DeleteButton onClick={deletar} loading={deletando} isAdmin={isAdmin} />}
         </div>
       </div>
 
-      <UploadZone onSuccess={(id) => setUploadSel(id)} />
+      <UploadCard
+        dataset="extravios"
+        inputId="ext-upload"
+        title="Upload — Controle de Extravios"
+        hint={<>Excel com aba <code className="bg-slate-200 px-1 rounded">BD</code> (Waybill, Reason, Resp, Motivo PT...)</>}
+        colorClass="bg-red-600 hover:bg-red-700"
+        onSuccess={(id) => setUploadSel(id)}
+      />
 
       {loading && (
         <div className="mt-6">

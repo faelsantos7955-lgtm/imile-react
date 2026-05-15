@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { useUploadFlow } from '../lib/useUploadFlow'
+import { ExcelButton, DeleteButton } from '../components/UploadActions'
 import {
   KpiCard, Card, SectionHeader, EmptyState, LogisticsEmptyState, Alert, Badge, Button, toast,
 } from '../components/ui'
@@ -631,33 +633,24 @@ function UploadSelector({ uploads, selected, onChange }) {
 // ── Page ──────────────────────────────────────────────────────
 export default function NotArrived() {
   const { isAdmin } = useAuth()
-  const qc = useQueryClient()
   const [showPanel, setShowPanel] = useState(false)
-  const [selectedId, setSelectedId] = useState(null)
   const [flashResult, setFlashResult] = useState(null)
-  const [baixando, setBaixando] = useState(false)
 
-  // Lista de uploads
-  const { data: uploads = [], isLoading: loadingUploads } = useQuery({
-    queryKey: ['not-arrived-uploads'],
-    queryFn: () => api.get('/api/not-arrived/uploads').then(r => r.data),
+  const {
+    uploads, uploadSel: selectedId, setUploadSel: setSelectedId,
+    detalhe, loading,
+    handleExcel, deletar, baixando, deletando,
+    invalidateUploads,
+  } = useUploadFlow({
+    dataset: 'not-arrived',
+    excelDataset: 'not-arrived-mov',
+    excelLabel: 'NotArrivedMov',
+    deleteConfirm: 'Excluir este upload de Not Arrived?',
   })
+  const loadingUploads = loading && !selectedId
+  const loadingDetalhe = loading && !!selectedId
 
-  // Seleciona o upload mais recente automaticamente
-  useEffect(() => {
-    if (uploads.length > 0 && !selectedId) {
-      setSelectedId(uploads[0].id)
-    }
-  }, [uploads, selectedId])
-
-  // Detalhe do upload selecionado
-  const { data: detalhe, isLoading: loadingDetalhe } = useQuery({
-    queryKey: ['not-arrived-detalhe', selectedId],
-    queryFn: () => api.get(`/api/not-arrived/upload/${selectedId}`).then(r => r.data),
-    enabled: !!selectedId,
-  })
-
-  // Tendência (heatmap supervisor × data)
+  // Tendência (heatmap supervisor × data) — query adicional específica do NotArrived
   const { data: tendencia = [] } = useQuery({
     queryKey: ['not-arrived-tendencia', selectedId],
     queryFn: () => api.get(`/api/not-arrived/upload/${selectedId}/tendencia`).then(r => r.data),
@@ -666,23 +659,9 @@ export default function NotArrived() {
 
   const upload = uploads.find(u => u.id === selectedId)
 
-  const handleExcel = async () => {
-    setBaixando(true)
-    try {
-      const r = await api.get(`/api/excel/not-arrived-mov/${selectedId}`, { responseType: 'blob' })
-      const url = URL.createObjectURL(r.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `NotArrivedMov_${upload?.data_ref || 'relatorio'}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch { toast.erro('Erro ao gerar Excel.') }
-    finally { setBaixando(false) }
-  }
-
   const handleUploadSuccess = (data) => {
     setFlashResult(data)
-    qc.invalidateQueries({ queryKey: ['not-arrived-uploads'] })
+    invalidateUploads()
     setSelectedId(data.upload_id)
   }
 
@@ -741,6 +720,7 @@ export default function NotArrived() {
                 {baixando ? <Loader size={12} className="animate-spin" /> : <Download size={12} />} Excel
               </button>
             )}
+            {selectedId && <DeleteButton onClick={deletar} loading={deletando} isAdmin={isAdmin} />}
           </div>
 
           {/* KPIs */}

@@ -11,6 +11,8 @@ import {
 import { LineChart } from '../components/charts.jsx'
 import api, { pollJob } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { useUploadFlow } from '../lib/useUploadFlow'
+import { ExcelButton, DeleteButton } from '../components/UploadActions'
 import {
   KpiCard, Card, SectionHeader, EmptyState, LogisticsEmptyState, Alert, Button,
   toast, chartTheme } from '../components/ui'
@@ -504,28 +506,26 @@ function HistoricoNA({ uploads }) {
 // ── Page ───────────────────────────────────────────────────────
 export default function Na() {
   const { isAdmin }  = useAuth()
-  const qc           = useQueryClient()
   const [view,       setView]       = useState('dados')
   const [showPanel,  setShowPanel]  = useState(false)
-  const [selectedId, setSelectedId] = useState(null)
   const [flashResult,setFlashResult]= useState(null)
-  const [downloading,setDownloading]= useState(false)
 
-  const { data: uploads = [], isLoading: loadingUploads } = useQuery({
-    queryKey: ['na-uploads'],
-    queryFn:  () => api.get('/api/na/uploads').then(r => r.data),
+  const {
+    uploads, uploadSel: selectedId, setUploadSel: setSelectedId,
+    detalhe, loading,
+    handleExcel, deletar, baixando: downloading, deletando,
+    invalidateUploads,
+  } = useUploadFlow({
+    dataset: 'na',
+    excelLabel: 'NotArrived',
+    deleteConfirm: 'Excluir este upload de Not Arrived?',
   })
 
-  useEffect(() => {
-    if (uploads.length > 0 && !selectedId) setSelectedId(uploads[0].id)
-  }, [uploads, selectedId])
+  // Loading apenas da lista (para o spinner inicial); detalhe é tratado mais abaixo
+  const loadingUploads = loading && !selectedId
+  const loadingDetalhe = loading && !!selectedId
 
-  const { data: detalhe, isLoading: loadingDetalhe } = useQuery({
-    queryKey: ['na-detalhe', selectedId],
-    queryFn:  () => api.get(`/api/na/upload/${selectedId}`).then(r => r.data),
-    enabled:  !!selectedId,
-  })
-
+  // Tendência: query adicional específica do Na (não está no hook genérico)
   const { data: tendencia = [] } = useQuery({
     queryKey: ['na-tendencia', selectedId],
     queryFn:  () => api.get(`/api/na/upload/${selectedId}/tendencia`).then(r => r.data),
@@ -539,30 +539,8 @@ export default function Na() {
 
   const handleUploadSuccess = (data) => {
     setFlashResult(data)
-    qc.invalidateQueries({ queryKey: ['na-uploads'] })
+    invalidateUploads()
     setSelectedId(data.upload_id)
-  }
-
-  const handleExcel = async () => {
-    if (!selectedId) return
-    setDownloading(true)
-    try {
-      const r = await api.get(`/api/excel/na/${selectedId}`, { responseType: 'blob' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(new Blob([r.data]))
-      a.download = `NotArrived_${upload?.data_ref || 'relatorio'}.xlsx`
-      a.click()
-    } catch (err) {
-      // Tenta ler mensagem de erro do blob de resposta
-      let msg = 'Erro ao gerar Excel.'
-      try {
-        const text = await err.response?.data?.text?.()
-        const json = JSON.parse(text || '{}')
-        msg = json.detail || msg
-      } catch {}
-      toast.erro(msg)
-    }
-    finally { setDownloading(false) }
   }
 
   if (loadingUploads) {
@@ -590,9 +568,10 @@ export default function Na() {
             )}
           </div>
           {selectedId && view === 'dados' && (
-            <button onClick={handleExcel} disabled={downloading} className="btn">
-              <Download size={14}/>{downloading ? 'Gerando…' : 'Excel'}
-            </button>
+            <ExcelButton onClick={handleExcel} loading={downloading} />
+          )}
+          {selectedId && view === 'dados' && (
+            <DeleteButton onClick={deletar} loading={deletando} isAdmin={isAdmin} />
           )}
           <button onClick={() => setShowPanel(true)} className="btn btn-primary">
             <Upload size={14}/> Novo Upload
