@@ -14,7 +14,15 @@ from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log, audit_log_sync, _session_factory
 from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import (
+    validar_arquivo,
+    remover_upload_anterior,
+    deletar_upload_handler,
+    bulk_insert,
+)
+
+_TABELA_MAE = "notracking_uploads"
+_TABELAS_FILHAS = ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa")
 
 log = logging.getLogger("notracking")
 
@@ -281,19 +289,7 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
 
         _set({"fase": "salvando"})
 
-        existing = db.execute(
-            text("SELECT id FROM notracking_uploads WHERE data_ref = :dr"),
-            {"dr": resultado['data_ref']}
-        ).mappings().first()
-        if existing:
-            old_id = existing["id"]
-            for tbl in ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa"):
-                try:
-                    db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-                except Exception:
-                    pass
-            db.execute(text("DELETE FROM notracking_uploads WHERE id = :id"), {"id": old_id})
-            db.commit()
+        remover_upload_anterior(db, log, _TABELA_MAE, _TABELAS_FILHAS, resultado['data_ref'], job_id=job_id)
 
         row = db.execute(
             text("""
@@ -312,35 +308,26 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
         uid = row["id"]
         db.commit()
 
-        if resultado['por_ds']:
-            rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
-            for i in range(0, len(rows), 1000):
-                db.execute(
-                    text("INSERT INTO notracking_por_ds (upload_id, station, supervisor, regional, total, valor_total, total_7d_mais) VALUES (:upload_id, :station, :supervisor, :regional, :total, :valor_total, :total_7d_mais)"),
-                    rows[i:i+1000]
-                )
-            db.commit()
-
-        if resultado['por_sup']:
-            db.execute(
-                text("INSERT INTO notracking_por_sup (upload_id, supervisor, regional, total, valor_total, total_7d_mais) VALUES (:upload_id, :supervisor, :regional, :total, :valor_total, :total_7d_mais)"),
-                [{"upload_id": uid, **r} for r in resultado['por_sup']]
-            )
-            db.commit()
-
-        if resultado['por_status']:
-            db.execute(
-                text("INSERT INTO notracking_por_status (upload_id, status, total, valor_total) VALUES (:upload_id, :status, :total, :valor_total)"),
-                [{"upload_id": uid, **r} for r in resultado['por_status']]
-            )
-            db.commit()
-
-        if resultado['por_faixa']:
-            db.execute(
-                text("INSERT INTO notracking_por_faixa (upload_id, faixa, total, valor_total, pct) VALUES (:upload_id, :faixa, :total, :valor_total, :pct)"),
-                [{"upload_id": uid, **r} for r in resultado['por_faixa']]
-            )
-            db.commit()
+        bulk_insert(
+            db, "notracking_por_ds",
+            [{"upload_id": uid, **r} for r in resultado['por_ds']],
+            ("upload_id", "station", "supervisor", "regional", "total", "valor_total", "total_7d_mais"),
+        )
+        bulk_insert(
+            db, "notracking_por_sup",
+            [{"upload_id": uid, **r} for r in resultado['por_sup']],
+            ("upload_id", "supervisor", "regional", "total", "valor_total", "total_7d_mais"),
+        )
+        bulk_insert(
+            db, "notracking_por_status",
+            [{"upload_id": uid, **r} for r in resultado['por_status']],
+            ("upload_id", "status", "total", "valor_total"),
+        )
+        bulk_insert(
+            db, "notracking_por_faixa",
+            [{"upload_id": uid, **r} for r in resultado['por_faixa']],
+            ("upload_id", "faixa", "total", "valor_total", "pct"),
+        )
 
         audit_log_sync("upload_processado", f"notracking_uploads:{uid}", {"total": resultado['total']}, user)
         log.info("[job:%s] notracking concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
@@ -383,12 +370,6 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    for tbl in ("notracking_por_ds", "notracking_por_sup", "notracking_por_status", "notracking_por_faixa"):
-        try:
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
-        except Exception:
-            raise HTTPException(500, f"Erro ao deletar {tbl}")
-    db.execute(text("DELETE FROM notracking_uploads WHERE id = :id"), {"id": upload_id})
-    db.commit()
+    deletar_upload_handler(db, log, _TABELA_MAE, _TABELAS_FILHAS, upload_id)
     audit_log(background_tasks, "upload_deletado", f"notracking_uploads:{upload_id}", {}, user)
     return {"ok": True}

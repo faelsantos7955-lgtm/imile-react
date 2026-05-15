@@ -13,7 +13,13 @@ from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log, audit_log_sync, _session_factory
 from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo, detectar_aba
+from api.upload_utils import (
+    validar_arquivo,
+    detectar_aba,
+    remover_upload_anterior,
+    deletar_upload_handler,
+    bulk_insert,
+)
 
 log = logging.getLogger("extravios")
 
@@ -37,6 +43,9 @@ COLS_OBRIGATORIAS = [
 ]
 
 _EXT_COLS_KEY = {"Waybill", "Reason", "Resp", "Date", "Motivo PT"}
+
+_TABELA_MAE = "extravios_uploads"
+_TABELAS_FILHAS = ("extravios_por_ds", "extravios_por_motivo", "extravios_por_semana")
 
 
 def _processar(conteudo: bytes) -> dict:
@@ -161,19 +170,7 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
 
         _set({"fase": "salvando"})
 
-        existing = db.execute(
-            text("SELECT id FROM extravios_uploads WHERE data_ref = :dr"),
-            {"dr": resultado['data_ref']}
-        ).mappings().first()
-        if existing:
-            old_id = existing["id"]
-            for tbl in ("extravios_por_ds", "extravios_por_motivo", "extravios_por_semana"):
-                try:
-                    db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-                except Exception:
-                    pass
-            db.execute(text("DELETE FROM extravios_uploads WHERE id = :id"), {"id": old_id})
-            db.commit()
+        remover_upload_anterior(db, log, _TABELA_MAE, _TABELAS_FILHAS, resultado['data_ref'], job_id=job_id)
 
         row = db.execute(
             text("""
@@ -191,31 +188,21 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
         uid = row["id"]
         db.commit()
 
-        if resultado['por_ds']:
-            rows = [{"upload_id": uid, **r} for r in resultado['por_ds']]
-            for i in range(0, len(rows), 1000):
-                db.execute(
-                    text("""
-                        INSERT INTO extravios_por_ds (upload_id, ds, supervisor, regional, total, valor_total, total_lost, total_damaged)
-                        VALUES (:upload_id, :ds, :supervisor, :regional, :total, :valor_total, :total_lost, :total_damaged)
-                    """),
-                    rows[i:i+1000]
-                )
-            db.commit()
-
-        if resultado['por_motivo']:
-            db.execute(
-                text("INSERT INTO extravios_por_motivo (upload_id, motivo, total, valor_total) VALUES (:upload_id, :motivo, :total, :valor_total)"),
-                [{"upload_id": uid, **r} for r in resultado['por_motivo']]
-            )
-            db.commit()
-
-        if resultado['por_semana']:
-            db.execute(
-                text("INSERT INTO extravios_por_semana (upload_id, semana, mes, total, valor_total) VALUES (:upload_id, :semana, :mes, :total, :valor_total)"),
-                [{"upload_id": uid, **r} for r in resultado['por_semana']]
-            )
-            db.commit()
+        bulk_insert(
+            db, "extravios_por_ds",
+            [{"upload_id": uid, **r} for r in resultado['por_ds']],
+            ("upload_id", "ds", "supervisor", "regional", "total", "valor_total", "total_lost", "total_damaged"),
+        )
+        bulk_insert(
+            db, "extravios_por_motivo",
+            [{"upload_id": uid, **r} for r in resultado['por_motivo']],
+            ("upload_id", "motivo", "total", "valor_total"),
+        )
+        bulk_insert(
+            db, "extravios_por_semana",
+            [{"upload_id": uid, **r} for r in resultado['por_semana']],
+            ("upload_id", "semana", "mes", "total", "valor_total"),
+        )
 
         audit_log_sync("upload_processado", f"extravios_uploads:{uid}", {"total": resultado['total']}, user)
         log.info("[job:%s] extravios concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
@@ -258,12 +245,6 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    for tbl in ("extravios_por_ds", "extravios_por_motivo", "extravios_por_semana"):
-        try:
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
-        except Exception:
-            raise HTTPException(500, f"Erro ao deletar {tbl}")
-    db.execute(text("DELETE FROM extravios_uploads WHERE id = :id"), {"id": upload_id})
-    db.commit()
+    deletar_upload_handler(db, log, _TABELA_MAE, _TABELAS_FILHAS, upload_id)
     audit_log(background_tasks, "upload_deletado", f"extravios_uploads:{upload_id}", {}, user)
     return {"ok": True}

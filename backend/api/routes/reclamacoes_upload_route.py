@@ -17,7 +17,14 @@ from sqlalchemy import text
 from api.deps import get_current_user, get_db, _session_factory
 from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import (
+    validar_arquivo,
+    remover_upload_anterior,
+    bulk_insert,
+)
+
+_TABELA_MAE = "reclamacoes_uploads"
+_TABELAS_FILHAS = ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor")
 from api.lark_utils import notify_reclamacoes
 
 log = logging.getLogger("reclamacoes")
@@ -235,16 +242,7 @@ class SalvarReclamacoesPayload(BaseModel):
 
 @router.post("/salvar")
 def salvar_reclamacoes(payload: SalvarReclamacoesPayload, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    existing = db.execute(
-        text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
-        {"dr": payload.data_ref}
-    ).mappings().first()
-    if existing:
-        old_id = existing["id"]
-        for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-        db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
-        db.commit()
+    remover_upload_anterior(db, log, _TABELA_MAE, _TABELAS_FILHAS, payload.data_ref)
 
     row = db.execute(
         text("""
@@ -264,26 +262,21 @@ def salvar_reclamacoes(payload: SalvarReclamacoesPayload, user: dict = Depends(g
     uid = row["id"]
     db.commit()
 
-    if payload.por_supervisor:
-        db.execute(
-            text("INSERT INTO reclamacoes_por_supervisor (upload_id, supervisor, dia_total, mes_total) VALUES (:upload_id, :supervisor, :dia_total, :mes_total)"),
-            [{"upload_id": uid, **r.model_dump()} for r in payload.por_supervisor]
-        )
-        db.commit()
-
-    if payload.por_station:
-        db.execute(
-            text("INSERT INTO reclamacoes_por_station (upload_id, station, supervisor, dia_total, mes_total) VALUES (:upload_id, :station, :supervisor, :dia_total, :mes_total)"),
-            [{"upload_id": uid, **r.model_dump()} for r in payload.por_station]
-        )
-        db.commit()
-
-    if payload.top5:
-        db.execute(
-            text("INSERT INTO reclamacoes_top5 (upload_id, motorista, id_motorista, ds, supervisor, total) VALUES (:upload_id, :motorista, :id_motorista, :ds, :supervisor, :total)"),
-            [{"upload_id": uid, **r.model_dump()} for r in payload.top5]
-        )
-        db.commit()
+    bulk_insert(
+        db, "reclamacoes_por_supervisor",
+        [{"upload_id": uid, **r.model_dump()} for r in payload.por_supervisor],
+        ("upload_id", "supervisor", "dia_total", "mes_total"),
+    )
+    bulk_insert(
+        db, "reclamacoes_por_station",
+        [{"upload_id": uid, **r.model_dump()} for r in payload.por_station],
+        ("upload_id", "station", "supervisor", "dia_total", "mes_total"),
+    )
+    bulk_insert(
+        db, "reclamacoes_top5",
+        [{"upload_id": uid, **r.model_dump()} for r in payload.top5],
+        ("upload_id", "motorista", "id_motorista", "ds", "supervisor", "total"),
+    )
 
     notify_reclamacoes(payload.model_dump(), user["email"])
     return {
@@ -343,16 +336,7 @@ def _run_job(job_id: str, conteudos: list[bytes], user: dict):
 
         _set({"fase": "salvando"})
 
-        existing = db.execute(
-            text("SELECT id FROM reclamacoes_uploads WHERE data_ref = :dr"),
-            {"dr": data_ref.isoformat()}
-        ).mappings().first()
-        if existing:
-            old_id = existing["id"]
-            for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
-                db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-            db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": old_id})
-            db.commit()
+        remover_upload_anterior(db, log, _TABELA_MAE, _TABELAS_FILHAS, data_ref.isoformat(), job_id=job_id)
 
         row = db.execute(
             text("""
@@ -372,26 +356,21 @@ def _run_job(job_id: str, conteudos: list[bytes], user: dict):
         uid = row["id"]
         db.commit()
 
-        if por_sup:
-            db.execute(
-                text("INSERT INTO reclamacoes_por_supervisor (upload_id, supervisor, dia_total, mes_total) VALUES (:upload_id, :supervisor, :dia_total, :mes_total)"),
-                [{"upload_id": uid, **r} for r in por_sup]
-            )
-            db.commit()
-
-        if por_sta:
-            db.execute(
-                text("INSERT INTO reclamacoes_por_station (upload_id, station, supervisor, dia_total, mes_total) VALUES (:upload_id, :station, :supervisor, :dia_total, :mes_total)"),
-                [{"upload_id": uid, **r} for r in por_sta]
-            )
-            db.commit()
-
-        if top5:
-            db.execute(
-                text("INSERT INTO reclamacoes_top5 (upload_id, motorista, id_motorista, ds, supervisor, total) VALUES (:upload_id, :motorista, :id_motorista, :ds, :supervisor, :total)"),
-                [{"upload_id": uid, **r} for r in top5]
-            )
-            db.commit()
+        bulk_insert(
+            db, "reclamacoes_por_supervisor",
+            [{"upload_id": uid, **r} for r in por_sup],
+            ("upload_id", "supervisor", "dia_total", "mes_total"),
+        )
+        bulk_insert(
+            db, "reclamacoes_por_station",
+            [{"upload_id": uid, **r} for r in por_sta],
+            ("upload_id", "station", "supervisor", "dia_total", "mes_total"),
+        )
+        bulk_insert(
+            db, "reclamacoes_top5",
+            [{"upload_id": uid, **r} for r in top5],
+            ("upload_id", "motorista", "id_motorista", "ds", "supervisor", "total"),
+        )
 
         resultado = {
             "upload_id":   uid,

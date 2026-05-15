@@ -16,7 +16,19 @@ from sqlalchemy import text
 from api.deps import get_current_user, get_db, _session_factory
 from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo, detectar_aba
+from api.upload_utils import (
+    validar_arquivo,
+    detectar_aba,
+    remover_upload_anterior,
+    bulk_insert,
+)
+
+_TABELA_MAE = "not_arrived_uploads"
+_TABELAS_FILHAS = (
+    "not_arrived_por_estacao", "not_arrived_por_regiao",
+    "not_arrived_por_operacao", "not_arrived_por_supervisor",
+    "not_arrived_tendencia",
+)
 
 log = logging.getLogger("not_arrived")
 
@@ -329,20 +341,7 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
         _set({"fase": "salvando"})
         data_ref = resultado["data_ref"]
 
-        existing = db.execute(
-            text("SELECT id FROM not_arrived_uploads WHERE data_ref = :dr"), {"dr": data_ref}
-        ).mappings().first()
-        if existing:
-            old_id = existing["id"]
-            for tbl in ("not_arrived_por_estacao", "not_arrived_por_regiao",
-                        "not_arrived_por_operacao", "not_arrived_por_supervisor",
-                        "not_arrived_tendencia"):
-                try:
-                    db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-                except Exception:
-                    pass
-            db.execute(text("DELETE FROM not_arrived_uploads WHERE id = :id"), {"id": old_id})
-            db.commit()
+        remover_upload_anterior(db, log, _TABELA_MAE, _TABELAS_FILHAS, data_ref, job_id=job_id)
 
         row = db.execute(
             text("""
@@ -363,42 +362,33 @@ def _run_job(job_id: str, conteudo: bytes, user: dict):
         uid = row["id"]
         db.commit()
 
-        estacoes = [{"upload_id": uid, **r} for r in resultado["por_estacao"]]
-        for i in range(0, len(estacoes), 500):
-            db.execute(
-                text("INSERT INTO not_arrived_por_estacao (upload_id, oc_name, oc_code, tipo, regiao, supervisor, total, entregues) VALUES (:upload_id, :oc_name, :oc_code, :tipo, :regiao, :supervisor, :total, :entregues)"),
-                estacoes[i:i+500]
-            )
-        db.commit()
-
-        if resultado["por_regiao"]:
-            db.execute(
-                text("INSERT INTO not_arrived_por_regiao (upload_id, regiao, tipo, total) VALUES (:upload_id, :regiao, :tipo, :total)"),
-                [{"upload_id": uid, **r} for r in resultado["por_regiao"]]
-            )
-            db.commit()
-
-        if resultado["por_operacao"]:
-            db.execute(
-                text("INSERT INTO not_arrived_por_operacao (upload_id, operacao, total) VALUES (:upload_id, :operacao, :total)"),
-                [{"upload_id": uid, **r} for r in resultado["por_operacao"]]
-            )
-            db.commit()
-
-        if resultado["por_supervisor"]:
-            db.execute(
-                text("INSERT INTO not_arrived_por_supervisor (upload_id, supervisor, total, total_dc, total_ds, entregues) VALUES (:upload_id, :supervisor, :total, :total_dc, :total_ds, :entregues)"),
-                [{"upload_id": uid, **r} for r in resultado["por_supervisor"]]
-            )
-            db.commit()
-
-        if tendencia:
-            for i in range(0, len(tendencia), 500):
-                db.execute(
-                    text("INSERT INTO not_arrived_tendencia (upload_id, supervisor, data, total) VALUES (:upload_id, :supervisor, :data, :total)"),
-                    [{"upload_id": uid, **r} for r in tendencia[i:i+500]]
-                )
-            db.commit()
+        bulk_insert(
+            db, "not_arrived_por_estacao",
+            [{"upload_id": uid, **r} for r in resultado["por_estacao"]],
+            ("upload_id", "oc_name", "oc_code", "tipo", "regiao", "supervisor", "total", "entregues"),
+            batch_size=500,
+        )
+        bulk_insert(
+            db, "not_arrived_por_regiao",
+            [{"upload_id": uid, **r} for r in resultado["por_regiao"]],
+            ("upload_id", "regiao", "tipo", "total"),
+        )
+        bulk_insert(
+            db, "not_arrived_por_operacao",
+            [{"upload_id": uid, **r} for r in resultado["por_operacao"]],
+            ("upload_id", "operacao", "total"),
+        )
+        bulk_insert(
+            db, "not_arrived_por_supervisor",
+            [{"upload_id": uid, **r} for r in resultado["por_supervisor"]],
+            ("upload_id", "supervisor", "total", "total_dc", "total_ds", "entregues"),
+        )
+        bulk_insert(
+            db, "not_arrived_tendencia",
+            [{"upload_id": uid, **r} for r in tendencia],
+            ("upload_id", "supervisor", "data", "total"),
+            batch_size=500,
+        )
 
         log.info("[job:%s] not_arrived concluído — upload_id=%d total=%d", job_id, uid, resultado['total'])
         _set({

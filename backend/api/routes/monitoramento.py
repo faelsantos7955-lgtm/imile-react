@@ -1,17 +1,20 @@
 """
 api/routes/monitoramento.py — Monitoramento Diário de Entregas
 """
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import validar_arquivo, deletar_upload_handler
 import pandas as pd
 import io, re
 from datetime import date as _date_cls
 from typing import List, Optional
 
+log = logging.getLogger("monitoramento")
 router = APIRouter()
 
 
@@ -26,8 +29,8 @@ async def _ler_excel_files(files: List[UploadFile], sheet_name=0) -> list:
         content = await f.read()
         try:
             dfs.append(pd.read_excel(io.BytesIO(content), sheet_name=sheet_name))
-        except Exception:
-            pass
+        except (ValueError, KeyError, OSError) as e:
+            log.warning("Falha ao ler %s (sheet=%s): %s", f.filename, sheet_name, e)
     return dfs
 
 
@@ -40,8 +43,8 @@ async def _ler_estoque_files(files: List[UploadFile]) -> list:
             xls = pd.ExcelFile(io.BytesIO(content))
             sheet = 'details' if 'details' in xls.sheet_names else xls.sheet_names[0]
             dfs.append(pd.read_excel(xls, sheet_name=sheet))
-        except Exception:
-            pass
+        except (ValueError, KeyError, OSError) as e:
+            log.warning("Falha ao ler estoque %s: %s", f.filename, e)
     return dfs
 
 
@@ -227,7 +230,7 @@ def _ler_relatorio(conteudo: bytes):
         ts = pd.Timestamp(first_col)
         if not pd.isna(ts):
             data_ref = ts.date().isoformat()
-    except Exception:
+    except (ValueError, TypeError):
         pass
     if not data_ref:
         # YYYY-MM-DD explícito
@@ -375,9 +378,7 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    db.execute(text("DELETE FROM monitoramento_diario WHERE upload_id = :id"), {"id": upload_id})
-    db.execute(text("DELETE FROM monitoramento_uploads WHERE id = :id"), {"id": upload_id})
-    db.commit()
+    deletar_upload_handler(db, log, "monitoramento_uploads", ("monitoramento_diario",), upload_id)
     audit_log(background_tasks, "upload_deletado", f"monitoramento_uploads:{upload_id}", {}, user)
     return {"ok": True}
 

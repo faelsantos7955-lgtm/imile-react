@@ -12,7 +12,11 @@ from sqlalchemy import text
 
 from api.deps import get_db, get_current_user, require_admin, audit_log
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo
+from api.upload_utils import (
+    validar_arquivo,
+    remover_upload_anterior,
+    deletar_upload_handler,
+)
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -22,6 +26,12 @@ FAIXAS        = ['1-3', '3-5', '5-7', '7-10', '10-15', '15-20', 'Backlog >20']
 FAIXAS_LABELS = ['1D≤X<3D', '3D≤X<5D', '5D≤X<7D', '7D≤X<10D', '10D≤X<15D', '15D≤X<20D', '≥20D']
 DB_COLS       = ['f_1_3', 'f_3_5', 'f_5_7', 'f_7_10', 'f_10_15', 'f_15_20', 'f_20_mais']
 FAIXA_7D      = {'7-10', '10-15', '15-20', 'Backlog >20'}
+
+_TABELA_MAE = "backlog_uploads"
+_TABELAS_FILHAS = (
+    "backlog_detalhes", "backlog_por_cliente", "backlog_por_motivo",
+    "backlog_por_ds", "backlog_por_supervisor", "backlog_por_rdc",
+)
 
 
 def _faixas_to_dict(row):
@@ -259,11 +269,7 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    for tbl in ("backlog_detalhes", "backlog_por_cliente", "backlog_por_motivo",
-                "backlog_por_ds", "backlog_por_supervisor", "backlog_por_rdc"):
-        db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :uid"), {"uid": upload_id})
-    db.execute(text("DELETE FROM backlog_uploads WHERE id = :uid"), {"uid": upload_id})
-    db.commit()
+    deletar_upload_handler(db, logger, _TABELA_MAE, _TABELAS_FILHAS, upload_id)
     audit_log(background_tasks, "upload_deletado", f"backlog_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
@@ -403,16 +409,7 @@ async def processar_backlog(
 
     kpis, por_rdc, por_supervisor, por_ds, por_motivo = _processar(df, df_res)
 
-    # Remove upload anterior da mesma data_ref
-    existing = db.execute(text(
-        "SELECT id FROM backlog_uploads WHERE data_ref = :dr"
-    ), {"dr": kpis["data_ref"]}).mappings().first()
-    if existing:
-        old_id = existing["id"]
-        for tbl in ("backlog_detalhes", "backlog_por_ds", "backlog_por_supervisor",
-                    "backlog_por_rdc", "backlog_por_motivo", "backlog_por_cliente"):
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :uid"), {"uid": old_id})
-        db.execute(text("DELETE FROM backlog_uploads WHERE id = :uid"), {"uid": old_id})
+    remover_upload_anterior(db, logger, _TABELA_MAE, _TABELAS_FILHAS, kpis["data_ref"])
 
     row = db.execute(text("""
         INSERT INTO backlog_uploads (data_ref, criado_por, total, total_7d, na_ds, em_transito)

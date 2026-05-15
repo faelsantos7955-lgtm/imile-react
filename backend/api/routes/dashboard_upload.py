@@ -17,7 +17,7 @@ from sqlalchemy import text
 from api.deps import get_current_user, get_db, _session_factory
 from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo, validar_varios
+from api.upload_utils import validar_arquivo, validar_varios, execute_batch
 
 log = logging.getLogger("dashboard")
 
@@ -42,7 +42,7 @@ def _lc(s: pd.Series) -> pd.Series:
 def _wb(s: pd.Series) -> pd.Series:
     try:
         return s.astype(float).astype("int64").astype(str).str.strip()
-    except Exception:
+    except (ValueError, TypeError):
         return s.astype(str).str.strip()
 
 
@@ -51,7 +51,8 @@ def _ler(files: list[bytes], cols: set) -> pd.DataFrame:
     for b in files:
         try:
             df = pd.read_excel(io.BytesIO(b), engine=_ENGINE, usecols=lambda c: c in cols)
-        except Exception:
+        except (ValueError, KeyError):
+            # usecols rejeitou — provável incompatibilidade de colunas, lê tudo
             df = pd.read_excel(io.BytesIO(b), engine=_ENGINE)
         frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
@@ -267,24 +268,23 @@ def _processar_dashboard(rec_bytes, out_bytes, ent_bytes, sup_bytes, meta_bytes,
             }
             for _, r in p.iterrows()
         ]
-        if rows_d:
-            db.execute(
-                text("""
-                    INSERT INTO expedicao_diaria
-                        (data_ref, scan_station, region, recebido, expedido, entregas,
-                         taxa_exp, taxa_ent, meta, atingiu_meta, processado_por)
-                    VALUES (:data_ref, :scan_station, :region, :recebido, :expedido, :entregas,
-                            :taxa_exp, :taxa_ent, :meta, :atingiu_meta, :processado_por)
-                    ON CONFLICT (data_ref, scan_station) DO UPDATE
-                    SET region = EXCLUDED.region, recebido = EXCLUDED.recebido,
-                        expedido = EXCLUDED.expedido, entregas = EXCLUDED.entregas,
-                        taxa_exp = EXCLUDED.taxa_exp, taxa_ent = EXCLUDED.taxa_ent,
-                        meta = EXCLUDED.meta, atingiu_meta = EXCLUDED.atingiu_meta,
-                        processado_por = EXCLUDED.processado_por
-                """),
-                rows_d
-            )
-            db.commit()
+        execute_batch(
+            db,
+            text("""
+                INSERT INTO expedicao_diaria
+                    (data_ref, scan_station, region, recebido, expedido, entregas,
+                     taxa_exp, taxa_ent, meta, atingiu_meta, processado_por)
+                VALUES (:data_ref, :scan_station, :region, :recebido, :expedido, :entregas,
+                        :taxa_exp, :taxa_ent, :meta, :atingiu_meta, :processado_por)
+                ON CONFLICT (data_ref, scan_station) DO UPDATE
+                SET region = EXCLUDED.region, recebido = EXCLUDED.recebido,
+                    expedido = EXCLUDED.expedido, entregas = EXCLUDED.entregas,
+                    taxa_exp = EXCLUDED.taxa_exp, taxa_ent = EXCLUDED.taxa_ent,
+                    meta = EXCLUDED.meta, atingiu_meta = EXCLUDED.atingiu_meta,
+                    processado_por = EXCLUDED.processado_por
+            """),
+            rows_d,
+        )
 
         # ── Salva expedicao_cidades ───────────────────────────
         n_cidades = 0
@@ -336,23 +336,22 @@ def _processar_dashboard(rec_bytes, out_bytes, ent_bytes, sup_bytes, meta_bytes,
                 }
                 for _, r in rec_city.iterrows()
             ]
-            if rows_c:
-                db.execute(
-                    text("""
-                        INSERT INTO expedicao_cidades
-                            (data_ref, scan_station, destination_city, recebido, expedido,
-                             entregas, taxa_exp, taxa_ent)
-                        VALUES (:data_ref, :scan_station, :destination_city, :recebido, :expedido,
-                                :entregas, :taxa_exp, :taxa_ent)
-                        ON CONFLICT (data_ref, scan_station, destination_city) DO UPDATE
-                        SET recebido = EXCLUDED.recebido, expedido = EXCLUDED.expedido,
-                            entregas = EXCLUDED.entregas, taxa_exp = EXCLUDED.taxa_exp,
-                            taxa_ent = EXCLUDED.taxa_ent
-                    """),
-                    rows_c
-                )
-                db.commit()
-                n_cidades = len(rows_c)
+            execute_batch(
+                db,
+                text("""
+                    INSERT INTO expedicao_cidades
+                        (data_ref, scan_station, destination_city, recebido, expedido,
+                         entregas, taxa_exp, taxa_ent)
+                    VALUES (:data_ref, :scan_station, :destination_city, :recebido, :expedido,
+                            :entregas, :taxa_exp, :taxa_ent)
+                    ON CONFLICT (data_ref, scan_station, destination_city) DO UPDATE
+                    SET recebido = EXCLUDED.recebido, expedido = EXCLUDED.expedido,
+                        entregas = EXCLUDED.entregas, taxa_exp = EXCLUDED.taxa_exp,
+                        taxa_ent = EXCLUDED.taxa_ent
+                """),
+                rows_c,
+            )
+            n_cidades = len(rows_c)
 
         return {
             "data_ref":   data_ref,

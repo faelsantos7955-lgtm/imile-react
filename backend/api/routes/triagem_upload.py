@@ -28,7 +28,15 @@ from sqlalchemy import text
 from api.deps import get_current_user, _session_factory
 from api.jobs import create_job, get_job, update_job
 from api.limiter import limiter
-from api.upload_utils import validar_arquivo, detectar_aba
+from api.upload_utils import (
+    validar_arquivo,
+    detectar_aba,
+    remover_upload_anterior,
+    bulk_insert,
+)
+
+_TABELA_MAE = "triagem_uploads"
+_TABELAS_FILHAS = ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes")
 from api.lark_utils import notify_triagem
 
 
@@ -337,18 +345,7 @@ def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: 
         t0 = time.time()
         data_ref = resultado["data_ref"]
 
-        existing = db.execute(
-            text("SELECT id FROM triagem_uploads WHERE data_ref = :dr"), {"dr": data_ref}
-        ).mappings().first()
-        if existing:
-            old_id = existing["id"]
-            for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
-                try:
-                    db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-                except Exception:
-                    pass
-            db.execute(text("DELETE FROM triagem_uploads WHERE id = :id"), {"id": old_id})
-            db.commit()
+        remover_upload_anterior(db, log, _TABELA_MAE, _TABELAS_FILHAS, data_ref, job_id=job_id)
 
         row = db.execute(
             text("""
@@ -371,44 +368,33 @@ def _run_job(job_id: str, conteudos: list[bytes], arr_bytes: list[bytes], user: 
         uid = row["id"]
         db.commit()
 
-        BATCH = 2000
-        if resultado["por_ds"]:
-            db.execute(
-                text("INSERT INTO triagem_por_ds (upload_id, ds, total, ok, nok, fora, taxa, recebidos, recebidos_nok) VALUES (:upload_id, :ds, :total, :ok, :nok, :fora, :taxa, :recebidos, :recebidos_nok)"),
-                [{"upload_id": uid, **r} for r in resultado["por_ds"]]
-            )
-            db.commit()
-
-        if resultado["top5"]:
-            db.execute(
-                text("INSERT INTO triagem_top5 (upload_id, ds, total_erros) VALUES (:upload_id, :ds, :total_erros)"),
-                [{"upload_id": uid, "ds": r["ds"], "total_erros": r["nok"]} for r in resultado["top5"]]
-            )
-            db.commit()
-
-        if resultado["por_supervisor"]:
-            db.execute(
-                text("INSERT INTO triagem_por_supervisor (upload_id, supervisor, total, ok, nok, fora, taxa) VALUES (:upload_id, :supervisor, :total, :ok, :nok, :fora, :taxa)"),
-                [{"upload_id": uid, **r} for r in resultado["por_supervisor"]]
-            )
-            db.commit()
-
-        cidades = [{"upload_id": uid, **r} for r in resultado["por_cidade"]]
-        for i in range(0, len(cidades), BATCH):
-            db.execute(
-                text("INSERT INTO triagem_por_cidade (upload_id, ds, cidade, ok, nok, total, taxa) VALUES (:upload_id, :ds, :cidade, :ok, :nok, :total, :taxa)"),
-                cidades[i:i+BATCH]
-            )
-        db.commit()
-
-        if resultado["detalhes"]:
-            det_rows = [{"upload_id": uid, **r} for r in resultado["detalhes"]]
-            for i in range(0, len(det_rows), BATCH):
-                db.execute(
-                    text("INSERT INTO triagem_detalhes (upload_id, waybill, ds_destino, ds_entrega, cidade, status, foi_recebido) VALUES (:upload_id, :waybill, :ds_destino, :ds_entrega, :cidade, :status, :foi_recebido)"),
-                    det_rows[i:i+BATCH]
-                )
-            db.commit()
+        bulk_insert(
+            db, "triagem_por_ds",
+            [{"upload_id": uid, **r} for r in resultado["por_ds"]],
+            ("upload_id", "ds", "total", "ok", "nok", "fora", "taxa", "recebidos", "recebidos_nok"),
+        )
+        bulk_insert(
+            db, "triagem_top5",
+            [{"upload_id": uid, "ds": r["ds"], "total_erros": r["nok"]} for r in resultado["top5"]],
+            ("upload_id", "ds", "total_erros"),
+        )
+        bulk_insert(
+            db, "triagem_por_supervisor",
+            [{"upload_id": uid, **r} for r in resultado["por_supervisor"]],
+            ("upload_id", "supervisor", "total", "ok", "nok", "fora", "taxa"),
+        )
+        bulk_insert(
+            db, "triagem_por_cidade",
+            [{"upload_id": uid, **r} for r in resultado["por_cidade"]],
+            ("upload_id", "ds", "cidade", "ok", "nok", "total", "taxa"),
+            batch_size=2000,
+        )
+        bulk_insert(
+            db, "triagem_detalhes",
+            [{"upload_id": uid, **r} for r in resultado["detalhes"]],
+            ("upload_id", "waybill", "ds_destino", "ds_entrega", "cidade", "status", "foi_recebido"),
+            batch_size=2000,
+        )
 
         log.info("[job:%s] Salvo no banco em %.1fs — upload_id=%d detalhes=%d",
                  job_id, time.time()-t0, uid, len(resultado["detalhes"]))

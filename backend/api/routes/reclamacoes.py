@@ -1,13 +1,20 @@
 """
 api/routes/reclamacoes.py — Reclamações + motoristas por semana
 """
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
+from api.upload_utils import deletar_upload_handler
 from collections import defaultdict
 
+log = logging.getLogger("reclamacoes")
 router = APIRouter()
+
+_TABELA_MAE = "reclamacoes_uploads"
+_TABELAS_FILHAS = ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor")
 
 
 @router.get("/uploads")
@@ -25,10 +32,7 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    for tbl in ("reclamacoes_top5", "reclamacoes_por_station", "reclamacoes_por_supervisor"):
-        db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
-    db.execute(text("DELETE FROM reclamacoes_uploads WHERE id = :id"), {"id": upload_id})
-    db.commit()
+    deletar_upload_handler(db, log, _TABELA_MAE, _TABELAS_FILHAS, upload_id)
     audit_log(background_tasks, "upload_deletado", f"reclamacoes_uploads:{upload_id}", {}, user)
     return {"ok": True}
 

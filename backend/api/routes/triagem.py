@@ -9,10 +9,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
 from api.lark_utils import notify_triagem
+from api.upload_utils import deletar_upload_handler, remover_upload_anterior
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_TABELA_MAE = "triagem_uploads"
+_TABELAS_FILHAS = ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes")
 
 
 @router.get("/uploads")
@@ -52,14 +56,7 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
-        try:
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
-        except Exception:
-            logger.error("Falha ao deletar tabela %s para upload_id=%s", tbl, upload_id)
-            raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
-    db.execute(text("DELETE FROM triagem_uploads WHERE id = :id"), {"id": upload_id})
-    db.commit()
+    deletar_upload_handler(db, logger, _TABELA_MAE, _TABELAS_FILHAS, upload_id)
     audit_log(background_tasks, "upload_deletado", f"triagem_uploads:{upload_id}", {}, user)
     return {"ok": True}
 
@@ -144,19 +141,7 @@ class SalvarTriagemPayload(BaseModel):
 @router.post("/salvar")
 def salvar_triagem(payload: SalvarTriagemPayload, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Recebe resultado já processado localmente e salva no banco."""
-    # Remove upload anterior com a mesma data_ref
-    existing = db.execute(
-        text("SELECT id FROM triagem_uploads WHERE data_ref = :dr"), {"dr": payload.data_ref}
-    ).mappings().first()
-    if existing:
-        old_id = existing["id"]
-        for tbl in ("triagem_top5", "triagem_por_supervisor", "triagem_por_ds", "triagem_por_cidade", "triagem_detalhes"):
-            try:
-                db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": old_id})
-            except Exception:
-                pass
-        db.execute(text("DELETE FROM triagem_uploads WHERE id = :id"), {"id": old_id})
-        db.commit()
+    remover_upload_anterior(db, logger, _TABELA_MAE, _TABELAS_FILHAS, payload.data_ref)
 
     row = db.execute(
         text("""

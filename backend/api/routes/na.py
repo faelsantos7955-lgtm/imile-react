@@ -1,12 +1,19 @@
 """
 api/routes/na.py — Listagem, detalhe e exclusão de uploads Not Arrived (有发未到)
 """
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from api.deps import get_db, get_current_user, require_admin, audit_log
+from api.upload_utils import deletar_upload_handler
 
+log = logging.getLogger("na")
 router = APIRouter()
+
+_TABELA_MAE = "na_uploads"
+_TABELAS_FILHAS = ("na_tendencia", "na_por_supervisor", "na_por_ds", "na_por_processo")
 
 
 @router.get("/uploads")
@@ -89,12 +96,6 @@ def deletar_upload(
     user: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    for tbl in ("na_tendencia", "na_por_supervisor", "na_por_ds", "na_por_processo"):
-        try:
-            db.execute(text(f"DELETE FROM {tbl} WHERE upload_id = :id"), {"id": upload_id})
-        except Exception:
-            raise HTTPException(500, f"Erro ao deletar dados de {tbl}")
-    db.execute(text("DELETE FROM na_uploads WHERE id = :id"), {"id": upload_id})
-    db.commit()
+    deletar_upload_handler(db, log, _TABELA_MAE, _TABELAS_FILHAS, upload_id)
     audit_log(background_tasks, "upload_deletado", f"na_uploads:{upload_id}", {}, user)
     return {"ok": True}
